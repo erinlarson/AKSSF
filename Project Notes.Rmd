@@ -1,0 +1,40 @@
+---
+title: "Project Notes"
+author: "Leslie Jones"
+date: "9/9/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Approach
+Quantifying portfolio effect > diversity of temperatures (Chezik et al)
+Will this portfolio of habitats shrink or expand? Shrink for which types of systems? expand for others?
+
+Cumulative or aggregate effects based on seasonal changes? discharge?
+
+## Empirical Dynamic Modeling
+Methods and applications can be used to give a mechanistic understanding of dynamical systems and provide effective policy and management recommendations on ecosystem and climate (Chang 2017).EDM can be used to investigate: (1) complexity (dimensionality of the model) of system; (2) distinguishing non-linear dynamical systems from linear stochastic systems; (3) determining causal variables; (4) forecasting.
+
+Dimensionality is determined by simplex projection. In the case of short time-series leave-one-out cross validation can be performed instead of dividing time-series into halves (Glacier et al 2014).Correlation of Coefficient and/or MAE are used to evaluate embedding dimesion (E). Use trial and error to get best E.
+
+The degree of non-linearity is the 'state dependency' and is quantified by S-map analysis (sequential locally weighted global linear map). This is the step that you distinguish between linear stochasic systems and non-linear dynamic systems. If parameter theta=0 then system reduces to linear autoregressive model. If theta>0 (non-linear)then different weights are given to each local parameter fitting and system is non-linear and dynamic.State dependency (non-linearity) can be evaluated by examing improvement in forecasting of non-linear model compared to linear model (theta=0).
+
+Non-linear equations do not always exhibit nonlinear dynamical properties (e.g. chaos). Depending on the parameters, nonlinear equations can acutally exhibit simple linear behaviors, such as equilibria and periodic cycles. Non-linearity is evaluated by examining the relationship between the predictive skill (correlation coefficient) and state dependency parameter (theta).
+
+EDM can be used to reveal causation between variables.Two variables are causally linked if they interact in the same dynamical system. Cross-mapping algorithm predicts the current quantity of one variable (M1) using the time lags of another variable (M2) and vice versa. If they belong to the same dynamical system the cross-mapping will converge (called Convergent Cross-mapping - CCM).
+
+Simplex projection and S-map enable forecasting for dynamical systems using information in the reconstructed state space.
+Three different methods can be used for the reconstruction: (1) univariate embedding, (2) multivariate embedding, and (3)multi-view embedding.
+
+Tracking strength and sign of interactions - Interspecific interactions (II) can be calculated from partial derivatives output from the S-map method. II can capture the time-varying dynamics of the interaction strengths. These can be used to evaluate bottom-up and top-down dynamics.
+
+Scenario planning can be done by altering the state space and altering the inputs.
+
+All data should be normalized to zero mean and unit variance to ensure all variables have the same level of magnitude for comparison. and linear trends should be removed, either by simple regression or taking the first differenc to make the time series stationary.
+
+EDM can be used to classify systems. Should be cautioned for strong cyclical data or seasonality. Surrogate data tests for seasonality have been developed (Deyle et al 2016a)
+
+## Data availability 
