@@ -1,0 +1,164 @@
+---
+title: "Outline Objectives"
+author: "Leslie Jones"
+date: "11/5/2019"
+output: html_document
+---
+
+##Study Area 
+
+Cook Inlet, Prince William Sound and Copper River Basins
+HUC12 watersheds
+Salmon only?
+
+## Objective 1: Thermal regimes
+Task 1.1 - Temperature Data Synthesis - open water season (May 1st - September 1) and winter period - incubation period (degree days) - those that are sensitive - scenarios of change C/change C  - relate changes in incubation period/spawn timing to subsistence fishing
+
+- summarize to mean, min, and max daily stream temperatures 
+Look at correlations between min, max, mean, range
+
+- relate to Maheu parameters to describe thermal regimes (amplitude, mean, phase)
+
+1) Summarize thermal regimes/metrics of interest
+
+- are there certain thermal metrics besides average daily that we want to test sensitivity of? daily min or max? how correlated are these?
+- helpful to have a reduced set of metrics that are applicable to salmon life-histories
+- which are unique to AK?
+ - what timing windows are relevant to metrics - may differ by species
+
+2) Identify salmon-specific life-history windows or hydrology driven sensitivity windows on which to calculate temperature sensitivities
+- early summer period (May1 - July 15)
+- late summer period (July 15 - Sept 1)
+
+OR
+
+Try to have temporal domain of time series match life-history windows of choice - hope that matches hydrology driver windows
+-let model AIC selction designate this windown
+
+Incubation Period most closely tied to temperature - what about early incubation sensitivity analysis?
+ - can we do sensitivity analysis on this entire period? luca says no - what about shoulder seasons to get at shifts in timing?
+ - species specific
+ - August to May for chinook and sockeye and chum
+ - September to May for coho and pink
+ 
+Should we seperate mainstem and trib?
+
+Juvenile rearing - tributary
+ - early summer (may 1 - july 15?)
+ - late summer (july 15 - September 30)
+ 
+Freshwater Migration - mainstem sites only?
+ - May to mid-September
+
+
+##Objective 2: Temperature Sensitivity
+Task 2.1 - Climate and Geomorphic Data Synthesis
+1) Summarize daily values of Daymet (air for sure maybe swe and prcp) for each watershed and year - join to site-specific temperature data 
+- All daily stream and air temperature time-series should be z-score standardized within each stream-year prior to analysis. 
+
+Task 2.2 - Thermal Sensitivity Analysis:
+
+1)DFA approach: data = trends + explanatory variables + noise
+- can test DFA models for each life-history window or hydrology window of interest - test for best fit using AIC 
+  - model without explanatory variables
+  - model with air alone
+  - model with air and snow end date? interaction?
+  - What drives diversity in sensitivity index? snow? rain? geomorphology?
+  - what are sensitivity ranges of glacial sites based on glacial mass/% cover (similar to Lisi isotope figures)
+    
+ - get factor loadings for each site-year combination - factor loadings will tell which trend is most common to that site-year and the effect of the explanatory variable
+ -what is variability of sensitivity year to year within a site - does one site have more than 1 common trend across years? what does this mean from a hydrologic perspective?
+ - like lisi low snowpack years meant more homogenous sensitivities
+ 
+OR
+
+2) Map sensitivities for "each time period for "average" year and years with other scenarios - with watersheds with empirical data - expected vs observed
+
+ Scenarios:
+  - year with high winter snow-pack (2012)
+  - year with low snow-pack (2005)
+  - year with high summer temps
+  - year with low summer temps
+  
+- how much diversity exists? across regions and scenarios
+
+3) PCA or Random Forest/Boosting regression/machine learning approach (non-lineraties and interactions) to link Sensitivity index to spatial descriptors
+
+-back standardize factor loadings and get sensitivity index to use in PCA
+Regress sensitivity index against geomorphic, hydrologic covariates
+
+Use PC values to predicts across all watersheds - again...for certain sceanarios
+
+Geomorphic covaraites:
+1) Elevation of watershed or site specific elevation? more relavant for coastal Huc which have large differences within...
+2) upstream contributing area - flow accumulation (stream size)
+3) watershed slope
+4) glacial till - sediment - geology - 
+5) alluvial fill - unconsolidated sediment - cook inlet project included this and found sensitivity look at Sue's ms
+6) valley width change? knick points - convex vs concave - ask Timm is this is something that could be automated - 1 km max? - surface slope break
+Use imagery (Lidar) to detect winter upwelling to get at scale question and target groundwater reaches 
+
+Hydrologic covariates:
+1) downstream of glacier - percent cover of glaciers (expected changes in mass/% cover of glaciers - Kara Pitmann with Johnnie moore) - randolph glacier inventory
+2) downstream of lake - lake size?
+
+Landcover covariates:
+1) wetland cover
+2) forest cover - NDVI?? LST? something to get at riparian cover
+
+#Objective 3: Risk Analysis
+Task 3.1 - Mapping thermal sensitivities
+Mapping temperature regimes and thermal sensitivities will allow for visual representation of results so that decision makers can better understand the location and nature of sensitive habitats and impacts that may threaten salmon populations and fisheries. Thermal sensitivity estimates and environmental covariates will be mapped at sites and watershed scales. 
+
+ - are there hucs that have a wide diversity of sensitivity levels?
+
+Task 3.2 – Vulnerability analysis - cold-water refugia mapping 
+Salmon habitats and watersheds with low sensitivities to changes in air temperature and snowpack may have the highest potential of providing thermal refugia under future climate warming, whereas habitats and watersheds identified with high sensitivities to air temperature change may be most at risk to warming. For this task, maps will be produced that prioritize watersheds based on potential (i.e., low sensitivities) of providing cold-water refugia under future climate warming.
+
+- Vulnerability = sensitivity + exposure
+- what is overlap between those watersheds that have a high sensitivity to change and ARE projected to change
+- change agents need to correspond with DFA model explanatory variables
+- glacier change? is data available for this?
+- specific changes in life-histories - like changes in spawn timing and emergence timing
+
+- target spatial distribution of sensitive and spatial distribution of future temperature change
+
+ 
+Task 3.2 – Population level impact assessment (can we detect higher vulnerability for watersheds like the Deshka?)
+Target subsistence fisheries/locations in regions - summarize results across regions/fisheries
+
+- how does changes in spawn timing overlap with subsistence fisheries
+
+- use scenarios to illustrate changes in spawn timing, incubation rates, emergence dates
+- how will these  change with climate? are there phenological mis-matches? what may be biological consequences of not adapting
+
+- scenarios can be used proactively for management/conservation
+Sensitivity of watersheds with different year types - what land use actions will exacerbate sensitivity of temperature. 
+ -mining
+ -logging
+ -development (mat-su)
+ 
+ #Outcomes from vulnerability Assesssment
+ - will temperature influence production rates?
+ - Adjust harvest rates/limits
+ - limit human impacts 
+ - run-timing shifts effects on subsistence fishing and overlap with others species (by-catch)
+ - phenology shifts
+ - shifts in growth potential (degree days)
+ - when does growing season start?
+ 
+ weir/sonar data available for system types - validation technique
+ 
+ Biological response of temperature - look at patterns where data is available
+ 
+ Case-studies for digging into population level consequences
+  - Luca and Emilie - data from copper river for pop-specific questions
+  - use adfg run-timing data availablity to drive 
+  - how does distribution of temperature drive run-timing
+  - what is exposure
+  
+  Manuscripts:
+ - sensitivity analysis
+ - what does temperautre sensitivity mean in terms of life-cycle of the fish and/or impacts to fishing regs
+ 
+ Goal with by the end of 2020 having analysis complete.

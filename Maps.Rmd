@@ -1,0 +1,54 @@
+---
+title: "Maps"
+author: "Leslie Jones"
+date: "11/19/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(daymetr)
+library(ncdf4)
+library(raster)
+library(rgdal)
+library(ggplot2)
+library(maptools)
+library(sf)
+library(RColorBrewer)
+library(tidyverse)
+library(epitools)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+akssf <- st_read("W:/GIS/AKSSF/AKSSF_studyarea.shp")
+ggplot() +
+  geom_sf(data = akssf, size = 0.5, color = "grey", fill = "cyan1") + 
+  ggtitle("AKSSF Study Area") 
+
+tair <- raster("W:/GIS/Daymet/tmean_8day/2014/tair_2014_06_28.tif")
+raster::projection(tair) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +a=6378137   +b=6356752.314706705 +units=km +no_defs"
+# reproject to AK equal albers
+tair2 <- raster::projectRaster(tair, crs = "+init=epsg:3338")
+tmean_df  <- as.data.frame(tair2, xy = TRUE)
+
+ggplot() +  geom_sf(data = akssf, size = 0.5, color = "grey", fill = NA) +
+   ggtitle("AKSSF Study Area") + geom_raster(data = tmean_df, aes(x=x, y=y, fill=tair_2014_06_28))
+
+#use ggplot to map raster
+ggplot() +
+  geom_raster(data = tmean_df, aes(x=x, y=y, fill=tair_2014_06_28)) +  scale_colour_gradient() + coord_quickmap()
+
+#map raster with rcas
+tair_map <- ggplot() +
+  geom_raster(data = tmean_df, aes(x=x, y=y, fill=tair_2014_06_28)) +  scale_colour_gradient() +
+  geom_sf(data = akssf, size = 0.5, color = "grey", fill = NA) 
+
+ggsave("W:/AKSSF/admin/reporting/tair_map.jpeg")
+
+```
+

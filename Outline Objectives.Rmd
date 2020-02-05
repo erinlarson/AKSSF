@@ -1,0 +1,142 @@
+---
+title: "Outline Objectives"
+author: "Leslie Jones"
+date: "11/5/2019"
+output: html_document
+---
+
+##Study Area 
+
+Cook Inlet, Prince William Sound and Copper River Basins
+HUC12 watersheds?
+Salmon only?
+
+## Objective 1: Thermal regimes
+Task 1.1 - Temperature Data Synthesis - open water season (May 1st - September 1) and winter period - incubation period (degree days) - those that are sensitive - scenarios of change C/change C  - relate changes in incubation period/spawn timing to subsistence fishing
+
+- summarize to mean, min, and max daily stream temperatures 
+Look at correlations between min, max, mean, range
+
+
+Incubation Period most closely tied to temperature
+ - species specific
+ - August to May for chinook and sockeye and chum
+ - September to May for coho and pink
+ 
+Juvenile rearing
+ - early summer (may 1 - july 15?)
+ - late summer (july 15 - September 30)
+ 
+Freshwater Migration
+ - May to mid-September
+ 
+
+1) Plot temperature time-series by year to identify distinct thermal regimes based on open water season (glacial, high-elevation snow and mid-low elevation rain)
+
+2) Summarize thermal regimes/metrics of interest
+
+- are there certain thermal metrics besides average daily that we want to test sensitivity of?
+- Use DFA or PCA of thermal regimes/metrics to see if there is overlap between sites ("water source/hydrologic types") or regions 
+- explore similarities and differences and justification of including all in one model
+
+2) Identify salmon-specific life-history windows or hydrology driven sensitivity windows on which to calculate temperature sensitivities
+- early summer period (May1 - July 15)
+- late summer period (July 15 - Sept 1)
+
+
+MAtt??? how different thermal regimes drive salmon specific stuff
+What is added value of DFA?
+
+
+##Objective 2: Temperature Sensitivity
+Task 2.1 - Climate and Geomorphic Data Synthesis
+1) Summarize daily values of Daymet (air, swe, and prcp) for each watershed and year - join to site-specific temperature data 
+- All daily stream and air temperature time-series should be z-score standardized within each stream-year prior to analysis. 
+
+Task 2.2 - Thermal Sensitivity Analysis:
+
+1)DFA approach: data = trends + explanatory variables + noise
+- Common trends in sensitivity of air temperature and precipitation - combined
+- explanatory variable could be air temp, snow, rain. and then cumulative impact/sensitivity?
+
+OR
+
+2) For each site calculate year-specific senstivities to air temperature (daily mean, min or max water temperature)
+site-year specific sensitivity models
+WTi = beta* ATi, where i = day and beta = delta WT/delta ST
+
+- map sensitivities for each time period by year
+- how much diversity exists? 
+- What drives diversity in sensitivity index? snow? rain? geomorphology?
+- relate to Maheu parameters to describe thermal regimes (amplitude, mean, phase)
+
+- PCA to link Sensitivity index to thermal regime descriptors, so that after watersheds are attributed with SI -they can be described in terms of thermal regime characteristics
+
+3) Regress air sensitivity index against geomorphic, hydrologic, and climate covariates
+All sites and years
+SIij = watershed slope + elevation + glacier cover + riparian, where i=site and j=year
+
+Geomorphic covaraites:
+1) Elevation of watershed
+2) upstream contributing area - flow accumulation (stream size)
+3) watershed slope
+4) glacial till - sediment - geology
+
+Hydrologic covariates:
+1) downstream of glacier - percent cover of glaciers
+2) downstream of lake - maybe not
+
+Landcover covariates:
+1) wetland cover
+2) forest cover - NDVI?? LST? something to get at riparian cover
+
+#Objective 3: Risk Analysis
+Task 3.1 - Mapping thermal sensitivities
+Mapping temperature regimes and thermal sensitivities will allow for visual representation of results so that decision makers can better understand the location and nature of sensitive habitats and impacts that may threaten salmon populations and fisheries. Thermal sensitivity estimates and environmental covariates will be mapped at sites and watershed scales. 
+
+ - specific changes in life-histories - like changes in spawn timing and emergence timing
+
+Task 3.2 – Vulnerability analysis - cold-water refugia mapping 
+Salmon habitats and watersheds with low sensitivities to changes in air temperature and snowpack may have the highest potential of providing thermal refugia under future climate warming, whereas habitats and watersheds identified with high sensitivities to air temperature change may be most at risk to warming. For this task, maps will be produced that prioritize watersheds based on potential (i.e., low sensitivities) of providing cold-water refugia under future climate warming.
+
+ - Vulnerability = sensitivity + exposure
+ - target spatial distribution of sensitive and spatial distribution of future temperature change
+
+ 
+Task 3.2 – Population level impact assessment (can we detect higher vulnerability for watersheds like the Deshka?)
+Target subsistence fisheries/locations in regions
+scale up?
+
+- how does changes in spawn timing overlap with subsistence fisheries
+
+1) Extroplate regressions across all watersheds for chosen years which represent climate conditions
+
+  Scenarios:
+  - year with high winter snow-pack (2012)
+  - year with low snow-pack (2005)
+  - year with high summer temps
+  - year with low summer temps
+  
+What is the diversity of sensitivity across scenarios? so that scenarios can be used proactively for management/conservation?
+Sensitivity of watersheds with different year types - what land use actions will exacerbate sensitivity of temperature. 
+ -mining
+ -logging
+ -development (mat-su)
+ 
+Relate SI to thermal regime metrics based on PCA above
+
+#Outcomes from vulnerability Assesssment
+ - will temperature influence production rates?
+ - Adjust harvest rates/limits
+ - limit human impacts 
+ - run-timing shifts effects on subsistence fishing and overlap with others species (by-catch)
+ - phenology shifts
+ - shifts in growth potential (degree days)
+ - when does growing season start?
+ 
+ weir/sonar data available for system types - validation technique
+ 
+ Case-studies for digging into population level consequences
+  - use adfg run-timing data availablity to drive 
+  - how does distribution of temperature drive run-timing
+  - what is exposure
