@@ -182,3 +182,7 @@ Idea for Manuscripts:
  - what does temperautre sensitivity mean in terms of life-cycle of the fish and/or impacts to fishing regs
  
 Goal with by the end of 2020 having analysis complete.
+
+Notes from RSS:
+- when summarizing daymet using extract for catchments or other polygons, use weighted averages (weights = TRUE, normalize = TRUE). Since catchments in NHDPlus are really small, not many grids in each.
+- Check out github repo: https://github.com/Conte-Ecology/conteStreamTemperature. USGS stream temperature group working on NE temperature models with scripts for cleaning daily data. Possibly useful if we have some data that has not been cleaned and also to double check all data.
