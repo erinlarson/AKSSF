@@ -55,9 +55,13 @@ Let model AIC selction designate whether this partition is needed
 - what metrics are specific to timing or life-history windows? - may differ by species
 - relate to Maheu parameters to describe thermal regimes (amplitude, mean, phase)
 
-#Objective 2: Temperature Sensitivity
+# Objective 2: Temperature Sensitivity
 
 ##Task 2.1 - Climate and Geomorphic Data Synthesis
+
+For daymet processing, see the custom zonalDaymet package developed by NE USGS temperature data researchers. Everything can be done in R and they have processes for managing memory issues during spatial averaging.
+
+https://github.com/Conte-Ecology/zonalDaymet
 
 1) Summarize daily values of Daymet for each RCA and year - join to site-specific temperature data 
    - air temperature
@@ -120,7 +124,7 @@ Landcover covariates:
 1) wetland cover
 2) riparian (forest cover/shrub) - something to get at riparian cover
 
-#Objective 3: Risk Analysis
+# Objective 3: Risk Analysis
 
 ##Task 3.1 - Mapping thermal sensitivities
 
