@@ -255,24 +255,24 @@ ci_summer_sites %>%
 
 ```{r prepare data}
 
-ci_daily_2017 <- left_join(ci_summer_sites %>% filter(year == 2017) %>% select(SiteID, year), 
+ci_daily_2010 <- left_join(ci_summer_sites %>% filter(year == 2010) %>% select(SiteID, year), 
                            ci_daily %>% filter(month(sampleDate) %in% 6:8)) %>% 
   arrange(SiteID, year)
 
-ci_daily_2017_zsc <- bind_cols(ci_daily_2017 %>% 
+ci_daily_2010_zsc <- bind_cols(ci_daily_2010 %>% 
   group_by(SiteID, year) %>% 
   summarize(meanTemp_zsc = scale(meanTemp),
             tair3_zsc = scale(tair3)),
-  ci_daily_2017 %>% select(sampleDate, meanTemp, tair3))
+  ci_daily_2010 %>% select(sampleDate, meanTemp, tair3))
 
-ci_daily_2017_zsc 
+ci_daily_2010_zsc 
 
-ci_daily_2017 %>% 
+ci_daily_2010 %>% 
   filter(SiteID == "CIK14") %>% 
   summarize(mean = mean(meanTemp),
             sd = sd(meanTemp))
 
-ci_daily_2017 %>% 
+ci_daily_2010 %>% 
   filter(SiteID == "CIK14") %>% 
   mutate(zsc = (meanTemp - 12.18014)/1.902544)
 
@@ -283,32 +283,37 @@ ci_daily_2017 %>%
 
 ```{r zscores and remove na cols}
 
-ci_daily_2017_zsc %>% 
+ci_daily_2010_zsc %>% 
   ggplot() +
   geom_line(aes(x = sampleDate, y = meanTemp, color = "blue")) +
   geom_line(aes(x = sampleDate, y = meanTemp_zsc, color = "red")) +
   facet_wrap(~SiteID)
 
-ci_daily_2017_zsc
+ci_daily_2010_zsc %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = meanTemp_zsc, group = SiteID, color = "grey")) + 
+  geom_line(aes(x = sampleDate, y = tair3_zsc, group = SiteID, color = "red")) 
+
+ci_daily_2010_zsc
 
 #convert to n x T: n time series over T time steps
 
-ci_2017_stream <- ci_daily_2017_zsc %>%
+ci_2010_stream <- ci_daily_2010_zsc %>%
   ungroup() %>% 
   select(SiteID, sampleDate, meanTemp_zsc) %>% 
   pivot_wider(names_from = sampleDate, values_from = meanTemp_zsc)
 
-ci_2017_air <- ci_daily_2017_zsc %>%
+ci_2010_air <- ci_daily_2010_zsc %>%
   ungroup() %>% 
   select(SiteID, sampleDate, tair3_zsc) %>% 
   pivot_wider(names_from = sampleDate, values_from = tair3_zsc)
 
 #remove dates with any missing values for stream temp
-nacols <- colnames(ci_2017_stream)[colSums(is.na(ci_2017_stream)) > 0]
+nacols <- colnames(ci_2010_stream)[colSums(is.na(ci_2010_stream)) > 0]
 nacols
 
-ci_2017_stream <- ci_2017_stream %>% select(-c(nacols, SiteID))
-ci_2017_air <- ci_2017_air %>% select(-c(nacols, SiteID))
+ci_2010_stream <- ci_2010_stream %>% select(-c(nacols, SiteID))
+ci_2010_air <- ci_2010_air %>% select(-c(nacols, SiteID))
 
 ```
 
@@ -320,13 +325,72 @@ ci_2017_air <- ci_2017_air %>% select(-c(nacols, SiteID))
 x = 200 #set for minit
 c = 5000 #set for maxit = (x + c) - to ensure convergence
 
-#error won't run
-ci_marss <- MARSS(as.matrix(ci_2017_stream), model = list(m = 3, R = 'unconstrained'), covariates = as.matrix(ci_2017_air),
-                  form = "dfa")
+#model set for 2014 - 16 time series and 83 days in JJA
+# 1 - no air temp, R diagonal and equal
+# 2 - with air temp, R diagonal and equal
 
-#ran, but convergence error bc maxit set to 500.
-ci_marss <- MARSS(as.matrix(ci_2017_stream), model = list(m = 1, R = 'unconstrained'),
-                  form = "dfa")
+
+control.ops <- list(minit = x, maxit = c) 
+
+ci_mod1 <- MARSS(as.matrix(ci_2010_stream), model = list(m = 1, R = 'diagonal and equal'),
+                  form = "dfa", control = control.ops)
+ci_mod2 <- MARSS(as.matrix(ci_2010_stream), model = list(m = 1, R = 'diagonal and equal'), covariates = as.matrix(ci_2010_air),
+                  form = "dfa", control = control.ops)
+ci_mod3 <- MARSS(as.matrix(ci_2010_stream), model = list(m = 2, R = 'diagonal and equal'),
+                  form = "dfa", control = control.ops)
+ci_mod4 <- MARSS(as.matrix(ci_2010_stream), model = list(m = 2, R = 'diagonal and equal'), covariates = as.matrix(ci_2010_air),
+                  form = "dfa", control = control.ops)
+
+AIC(ci_mod1, ci_mod2, ci_mod3, ci_mod4)
+
+coef(ci_mod4)
+
+fit <- get_DFA_fits(ci_mod2)
+
+```
+
+```{r get_DFA_fits function}
+
+MLEobj <- ci_mod2
+
+get_DFA_fits <- function(MLEobj, dd = NULL, alpha = 0.05) {
+    ## empty list for results
+    fits <- list()
+    ## extra stuff for var() calcs
+    Ey <- MARSS:::MARSShatyt(MLEobj)
+    ## model params
+    ZZ <- coef(MLEobj, type = "matrix")$Z
+    ## number of obs ts
+    nn <- dim(Ey$ytT)[1]
+    ## number of time steps
+    TT <- dim(Ey$ytT)[2]
+    ## get the inverse of the rotation matrix
+    H_inv <- varimax(ZZ)$rotmat
+    ## check for covars
+    if (!is.null(dd)) {
+        DD <- coef(MLEobj, type = "matrix")$D
+        ## model expectation
+        fits$ex <- ZZ %*% H_inv %*% MLEobj$states + DD %*% dd
+    } else {
+        ## model expectation
+        fits$ex <- ZZ %*% H_inv %*% MLEobj$states
+    }
+    ## Var in model fits
+    VtT <- MARSSkfss(MLEobj)$VtT
+    VV <- NULL
+    for (tt in 1:TT) {
+        RZVZ <- coef(MLEobj, type = "matrix")$R - ZZ %*% VtT[, 
+            , tt] %*% t(ZZ)
+        SS <- Ey$yxtT[, , tt] - Ey$ytT[, tt, drop = FALSE] %*% 
+            t(MLEobj$states[, tt, drop = FALSE])
+        VV <- cbind(VV, diag(RZVZ + SS %*% t(ZZ) + ZZ %*% t(SS)))
+    }
+    SE <- sqrt(VV)
+    ## upper & lower (1-alpha)% CI
+    fits$up <- qnorm(1 - alpha/2) * SE + fits$ex
+    fits$lo <- qnorm(alpha/2) * SE + fits$ex
+    return(fits)
+}
 
 ```
 
