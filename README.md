@@ -22,6 +22,10 @@ Project to describe and map thermal sensitivities for Southcentral Alaska - Cook
 * NPS data on KNB from Trey Simmons
 * ARRI data from Mat-Su - dailies are an output from thermal regimes project
 
+All Bristol Bay data are being cleaned in a separate [gihub repo](https://github.com/rsshaftel/SWSHP-Bristol-Bay-Thermal-Diversity).
+
+
+
 2. Data cleaning
 
 All data need to be formatted consistently so that we can combine them for the data analysis step. All datasets should be saved as separate data files and sites files for import to AKTEMP later. 

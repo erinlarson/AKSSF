@@ -1,0 +1,202 @@
+---
+title: "sites"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+
+library(tidyverse)
+library(googlesheets4)
+library(readxl)
+
+```
+
+Read in metadata for all the sites from the different providers/projects. Combine into one data frame:
+
+* data_SiteID - this is the correct site id to link to the data table
+* SiteID - this is the site id provided by the agency, but not always unique or linked directly to the data as provided
+* AKOATS_ID
+* waterbody_name - we will need this to confirm correct catchment location
+* latitude
+* longitude
+* Source_Name
+* Contact_Name
+
+This file will be brought into GIS to link to catchments (e.g. add a catchment_ID) so that we can extract daymet air temperatures and correctly link them to sites.
+
+# AKOATS
+
+```{r akoats working continuous sites}
+
+#get lat/longs for sites in akoats
+akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "CONTINUOUS_DATA")
+
+```
+
+# USFS
+
+Forest service sites.
+
+```{r usfs metadata}
+
+depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
+
+usfs_md <- read_sheet(depracated_metadata, sheet = "Sheet1",
+                    col_names = TRUE, na = "NA", col_types = "c-cn-cccccnnccccc") %>% 
+  filter(ACCS_Project == "USFS_Chugach") %>% 
+  rename(lat_new = Latitude, long_new = Longitude) %>% 
+  select(-ACCS_Project)
+
+usfs_md <- left_join(usfs_md, akoats %>% select(seq_id, Latitude, Longitude), by = c("AKOATS_ID" = "seq_id")) %>% 
+  mutate(Latitude = case_when(is.na(Latitude) ~ lat_new,
+                              TRUE ~ Latitude),
+         Longitude = case_when(is.na(Longitude) ~ long_new,
+                               TRUE ~ Longitude)) %>% 
+  select(-lat_new, -long_new)
+
+usfs_akssf_md <- usfs_md %>% 
+  select(AKOATS_ID, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+```
+
+# Stream temperature models - Deshka, Anchor, Kenai
+
+Metadata were created for the AKTEMP database, read in from google sheet online.
+
+Problems with bad naming conventions on some of this data. The sites were renamed by Leslie for this project and those names are what are in the data. For this project, use the data_siteID so that we can link to the data table later. For the raw metadata for akoats, can use the agency id when available or the data-site id when it is not (just the three kwf loggers).
+
+```{r}
+
+ci_tempmodel_md <- read_sheet(depracated_metadata, sheet = "Sheet1",
+                              col_names = TRUE, na = "NA", col_types = "c-cn-cccccnnccccc") %>% 
+  filter(ACCS_Project %in% c("Kenai Temperature Model", "Anchor Temperature Model", "Deshka Temperature Model")) %>% 
+  mutate(SiteID = case_when(is.na(Agency_ID) ~ data_SiteID,
+                            TRUE ~ Agency_ID)) 
+  
+
+ci_tempmodel_akssf_md <- ci_tempmodel_md %>% 
+  select(AKOATS_ID, SiteID = data_SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+```
+
+# KNB datasets - Sue Mauger, Trey Simmons
+
+Cook Inletkeeper data archived on KNB. Note that some of this data are from Bristol Bay... combine everything in GIS and see if I need to filter out some to just cover the SC geography.
+
+```{r}
+cik_md <- read_csv("S:\\Stream Temperature Data\\Cook Inletkeeper\\SiteLevelMetadata_Mauger.csv") 
+
+cik_akssf_md <- cik_md %>% 
+  filter(grepl("CIK", SiteID)) %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+cik_akssf_md
+```
+
+NPS data from interior - Trey Simmons archive on KNB. Note that some of these sites might also be outside the geography we want. Plot in GIS and see if need to exclude some.
+
+
+```{r}
+nps_md <- read_csv("S:\\Stream Temperature Data\\NPS Simmons\\data\\SiteLevelMetadata_Simmons.csv") 
+
+nps_akssf_md <- nps_md %>% 
+  filter(SiteID %in% c("Rufus Creek", "Caribou Creek", "Rock Creek WRST", 
+                       "Gilahina River", "Crystal Creek", "Lakina River", "Long Lake Creek")) %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+```
+
+
+# USFWS datasets for SC: Kodiak refuge and some OSM and WRB sites
+
+Read in metadata for Kodiak, OSM, and WRB. Note that they include a lot of notes so open each in Excel to ensure I am grabbing the correct rows with actual data.
+
+Kodiak, note that Meg fixed some site names that should be cleared up here. 
+
+```{r}
+
+kodiak_md <- read_excel("S:\\Stream Temperature Data\\USFWS Perdue - complete 2020\\Kodiak_Oct2020.xlsx", sheet = "AKOATS_metadata") %>% 
+  filter(Contact_person == "Bill Pyle") %>% 
+  mutate(SiteID = case_when(grepl("akacr01", SiteID) ~ "kdk_akacr01",
+                            grepl("ayarv03", SiteID) ~ "kdk_ayarv03",
+                            grepl("concr01", SiteID) ~ "kdk_concr01",
+                            TRUE ~ SiteID))
+
+kodiak_akssf_md <- kodiak_md %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+
+```
+
+
+Office of Subsistence Management. Unfortunately, these are all waterbody names for site ids. We could add an osm prefix. Reviewing AKOATS -  Tonada Creek and Long Lake Creek are in the copper river basin, Afognak and Buskin are on kodiak, Newhalen River in Bristol Bay. This metadata sheet doesn't have the akoats ids so will need to add them in. 
+
+NOTE - should transfer newhalen in bb to the other repo.
+
+```{r}
+osm_md <- read_excel("S:\\Stream Temperature Data\\USFWS Perdue - complete 2020\\OSM_Oct2020.xlsx", sheet = "OSM_Sites_AKOATS") %>% 
+  filter(Contact_person == "Don Rivard")
+
+#link to akoats ids, three duplicates, keep first record. Second record for Gisasa is particularly suspicious bc lat/long very different and note with comment from krista bartz/nps. Also, different agency_ids for afognak and buskin rivers, add in akoats ids manually.
+# new longitude for Tanada creek is totally wrong
+osm_md <- left_join(osm_md, akoats %>% filter(SourceName == "fwsAlaskaOSM") %>% select(Agency_ID, seq_id)) %>% 
+  filter(!seq_id %in% c(2096, 2095, 1581)) %>% 
+  mutate(seq_id = case_when(Agency_ID == "kdk_aforv01" ~ 1569,
+                            Agency_ID == "kdk_busrv01" ~ 1568,
+                            TRUE ~ seq_id),
+         Latitude = case_when(Lat_revised == "SAME" | Agency_ID == "Tanada Creek" ~ Latitude, 
+                              TRUE ~ as.numeric(Lat_revised)),
+         Longitude = case_when(Long_revised == "SAME" | Agency_ID == "Tanada Creek" ~ Longitude, 
+                              TRUE ~ as.numeric(Long_revised)))  
+
+#filter on sites needed for this project
+osm_akssf_md <- osm_md %>% 
+  filter(Agency_ID %in% c("Long Lake Creek", "Tanada Creek",
+                          "kdk_aforv01", "kdk_busrv01")) %>% 
+
+  select(AKOATS_ID = seq_id, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+osm_akssf_md
+```
+
+Water resources branch sites. Four sites on Kodiak island for this project: akalura r, dog salmon r, ayakulik r, and karluk r. Eegegik river in Bristol Bay in other repo.
+
+```{r}
+wrb_md <- read_excel("S:\\Stream Temperature Data\\USFWS Perdue - complete 2020\\WRB_Oct2020.xlsx", sheet = "AKOATS_metadata") %>% 
+  filter(Contact_person == "Meg Perdue")
+
+wrb_akssf_md <- wrb_md %>% 
+  filter(Waterbody_name %in% c("Akalura River", "Dog Salmon River", "Ayakulik River", "Karluk River")) %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+```
+
+Combine the FWS sites for this project.
+
+```{r}
+fws_akssf_md <- bind_rows(kodiak_md, osm_akssf_md, wrb_akssf_md) %>% 
+  select(AKOATS_ID, Waterbody_name, SiteID, SourceName, Contact_person, Latitude, Longitude)
+```
+
+# Bristol Bay metadata
+
+This is all being resolved as part of Southwest Alaska Salmon Habitat Partnership project. Bring in metadata list from that repo.
+
+```{r}
+bb_md <- readRDS("W:/Github/SWSHP-Bristol-Bay-Thermal-Diversity/output/bristol_bay_site_metadata.rds")
+```
+
+
+
+# Combine all raw metadata files with only the needed attributes
+
+
+
+```{r}
+
+akssf_md <- bind_rows(usfs_akssf_md, ci_tempmodel_akssf_md, cik_akssf_md, nps_akssf_md, fws_akssf_md, bb_md)
+
+write_csv(akssf_md, path = "output/akssf_metadata.csv")
+```
+
+

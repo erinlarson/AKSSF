@@ -65,7 +65,7 @@ https://github.com/Conte-Ecology/zonalDaymet
 
 1) Summarize daily values of Daymet for each RCA and year - join to site-specific temperature data 
    - air temperature
-    - prcp
+   - prcp
    - swe
    
 Do we want rolling averages? sums for prcp? April 1 SWE? think about daymet summaries needed to relate to temperature time-series for sensitivity analysis and how extrapolating might influence that decision
