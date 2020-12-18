@@ -10,6 +10,7 @@ knitr::opts_knit$set(root.dir = normalizePath(".."))
 library(tidyverse)
 library(googlesheets4)
 library(readxl)
+library(janitor)
 
 ```
 
@@ -129,9 +130,7 @@ kodiak_akssf_md <- kodiak_md %>%
 ```
 
 
-Office of Subsistence Management. Unfortunately, these are all waterbody names for site ids. We could add an osm prefix. Reviewing AKOATS -  Tonada Creek and Long Lake Creek are in the copper river basin, Afognak and Buskin are on kodiak, Newhalen River in Bristol Bay. This metadata sheet doesn't have the akoats ids so will need to add them in. 
-
-NOTE - should transfer newhalen in bb to the other repo.
+Office of Subsistence Management. Unfortunately, these are all waterbody names for site ids. We could add an osm prefix. Reviewing AKOATS -  Tanada Creek and Long Lake Creek are in the copper river basin, Afognak and Buskin are on kodiak, Newhalen River in Bristol Bay. This metadata sheet doesn't have the akoats ids so will need to add them in. 
 
 ```{r}
 osm_md <- read_excel("S:\\Stream Temperature Data\\USFWS Perdue - complete 2020\\OSM_Oct2020.xlsx", sheet = "OSM_Sites_AKOATS") %>% 
@@ -178,6 +177,100 @@ fws_akssf_md <- bind_rows(kodiak_md, osm_akssf_md, wrb_akssf_md) %>%
   select(AKOATS_ID, Waterbody_name, SiteID, SourceName, Contact_person, Latitude, Longitude)
 ```
 
+# USGS sites in akoats
+
+In GIS, selected all sites within AKSSF study areas: SC, Kodiak, and BB, and then selected subset with SourceName of USGS.
+
+```{r}
+usgs_md <- read_excel("data_preparation/akoats_workings_usgs.xls") %>% 
+  select(AKOATS_ID = seq_id, Waterbody_name, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude)
+```
+
+
+
+
+# ACCS sites in Little Susitna watershed
+
+The sites from 2016 are in akoats. We should have some additional sites and hopefully some of the same sites from 2019-2020 so that we have more than one summer of data.
+
+```{r}
+accs_2016_md <- akoats %>% filter(Contact_person == "Dan Bogan", Sensor_access == "Road") %>% 
+  select(AKOATS_ID = seq_id, Waterbody_name, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude)
+
+```
+
+27 sites established in 2019 that are in the logger database on google drive.
+
+```{r}
+# Delete if write access necessary - You will be prompted to log in to google and enter to receive an authorization token when calling read_sheet
+
+gs4_deauth() 
+
+# set link to sheet
+temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1K5gY-fmjBrofKXGFaSMeOj_KmYFHkrGTE_inwZj9zec/edit#gid=2031679772"
+
+#Read in temp logger deployment google sheet
+logDb <- read_sheet(temp_log_db_gs,sheet = "TEMP LOGGER DEPLOYMENT",
+                    col_names = TRUE,
+                    col_types = "c") %>% 
+  clean_names() 
+
+#54 loggers at 27 sites
+ls_sites <- logDb %>% 
+  mutate(deployment_date = as.Date(deployment_date_m_d_y, format = "%m/%d/%Y"),
+         deployment_year = year(deployment_date)) %>% 
+  filter(project_name == "Little Su Temperature Network", deployment_year == 2019) 
+  
+#lat/longs are 1 per site so can use distinct to get locations
+ls_sites %>% distinct(deployment_site_name, deployment_latitude_dd, deployment_longitude_dd) %>% count(deployment_site_name)
+
+#append a _2019 to these sites so we can differentiate them from the sites in 2016.
+ls_sites <- ls_sites %>% 
+  distinct(deployment_site_name, deployment_latitude_dd, deployment_longitude_dd) %>% 
+  mutate(SourceName = "uaaAKNHP", Contact_person = "Dan Bogan",
+         Waterbody_name = case_when(grepl("Little Su", deployment_site_name) ~ "Little Susitna River",
+                                    grepl("Lake Creek", deployment_site_name) ~ "Lake Creek",
+                                    grepl("Trib", deployment_site_name) ~ "Tributary to Little Susitna River",
+                                    grepl("trib", deployment_site_name) ~ "Tributary to Nancy Lakes",
+                                    deployment_site_name == "Archangel" ~ "Archangel Creek",
+                                    TRUE ~ deployment_site_name),
+         Latitude = as.numeric(deployment_latitude_dd),
+         Longitude = as.numeric(deployment_longitude_dd),
+         SiteID = paste(deployment_site_name, "_2019", sep = "")) %>% 
+  select(SiteID, Latitude, Longitude, Waterbody_name, SourceName, Contact_person)
+
+ls_sites %>% select(SiteID, Waterbody_name)
+```
+
+Combine 2016 and 2019 logger locations - check in GIS to see if some of these are close enough to be the same site id.
+
+```{r}
+accs_md <- bind_rows(accs_2016_md, ls_sites)
+
+
+```
+
+Notes from Little Su Repo. These are all different time series so can easily be combined when we get the catchment ids on them. If Dustin cleans up site names in little su repo, can bring that metadata sheet over here.
+
+Some sites are in the same catchment and relatively close so we could manage them with on SiteID:
+
+* Archangel Creek, two sites are 41 m apart
+* LS12 and Little Su 14, 32 m apart
+* Little Su 12 is right next to USGS gage 15290000, just fyi
+* Coho and Coho Creek are 29 m apart
+* Lake Creek and Lake Creek 2 are 14 m apart
+* Lake Creek 1 and Lake above Nancy are 12 m apart
+* Papoose and Papoose Creek are 10 m apart
+* Tributary 4 and Lake Complex are 34 m apart
+
+Some of the mainstem sites are in the same catchment, but pretty far apart so we should probably keep them as separate sites:
+
+* Little Su 6 and LS8 are about ~190 m apart along the flowline and are in the same catchment
+* Little Su 3 and LS3 are ~ 800 m apart as the crow flies, but much further on stream line, same catchment though
+* LS1 and Little Su 2 are 400 m apart direct line distance and in the same catchment
+* Little Su 1 and LS PUF are ~400 m apart direct line distance and in the same catchment
+
+
 # Bristol Bay metadata
 
 This is all being resolved as part of Southwest Alaska Salmon Habitat Partnership project. Bring in metadata list from that repo.
@@ -190,11 +283,9 @@ bb_md <- readRDS("W:/Github/SWSHP-Bristol-Bay-Thermal-Diversity/output/bristol_b
 
 # Combine all raw metadata files with only the needed attributes
 
-
-
 ```{r}
 
-akssf_md <- bind_rows(usfs_akssf_md, ci_tempmodel_akssf_md, cik_akssf_md, nps_akssf_md, fws_akssf_md, bb_md)
+akssf_md <- bind_rows(usfs_akssf_md, ci_tempmodel_akssf_md, cik_akssf_md, nps_akssf_md, fws_akssf_md, bb_md, usgs_md, accs_md)
 
 write_csv(akssf_md, path = "output/akssf_metadata.csv")
 ```
