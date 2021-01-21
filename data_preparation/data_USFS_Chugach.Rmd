@@ -64,7 +64,9 @@ bb.climDat
 
 # USFS
 
-## Data
+
+
+## Metadata
 
 Export his site names for Priscilla or use his metadata workbook -- it's a little confusing. Check if it matches the actual data files.
 
@@ -82,6 +84,63 @@ fs_site_names <- sapply(fs_files, function(x) str_match(x, "\\/\\s*(.*?)\\s*\\.c
 # as.data.frame(fs_site_names) %>% write_csv(path = "output/usfs_site_names.csv")
 
 ```
+
+Priscilla was able to link most of these file names to site names in AKOATS. For the four sites not in AKOATS, she converted the UTM 
+coordinates to latitude/longitude. Read in that google sheet so that we can get simple site names on the data sheet and also start a metadata file with the locations.
+
+```{r read in metadata}
+
+depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
+
+usfs_md <- read_sheet(depracated_metadata, sheet = "Sheet1",
+                    col_names = TRUE,
+                    col_types = "c") %>% 
+  filter(ACCS_Project == "USFS_Chugach") %>% 
+  mutate(AKOATS_ID = as.numeric(AKOATS_ID),
+         Latitude = as.numeric(Latitude),
+         Longitude = as.numeric(Longitude)) %>% 
+  rename(SiteID = Agency_ID)
+
+usfs_md %>% select(SiteID, Latitude, Longitude)
+
+```
+
+Read in current copy of akoats so we can get lat longs for Luca's sites that Priscilla could match.
+
+```{r akoats}
+akoats_md <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_Working.xlsx", sheet = "CONTINUOUS_DATA") %>%
+  select(seq_id,Agency_ID,Contact_person,SourceName,Contact_email,Contact_telephone,Latitude,Longitude,Sensor_accuracy) %>%
+  rename(AKOATS_ID = seq_id,
+         SiteID = Agency_ID) %>% 
+  mutate(AKOATS_ID = as.numeric(AKOATS_ID),
+         Latitude = as.numeric(Latitude),
+         Longitude = as.numeric(Longitude))
+```
+
+
+```{r}
+
+fs_akoats_sites <- usfs_md %>% 
+  rename(SiteID = Agency_ID) %>% 
+  select(SiteID, AKOATS_ID) %>% 
+  left_join(akoats_md) %>% 
+  filter(!is.na(AKOATS_ID))
+  
+keep <- intersect(names(fs_akoats_sites), names(usfs_md))
+
+usfs_md <- bind_rows(fs_akoats_sites,
+  usfs_md %>% filter(is.na(AKOATS_ID)) %>% 
+    select(one_of(keep)))
+
+
+saveRDS(usfs_md, "output/usfs_md.rds")
+
+
+
+```
+
+
+## Data
 
 ```{r read in data from csv}
 
@@ -113,24 +172,14 @@ fsdat %>%
   summarize(min(sampleDate), max(sampleDate))
 
 fsdat %>% 
-  distinct(year(sampleDate))
+  distinct(year = year(sampleDate)) %>% 
+  arrange(year)
 
-```
-
-Priscilla was able to link most of these file names to site names in AKOATS. For the four sites not in AKOATS, she converted the UTM 
-coordinates to latitude/longitude. Read in that google sheet so that we can get simple site names on the data sheet and also start a metadata file with the locations.
-
-```{r read in metadata}
-
-depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
-
-usfs_md <- read_sheet(depracated_metadata, sheet = "Sheet1",
-                    col_names = TRUE,
-                    col_types = "c") %>% 
-  filter(ACCS_Project == "USFS_Chugach")
-
-
-usfs_md
+fsdat %>% 
+  distinct(file_name, year = year(sampleDate)) %>% 
+  count(file_name) %>% 
+  arrange(n) %>% 
+  summarize(median(n))
 
 ```
 
@@ -151,7 +200,6 @@ fsdat <- left_join(fsdat, usfs_md %>% select(data_SiteID, Agency_ID), by = c("fi
          year = year(sampleDate)) 
 
 ```
-
 
 Quick plots of data to make sure they read in ok. Start by summarizing daily means because quicker to plot. Looks like some bad winter temps well below zero that could be clipped later. No obvious air temps in summer as everything is < = 20 or so.
 
@@ -202,5 +250,18 @@ dev.off()
 
 ```
 
+
+Save file for summary report.
+
+```{r}
+fsdat
+
+names(fsdat)
+
+fsdat %>% 
+  rename(SiteID = Agency_ID) %>% 
+  select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
+  saveRDS("output/fsdat.rds")
+```
 
 

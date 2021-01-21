@@ -78,9 +78,11 @@ ci_tempmodel_md <- read_sheet(depracated_metadata, sheet = "Sheet1",
 
 ci_tempmodel_akssf_md <- ci_tempmodel_md %>% 
   select(AKOATS_ID, SiteID = data_SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+ci_tempmodel_akssf_md
 ```
 
-# KNB datasets - Sue Mauger, Trey Simmons
+# KNB datasets - Sue Mauger, Trey Simmons, ADFG
 
 Cook Inletkeeper data archived on KNB. Note that some of this data are from Bristol Bay... combine everything in GIS and see if I need to filter out some to just cover the SC geography.
 
@@ -96,7 +98,6 @@ cik_akssf_md
 
 NPS data from interior - Trey Simmons archive on KNB. Note that some of these sites might also be outside the geography we want. Plot in GIS and see if need to exclude some.
 
-
 ```{r}
 nps_md <- read_csv("S:\\Stream Temperature Data\\NPS Simmons\\data\\SiteLevelMetadata_Simmons.csv") 
 
@@ -104,6 +105,19 @@ nps_akssf_md <- nps_md %>%
   filter(SiteID %in% c("Rufus Creek", "Caribou Creek", "Rock Creek WRST", 
                        "Gilahina River", "Crystal Creek", "Lakina River", "Long Lake Creek")) %>% 
   select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+```
+
+ADFG data for four streams, but one doesn't have complete summer data for 2016 or 2017 so dropping.
+
+```{r}
+adfg_md <- read_csv("S:\\Stream Temperature Data\\ADFG Kodiak\\data\\SiteLevelMetadata_Kodiak.csv") 
+
+adfg_akssf_md <- adfg_md %>% 
+  filter(Waterbody_type == "S", !SiteID == "kdk_karrv01") %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+adfg_akssf_md
 
 ```
 
@@ -185,8 +199,6 @@ In GIS, selected all sites within AKSSF study areas: SC, Kodiak, and BB, and the
 usgs_md <- read_excel("data_preparation/akoats_workings_usgs.xls") %>% 
   select(AKOATS_ID = seq_id, Waterbody_name, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude)
 ```
-
-
 
 
 # ACCS sites in Little Susitna watershed
@@ -283,11 +295,16 @@ bb_md <- readRDS("W:/Github/SWSHP-Bristol-Bay-Thermal-Diversity/output/bristol_b
 
 # Combine all raw metadata files with only the needed attributes
 
+Save the sites file with a date appended so that we can track evolution over time. There are still a few low priority datasets we may be able to add in.
+
 ```{r}
 
-akssf_md <- bind_rows(usfs_akssf_md, ci_tempmodel_akssf_md, cik_akssf_md, nps_akssf_md, fws_akssf_md, bb_md, usgs_md, accs_md)
+akssf_md <- bind_rows(usfs_akssf_md, ci_tempmodel_akssf_md, cik_akssf_md, nps_akssf_md, adfg_akssf_md, fws_akssf_md, bb_md, usgs_md, accs_md)
 
-write_csv(akssf_md, path = "output/akssf_metadata.csv")
+akssf_md %>% 
+  count(SourceName)
+
+write_csv(akssf_md, path = paste("output/akssf_metadata_", Sys.Date(), ".csv", sep = ""))
 ```
 
 

@@ -1,0 +1,19 @@
+---
+title: "daymet_processing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This script is for processing DAYMET air temperatures for the DFA analysis. I have a number of questions regarding how we want to a) filter sites for the DFA and b) process the air temperature data.
+
+* What window are we including for the stream temperature data? (Tim used June 1 to September 1)
+* What is the minimum amount of missing data we can have for each year? Note that Tim said this could be higher than 20% as long as the data aren't all missing from the beginning or end of the time series.
+* Do we want a minimum number of years for each site? I'm not sure I see a good reason for this since all sites are opportunistic so years won't match anyways. (Tim used 3 years)
+* Should air temperatures be summarized by catchment or a simple buffer? If we want catchments, then we need to wait until all hydro networks are ready, which are being processed for Bristol Bay, Kodiak, and PWS. Additionally, NHDPlus is not yet ready for Copper. So, most likely just Cook Inlet for round 1. 
+* Should we take a mean of the air temperatures by day or over a moving average (e.g. 2 days before and day of)? We could process both ways and explore strength of relationship for cook Inlet data only.
+
+
+
