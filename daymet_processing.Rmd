@@ -5,6 +5,12 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(zonalDaymet)
+library(maptools)
+library(sp)
+library(rgdal)
+
+
 ```
 
 This script is for processing DAYMET air temperatures for the DFA analysis. I have a number of questions regarding how we want to a) filter sites for the DFA and b) process the air temperature data.
@@ -16,4 +22,18 @@ This script is for processing DAYMET air temperatures for the DFA analysis. I ha
 * Should we take a mean of the air temperatures by day or over a moving average (e.g. 2 days before and day of)? We could process both ways and explore strength of relationship for cook Inlet data only.
 
 
+Possible packages include zonalDaymet or spatialEco.
+
+
+Import catchments for Cook Inlet and reproject to daymet projection, Lambert Conformal Conic system.
+
+```{r}
+akssf_fgdb <- "W:\\GIS\\AKSSF Southcentral\\AKSSF Southcentral.gdb" 
+
+ci_cats <- readOGR(dsn = akssf_fgdb, layer = "cookInlet_sites_cats")
+
+summary(ci_cats)
+
+spTransform(ci_cats, CRS)
+```
 

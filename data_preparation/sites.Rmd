@@ -27,6 +27,15 @@ Read in metadata for all the sites from the different providers/projects. Combin
 
 This file will be brought into GIS to link to catchments (e.g. add a catchment_ID) so that we can extract daymet air temperatures and correctly link them to sites.
 
+
+Notes on review of site locations in ArcGIS:
+
+* Sue - Moose 3 Tributary does not have a catchment -- this stream is too small. If we keep it in, then calculate watershed metrics just for the catchment, not using flow accumulation.
+* Luca - Dave's Creek does not have a catchment, it falls within a catchment for Quartz Creek just above Crescent Creek.
+* Luca - Chickaloon River is a lake outlet. It's catchment is very very small. I think that is ok, if I shifted it to the next downstream catchment, it would include a pretty significant tributary erroneously.
+* Luca - NF and SF Williwaw are same location and I only see one tributary to Portage Creek here.
+
+
 # AKOATS
 
 ```{r akoats working continuous sites}
@@ -198,6 +207,21 @@ In GIS, selected all sites within AKSSF study areas: SC, Kodiak, and BB, and the
 ```{r}
 usgs_md <- read_excel("data_preparation/akoats_workings_usgs.xls") %>% 
   select(AKOATS_ID = seq_id, Waterbody_name, SiteID = Agency_ID, SourceName, Contact_person, Latitude, Longitude)
+
+usgs_md %>% 
+  group_by(SiteID) %>% 
+  summarize(n = n(),
+            akoats_ids = toString(AKOATS_ID)) %>% 
+  arrange(desc(n))
+  
+#Delete repeated sites.
+gs_repeats <- c(1670, 1785, 1075, 1071, 1067)
+
+usgs_md <- usgs_md %>% 
+  filter(!AKOATS_ID %in% gs_repeats)
+
+usgs_md %>% 
+  arrange(Waterbody_name)
 ```
 
 

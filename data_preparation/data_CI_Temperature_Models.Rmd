@@ -15,7 +15,6 @@ library(MARSS)
 
 Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series and DAYMET air temperatures can be recylced for this analysis as the data are ready.
 
-
 # Read in data from Deshka, Anchor, and Kenai - v2 raw data only
 
 This version of import - V2, only includes raw temperature data for each project. Get the daily USGS data and daily data from the thermal regimes project separately. This matches the metadata spreadsheet as well.

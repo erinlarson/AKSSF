@@ -14,6 +14,7 @@ library(stringr)
 library(lubridate)
 library(googlesheets4)
 library(rnoaa)
+library(hms)
 
 
 ```
@@ -142,6 +143,49 @@ saveRDS(usfs_md, "output/usfs_md.rds")
 
 ## Data
 
+Luca provided a big chunk of data in ~2018 that was formatted consistently. He recently sent over some additional data for four sites from the Kenai from 2018-2020 that should be read in separately. 
+
+
+```{r kenai new data}
+
+center_cr <- read_csv(fs_files[grepl("CenterCrk", fs_files)]) %>% 
+  rename(Date = "Date Time,",
+         Time = "GMT-08:00",
+         Temperature = "Temp, Â°C (LGR S/N: 20163556, SEN S/N: 20163556)") %>% 
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
+         SiteID = "Center Creek")
+
+bench_cr <- read_excel(fs_files[grepl("BENCH", fs_files)]) %>% 
+  rename(Date = "Date",
+         Time = "Time",
+         Temperature = "Temp, Â°C (LGR S/N: 10515702, SEN S/N: 10515702)") %>% 
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
+         Time = as_hms(Time),
+         SiteID = "Bench Creek")
+
+daves_cr <- read_excel(fs_files[grepl("DavesCrk_surfaceH2O_cz_2018", fs_files)]) %>% 
+  rename(Date = "Date Time,",
+         Time = "GMT-08:00",
+         Temperature = "Temp, Â°C (LGR S/N: 10497829, SEN S/N: 10497829)") %>% 
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
+         Time = as_hms(Time),
+         SiteID = "Daves Creek")
+
+quartz_cr <- read_excel(fs_files[grepl("QuartzCrk_surfaceH2O_cz_2018", fs_files)]) %>% 
+  rename(Date = "Date Time,",
+         Time = "GMT-09:00",
+         Temperature = "Temp, Â°C (LGR S/N: 20163535, SEN S/N: 20163535)") %>% 
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
+         Time = as_hms(Time),
+         SiteID = "Quartz Creek")
+
+
+kendat <- bind_rows(quartz_cr, daves_cr, bench_cr, center_cr)
+
+```
+
+
+
 ```{r read in data from csv}
 
 read_csv_and_name <- function(csv_file_path) {
@@ -149,6 +193,8 @@ read_csv_and_name <- function(csv_file_path) {
   dat <- read_csv(csv_file_path) %>% 
       mutate(file_name = sheet_name)
 }
+
+fs_files <- fs_files[!grepl("QAQC", fs_files)] 
 
 fsdat <- fs_files %>% 
   map_df(function(x) read_csv_and_name(x)) 
@@ -181,6 +227,8 @@ fsdat %>%
   arrange(n) %>% 
   summarize(median(n))
 
+
+
 ```
 
 Additional fields to add to data frame:
@@ -191,15 +239,35 @@ Additional fields to add to data frame:
 
 
 ```{r add new fields}
-fsdat <- left_join(fsdat, usfs_md %>% select(data_SiteID, Agency_ID), by = c("file_name" = "data_SiteID")) %>% 
+fsdat <- left_join(fsdat, usfs_md %>% select(data_SiteID, Agency_ID), by = c("file_name" = "data_SiteID")) 
+```
+
+Combined new data for four Kenai sites with larger dataset.
+
+```{r}
+
+fsdat <- kendat %>% rename(Agency_ID = SiteID,
+                           sampleTime = Time,
+                           sampleDate = Date) %>% 
+  bind_rows(fsdat)
+```
+
+
+```{r}
+fsdat <- fsdat %>% 
   mutate(useSite = case_when(Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek", "Jack Bay River",
-                                           "McKinley Lake", "NF Williwaw Creek", "Pigot Bay Spawn Channel", "Rude River SC",
-                                           "SF Williwaw Creek", "Solf Lake Inlet", "Steller Jay Creek") ~ 0,
+                                           "McKinley Lake", "NF Williwaw Creek", "Pigot Bay Spawn Channel", 
+                                           "Rude River SC", "SF Williwaw Creek", "Solf Lake Inlet", 
+                                           "Steller Jay Creek") ~ 0,
                              TRUE ~ 1),
          dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "), format = "%Y-%m-%d %H:%M"),
-         year = year(sampleDate)) 
+         year = year(sampleDate)) %>% 
+  select(-Date, -file_name, -year1)
 
 ```
+# STOPPED HERE - ADDED IN NEW DATA 1/25/21
+
+
 
 Quick plots of data to make sure they read in ok. Start by summarizing daily means because quicker to plot. Looks like some bad winter temps well below zero that could be clipped later. No obvious air temps in summer as everything is < = 20 or so.
 

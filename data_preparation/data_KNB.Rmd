@@ -216,6 +216,30 @@ nps.data %>%
     facet_wrap(~year) +
     labs(title = dat %>% distinct(SiteID))
 ```
+
+Plot of all data to share with Trey as a reminder.
+
+```{r}
+nps.data %>% 
+  # filter(SiteID == "Lakina River", month(sampleDate) == 6, year == 2008) %>%
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meanT = mean(Temperature)) %>%
+  complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
+  mutate(year = year(sampleDate),
+         mo_day = format(sampleDate, "%m-%d")) %>% 
+  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(year))) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b") +
+  facet_wrap(~ SiteID) +
+  labs(x = "Date", y = "Mean Daily Temperature", color = "Year",
+       title = "NPS Original Logger Data by Site and Year") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+ggsave("output/NPS daily data.pdf", width = 10, height = 8.5)
+
+```
+
 # ADFG - INCOMPLETE DATA 
 
 ## Read in data
