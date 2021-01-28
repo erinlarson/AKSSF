@@ -80,6 +80,7 @@ for(i in 1:nrow(cik.sites)) {
 
 dev.off()
 
+cik.sites %>% arrange(desc(year))
 
 ```
 
