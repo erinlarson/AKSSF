@@ -35,13 +35,17 @@ Metadata ready, but not data (i.e. I need to read in and format data):
 * FWS data for Kodiak Refuge, OSM sites on Kodiak (2) and Copper River (2), and WRB sites on Kodiak (2) -- from Meg Perdue, received Oct 2020. Check to see if FWS data archived on KNB is needed to supplement what Meg sent over -- those data are all through 2017.
 * USGS sites selected in GIS from akoats working. Get data from dataRetrieval library in R
 * ACCS temperature data from Little Susitna watershed - summer 2016 and 2019-2020. Dustin is doing data prep in a separate [Little_Susitna github repo](https://github.com/rsshaftel/Little_Susitna). Grabbed 2016 sites from akoats metadata and combined with 2019 sites from logger database, some might be the same, will need to check in GIS.
+* post-2017 data from Sue has been sent over. 
+
 
 Outstanding data requests:
 
-* post-2017 data from Sue. She has 16 active monitoring sites in Cook Inlet with data ready for 2018 and 2019, I believe. She retrieved loggers last year, but has not downloaded and QAed the data (note that could include 2019 data as well if she downloads mid-summer and not fall).
-* additional PWS data from Luca?
-* Tribal data in AKOATS for Kodiak Island. 
-* Native Village of Eyak data for Cordova.
+* additional PWS data from Luca. He is sending data from 3-4 sites from a graduate student project that has not been QAed and also more years of data for their PWS sites.
+* Native Village of Eyak data for Cordova. Talked with James Paley and they have data from two creeks in Cordova from level loggers so buried just subsurface. Not the best data so probably not worth waiting on.
+* KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Webber, he will send over the data, 2015-2019. He found Telrod on AKOATs, but not showing on our mapper, check working version of akoats to see if it is there. 
+* ADFG data - contact is Heather Finkle. Data through 2017 archived on KNB have already been included. I will email her to see if more years are available.
+* Larsen Bay Tribe, site on Karluk - called Alexander Panamaroff, but he wanted me to talk with Jamie Hubbard, who manages the data.  
+* Alutiiq Tribe, site on Big Creek - data request to Lepani Nadore, data will come from Jeff Davis and should be ready end February.
 
 Low priority datasets (wait to see if we decide to only look at sensitivity for sites with a minimum number of years of data before we pursue additional datasets):
 
