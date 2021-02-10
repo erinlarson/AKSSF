@@ -1,0 +1,186 @@
+---
+title: "CIK_trend_analysis"
+output: 
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+
+library(broom)
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+
+
+```
+
+
+Load data.
+
+```{r}
+cik_dat <- readRDS("data_preparation/formatted_data/cik_dat.rds")
+```
+
+# Temperature Figures
+
+Plot of daily means using complete so missing data don't have lines on ggplot.
+
+```{r}
+cik_dat %>%
+  filter(UseData == 1) %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meanT = mean(Temperature)) %>%
+  complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
+  mutate(year = year(sampleDate),
+         mo_day = format(sampleDate, "%m-%d")) %>% 
+  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(year))) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b") +
+  facet_wrap(~ SiteID) +
+  labs(x = "Date", y = "Mean Daily Temperature", color = "Year",
+       title = "CIK Original Logger Data by Site and Year") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+Same as above, but filtered on sites with 2019 data and that year is highlighted in red.
+
+```{r}
+
+sites_2019 <- cik_dat %>% distinct(SiteID, year) %>% filter(year == 2019) %>% pull(SiteID)
+
+cik_dat %>%
+  filter(UseData == 1, SiteID %in% sites_2019) %>% 
+  group_by(SiteID, Waterbody_name, sampleDate) %>% 
+  summarize(meanT = mean(Temperature)) %>%
+  complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
+  mutate(year = year(sampleDate),
+         mo_day = format(sampleDate, "%m-%d"),
+         yr19 = case_when(year == 2019 ~ 1,
+                          TRUE ~ 0)) %>% 
+  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(yr19), group = year)) +
+  geom_line() +
+  scale_color_manual(values = c("grey", "red"), labels = c("Other years", "2019")) +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b") +
+  facet_wrap(~ Waterbody_name) +
+  labs(x = "Date", y = "Mean Daily Temperature", color = "Year",
+       title = "Stream Temperatures at CIK Sites with Data for 2019") +
+  theme_bw() +
+  theme(legend.position = "bottom", axis.title.x = element_blank())
+```
+
+Create data frames of mean daily and mean monthly temperatures. Filter on UseData == 1. Only calculate monthly means when there are ~80% of days within a month, 24 days of data.
+
+```{r}
+ltSites <- cik_dat %>% 
+  distinct(SiteID, year) %>% 
+  count(SiteID) %>% 
+  filter(n > 9) %>% 
+  pull(SiteID)
+
+cik_daily <- cik_dat %>% 
+  filter(UseData == 1) %>% 
+  group_by(SiteID, Waterbody_name, year, sampleDate) %>% 
+  summarize(meanT = mean(Temperature, na.rm = TRUE)) 
+
+
+cik_monthly <- cik_daily %>% 
+  group_by(SiteID, Waterbody_name, year, month = month(sampleDate)) %>% 
+  summarize(meanMon = mean(meanT),
+            monCt = n())
+  
+```
+Plot of monthly temperatures. There is a clear pattern of warm temperatures in 2003 - 2005 or so that makes linear trends hard to see. But, starting in 2006 through 2019, all stream seem to show a pretty clear pattern in increasing temperatures, especially in summer.
+
+```{r}
+
+cik_monthly %>% 
+  filter(monCt > 24, SiteID %in% ltSites) %>% 
+  ggplot(aes(x = year, y = meanMon, color = as.factor(month))) + 
+  geom_point() +
+  # geom_line() +
+  # geom_smooth(method = "lm") +
+  facet_wrap(~Waterbody_name) +
+  theme_minimal()
+```
+
+# Linear Trends in Monthly Temperatures
+
+I decided looking at linear trends in mean monthly temperatures was the easiest analysis to pursue -- see Figure 4b) in Isaak DJ, Luce CH, Horan DL, et al (2018) Global Warming of Salmon and Trout Rivers in the Northwestern U.S.: Road to Ruin or Path Through Purgatory? Trans Am Fish Soc 147:566–587. https://doi.org/10.1002/tafs.10059. They also imputed missing data using a PCA, which we could try as well if we think there are months that could be filled in easily and increase the sample size.
+
+
+```{r}
+monthlyLMs <- cik_monthly %>% 
+  filter(monCt > 24, SiteID %in% ltSites) %>% 
+  nest(data = c(-Waterbody_name, -month)) %>% 
+  mutate(
+    fit = map(data, ~ lm(meanMon ~ year, data = .x)),
+    tidied = map(fit, tidy)
+  ) %>% 
+  unnest(tidied)
+
+sig_trends <- monthlyLMs %>% 
+  filter(p.value < 0.05, term == "year") %>% 
+  select(Waterbody_name, month)
+
+monthlyLMs %>% 
+  filter(p.value < 0.05, term == "year") %>% 
+  ggplot(aes(x = as.factor(month), y = estimate, color = Waterbody_name)) +
+  geom_point() +
+  theme_minimal() +
+  geom_abline(aes(intercept = 0, slope = 0)) 
+
+```
+
+Those estimates are really high, ~0.2 deg per year. Plot just these monthly trends and see if average monthly temperatures have actually increased by 2 deg over the last decade.
+
+```{r}
+cik_monthly %>% 
+  right_join(sig_trends) %>% 
+  ggplot(aes(x = year, y = meanMon, color = as.factor(month))) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~Waterbody_name) +
+  theme_minimal()
+```
+
+Would we see more significant results if we clipped the other sites to 2005 or later? Yes, 31 sig. trends in monthly means over last 15 years as compared to 23 if we don't filter to remove data prior to 2006.
+
+```{r}
+monthlyLMs2 <- cik_monthly %>% 
+  filter(monCt > 24, SiteID %in% ltSites, year > 2005) %>% 
+  nest(data = c(-Waterbody_name, -month)) %>% 
+  mutate(
+    fit = map(data, ~ lm(meanMon ~ year, data = .x)),
+    tidied = map(fit, tidy)
+  ) %>% 
+  unnest(tidied)
+
+sig_trends2 <- monthlyLMs2 %>% 
+  filter(p.value < 0.05, term == "year") %>% 
+  select(Waterbody_name, month)
+
+nrow(sig_trends2) - nrow(sig_trends)
+
+monthlyLMs2 %>% 
+  filter(p.value < 0.05, term == "year") %>% 
+  ggplot(aes(x = as.factor(month), y = estimate, color = Waterbody_name)) +
+  geom_point() +
+  theme_minimal() +
+  geom_abline(aes(intercept = 0, slope = 0)) +
+  labs(x = "Month", y = "Annual Trend in Mean Monthly Temperature", title = "Significant Trends (p-value < 0.05) in Mean Monthly Temperatures \n from 2006-2019 for Cook Inlet Streams", color = "Stream: ") +
+  theme(legend.position = "bottom")
+
+ggsave("output/CIK monthly trends.pdf", width = 10, height = 8)
+```
+
+
