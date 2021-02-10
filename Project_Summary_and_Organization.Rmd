@@ -27,31 +27,35 @@ All metadata and data ready:
 * NPS data on KNB from Trey Simmons
 * ADFG data on KNB for Kodiak Island, three streams with one summer of data
 
-QA not complete:
-* USFS data for streams in Chugach National Forest from Luca Adelfio. Dustin and I chatted with him and his data probably need a little review. He also sent over some more recent data from 4 Kenai sites that should be reviewed.
+Data need QA after formatting:
 
-Metadata ready, but not data (i.e. I need to read in and format data):
+* USFS data from Luca.
+* ADFG data from Heather.
+
+Data received, need to read in and format new data and create metadata (some may be done already):
 
 * FWS data for Kodiak Refuge, OSM sites on Kodiak (2) and Copper River (2), and WRB sites on Kodiak (2) -- from Meg Perdue, received Oct 2020. Check to see if FWS data archived on KNB is needed to supplement what Meg sent over -- those data are all through 2017.
 * USGS sites selected in GIS from akoats working. Get data from dataRetrieval library in R
 * ACCS temperature data from Little Susitna watershed - summer 2016 and 2019-2020. Dustin is doing data prep in a separate [Little_Susitna github repo](https://github.com/rsshaftel/Little_Susitna). Grabbed 2016 sites from akoats metadata and combined with 2019 sites from logger database, some might be the same, will need to check in GIS.
 * post-2017 data from Sue has been sent over. 
+* USFS data for streams in Chugach National Forest from Luca Adelfio. Dustin and I chatted with him and his data probably need a little review. He sent updated data for Kenai and PWS sites. Also new sites from a grad student. Different levels of QA on all of this data so needs a thorough review.
+* ADFG data - contact is Heather Finkle. Data through 2017 archived on KNB have already been included. She has sent over all of their data.
 
 
 Outstanding data requests:
 
-* additional PWS data from Luca. He is sending data from 3-4 sites from a graduate student project that has not been QAed and also more years of data for their PWS sites.
 * Native Village of Eyak data for Cordova. Talked with James Paley and they have data from two creeks in Cordova from level loggers so buried just subsurface. Not the best data so probably not worth waiting on.
-* KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Webber, he will send over the data, 2015-2019. He found Telrod on AKOATs, but not showing on our mapper, check working version of akoats to see if it is there. 
-* ADFG data - contact is Heather Finkle. Data through 2017 archived on KNB have already been included. I will email her to see if more years are available.
-* Larsen Bay Tribe, site on Karluk - called Alexander Panamaroff, but he wanted me to talk with Jamie Hubbard, who manages the data.  
+* KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Weber, he will send over the data, 2015-2019. AKOATS shp on web mapper needs to be updated to include Telrod Creek. For some reason, marcus' continuous worksheet didn't have all continuous sites, use complete worksheet instead and filter out discrete sites. 
+* Larsen Bay Tribe, site on Karluk - called Alexander Panamaroff, and also talked with Jamie Hubbard. Data will come from Jeff Davis.  
 * Alutiiq Tribe, site on Big Creek - data request to Lepani Nadore, data will come from Jeff Davis and should be ready end February.
+* Additional years of data from Trey Simmons, NPS. Talked to him on 2/3, can check back in a week or two if he doesn't send anything by then.
 
 Low priority datasets (wait to see if we decide to only look at sensitivity for sites with a minimum number of years of data before we pursue additional datasets):
 
 * Mat-Su thermal regimes project - daily data were saved as a final product. This would include CIK data already archived on KNB, USGS data that I can grab separately, and ARRI data from Mat-Su. I could just re-import the raw ARRI data, I believe they cleaned it for me.
 * AEA data for Susitna-Watana dam. I looked at this data for the thermal regimes project and it wasn't clean. They had temperature arrays on the Susitna River with some pretty anomalous readings between loggers. We could decide to clean this dataset for this project, but it would probably be a week of someone's time. 
 * Little Su tributaries as part of a Masters project. I have this data and only used the most downstream locations for the thermal regimes project, I could grab those along with the ARRI data and import.
+* ADFG data from Copper River/PWS. Talked to Stormy Haught. He has temperature data for LB/RB of Copper River and also from Coghill River, but both are very limited each summer - generally only June and July. I told him I would call back if we decided we could use this data - 424-3212 (phone is better than email).
 
 
 Bristol Bay:

@@ -17,74 +17,7 @@ library(plotly)
 
 # Cook Inletkeeper
 
-## Read in data
-
-Read in data files saved on S drive. These are all the data that Sue archived on KNB. These include some Bristol Bay data that will have to be removed. The site IDs for just Cook Inlet sites all have "CIK" in the name.
-
-```{r}
-cik.files <- list.files("S:/Stream Temperature Data/Cook Inletkeeper", pattern = ".csv", full.names = TRUE)
-
-cik.files <- cik.files[!grepl("SiteLevelMetadata_Mauger", cik.files)]
-
-```
-
-Metadata
-
-```{r}
-cik_md <- read_csv("S:\\Stream Temperature Data\\Cook Inletkeeper\\SiteLevelMetadata_Mauger.csv") 
-
-cik_akssf_md <- cik_md %>% 
-  filter(grepl("CIK", SiteID)) %>% 
-  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
-
-cik_akssf_md
-
-```
-
-
-Combined data files and get information from metadata file.
-
-```{r}
-cik.data <- cik.files %>% 
-  map_df(function(x) read_csv(x) %>% 
-  mutate(file_name = gsub(".csv","",basename(x))))
-
-cik.data <- left_join(cik.data, cik_akssf_md %>% select(AKOATS_ID, SiteID, Waterbody_name)) %>% 
-  filter(grepl("CIK", SiteID)) %>% 
-  mutate(year = year(sampleDate),
-         dt = parse_datetime(paste(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) 
-
-
-cik.data #removed ~500K rows of data that were from Bristol bay, still > 4M rows of data for cook inlet.
-```
-
-## Review data
-
-Plot of raw data, but Sue typically provides only QAed data. Some useData==0
-
-```{r}
-cik.data %>% count(UseData)
-
-cik.sites <- cik.data %>% distinct(SiteID, year = year(sampleDate))
-
-pdf("output/CIK raw data by site.pdf")
-
-for(i in 1:nrow(cik.sites)) {
-  dat <- left_join(cik.sites %>% slice(i), cik.data)
-  p1 <- dat %>% 
-    # filter(UseData == 1) %>%
-    ggplot(aes(x = dt, y = Temperature)) +
-    geom_line() +
-    facet_wrap(~year) +
-    labs(title = dat %>% distinct(SiteID))
-  print(p1)  
-}
-
-dev.off()
-
-cik.sites %>% arrange(desc(year))
-
-```
+Sue's data archived on KNB are included in the data_CIK script.
 
 
 # NPS - Trey Simmons
