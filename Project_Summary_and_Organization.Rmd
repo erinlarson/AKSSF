@@ -31,6 +31,7 @@ Data need QA after formatting:
 
 * USFS data from Luca.
 * ADFG data from Heather.
+* NPS data from Trey.
 
 Data received, need to read in and format new data and create metadata (some may be done already):
 
@@ -40,6 +41,7 @@ Data received, need to read in and format new data and create metadata (some may
 * post-2017 data from Sue has been sent over. 
 * USFS data for streams in Chugach National Forest from Luca Adelfio. Dustin and I chatted with him and his data probably need a little review. He sent updated data for Kenai and PWS sites. Also new sites from a grad student. Different levels of QA on all of this data so needs a thorough review.
 * ADFG data - contact is Heather Finkle. Data through 2017 archived on KNB have already been included. She has sent over all of their data.
+* NPS data - Trey Simmons. He submitted data for ~ 4 sites in our study area to KNB that were formatted. He recently sent over some additional years of data and also notes on burials and exposures.
 
 
 Outstanding data requests:

@@ -13,7 +13,7 @@ library(MARSS)
 ```
 
 
-Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series and DAYMET air temperatures can be recylced for this analysis as the data are ready.
+Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series can be used for this analysis as the data are ready. The climate data are for 3-day lags, which we decided we won't use for AKSSF so don't worry about linking to climate data. We do need metadata and data data frames.
 
 # Read in data from Deshka, Anchor, and Kenai - v2 raw data only
 

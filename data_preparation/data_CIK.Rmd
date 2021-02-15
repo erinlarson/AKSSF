@@ -16,7 +16,6 @@ library(rnoaa)
 library(hms)
 library(tidyverse)
 
-
 ```
 
 
@@ -44,7 +43,6 @@ cik_knb_md
 
 ```
 
-
 Combined data files and get information from metadata file.
 
 ```{r}
@@ -57,6 +55,45 @@ cik.data <- left_join(cik.data, cik_knb_md %>% select(AKOATS_ID, SiteID, Waterbo
 
 cik.data #removed ~500K rows of data that were from Bristol bay, still > 4M rows of data for cook inlet.
 ```
+
+Check for duplicates in this dataset. Add in DT first.
+
+```{r}
+cik.data <- cik.data %>% 
+  mutate(DT = as.POSIXct(paste(sampleDate, sampleTime)))
+```
+
+Mean and sd of differences between duplicate values by site. They are all really low so I think it's best to average them.
+
+```{r}
+dups <- cik.data %>% 
+  count(SiteID, DT) %>% 
+  filter(n > 1)
+
+dup_diffs <- left_join(dups, cik.data) %>% 
+  ungroup() %>% 
+  group_by(SiteID, DT) %>% 
+  mutate(id = row_number()) %>% 
+  select(SiteID, id, DT, Temperature) %>% 
+  pivot_wider(names_from = id, values_from = Temperature) %>% 
+  mutate(diff = abs(`1` - `2`))
+
+dup_diffs %>% 
+  group_by(SiteID) %>% 
+  summarize(mean(diff),
+            sd(diff))
+
+```
+Cleaning out duplicate values in this dataset by taking average.
+
+```{r}
+cik.data %>% 
+  group_by(AKOATS_ID, SiteID, Waterbody_name, sampleDate, sampleTime, DT, UseData) %>% 
+  summarize(Temperature = mean(Temperature))
+```
+
+
+
 
 # New data
 
@@ -168,10 +205,26 @@ cik_dat <- cik_dat %>%
          dt = parse_datetime(paste(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) 
 ```
 
+Check for duplicates across KNB and new submission.
+
+```{r}
+cik_dat %>% 
+  count(SiteID, sampleDate, sampleTime) %>% 
+  filter(n > 1)
+```
+
+We should also check to see if any of the data from the KNB submission and new set of files overlaps with sites that we used in the stream temperature models. Import the final data frame for those models and check if any sites overlap.
+
+```{r}
+
+```
+
+
+
 Plot of raw data, but Sue typically provides only QAed data. Some useData==0 from KNB.
 
 ```{r}
-cik_dat %>% count(UseData)
+cik_dat %>% ungroup() %>% count(UseData)
 
 cikSites <- cik_dat %>% distinct(SiteID)
 
