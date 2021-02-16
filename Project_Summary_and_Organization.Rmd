@@ -47,10 +47,10 @@ Data received, need to read in and format new data and create metadata (some may
 Outstanding data requests:
 
 * Native Village of Eyak data for Cordova. Talked with James Paley and they have data from two creeks in Cordova from level loggers so buried just subsurface. Not the best data so probably not worth waiting on.
-* KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Weber, he will send over the data, 2015-2019. AKOATS shp on web mapper needs to be updated to include Telrod Creek. For some reason, marcus' continuous worksheet didn't have all continuous sites, use complete worksheet instead and filter out discrete sites. 
+* KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Weber, he will send over the data, 2015-2019.  
 * Larsen Bay Tribe, site on Karluk - called Alexander Panamaroff, and also talked with Jamie Hubbard. Data will come from Jeff Davis.  
 * Alutiiq Tribe, site on Big Creek - data request to Lepani Nadore, data will come from Jeff Davis and should be ready end February.
-* Additional years of data from Trey Simmons, NPS. Talked to him on 2/3, can check back in a week or two if he doesn't send anything by then.
+* Additional years of data from Trey Simmons, NPS. Combine with KNB archive.
 
 Low priority datasets (wait to see if we decide to only look at sensitivity for sites with a minimum number of years of data before we pursue additional datasets):
 
@@ -70,18 +70,36 @@ All Bristol Bay data are being cleaned in a separate [github repo](https://githu
 
 All data need to be formatted consistently so that we can combine them for the data analysis step. All datasets should be saved as separate data files and sites files for import to AKTEMP later. 
 
+Steps:
+
+2a. Read in data files and format consistently using variable names and types below. Screen for duplicates. Formatting scripts are in the data_preparation folder and save data files are in data_preparation/formatted_data. 
+
+2b. In a second script, data are reviewed for exposures and burials for data providers that indicated their data review is minimal or incomplete. Note that CIK and FWS are probably the *only* data providers that don't need review. Enter dates for bad data in a google sheet on the ACCS Aquatics Program/Projects/Active Projects/AKTEMP/Data/Data_Temp/0x_xx/Souce folder. Save reviewed data with additional UseData flags in the data_preparation/formatted_data folder as well. This folder is in .gitignore because file sizes are so large.
+
+Note: We can restrict our QA of data to just the months of June-September. So for the output of the QA scripts, we can just filter to these months.
+
+2c. To obtain the data to be used for AKSSF, we need to filter on complete daily values to calculate daily min, mean, and max. And, may also filter to June - September to see how much available data we have across sites and years.
+
 Data file
 
-* SiteID
-* sampleDate
-* sampleTime
-* Temeperature
-* useData
+* SiteID, character
+* sampleDate, date
+* sampleTime, hms
+* Temperature, numeric
+* useData, numeric
+
+Optional fields in the data file to assist with QA:
+
+* Waterbody_name
+* DT, posixct
+* duplicate 
 
 Sites file
 
-* SiteID
+* Agency_ID, ID as provided from the data provider
+* SiteID, unique name that links to the data file, maybe a concatenation of agency_ID + lat + long.
 * AKOATS_ID
+* Waterbody_name
 * latitude
 * longitude
 * Source_Name
@@ -100,6 +118,8 @@ Per Daniel, Tim Cline has the correct code for running the DFA. He did a slightl
 Folders in this repo:
 
 * data_preparation folder: this include scripts for reading in and wrangling data. data_[provider name] are the scripts for reading and formatting metadata and data files, saved as .rds. data_QA_[provider name] are scripts for datasets that required QA. QAed data have a useData flag that indicates data to be removed prior to analysis.
-* docs folder 
+* data_preparation/formatted_data folder: output from data_ and data_QA scripts.
+* data_preparation/final_data folder: final dataset for AKSSF analysis. This should be daily min, max, and mean for all sites and days.
+* docs folder: for github pages. 
 
 
