@@ -35,7 +35,8 @@ source("day_and_month_functions.R")
 Load data.
 
 ```{r}
-cik_dat <- readRDS("data_preparation/formatted_data/cik_dat.rds")
+# cik.data <- readRDS("data_preparation/formatted_data/cik.data.rds")
+# load cik.daily
 ```
 
 # Temperature Figures
@@ -44,30 +45,22 @@ Create data frames of mean daily and mean monthly temperatures. Use functions th
 Filter on UseData == 1, which was added to the KNB dataset.
 
 ```{r}
-cik_dat <- cik_dat %>% temp_msmt_freq()
-
-cik_daily <- cik_dat %>% 
-  filter(UseData == 1) %>% 
-  group_by(SiteID, Waterbody_name, year, sampleDate, mode_diff) %>%
-  summarize(meanT = mean(Temperature, na.rm = TRUE),
-            msmtCt = n()) %>% 
-  filter(msmtCt > (0.9 * 1440/mode_diff))
-
-
-cik_monthly <- cik_daily %>% 
-  mutate(daysMonth = days_in_month(sampleDate)) %>% 
-  group_by(SiteID, Waterbody_name, year, month = month(sampleDate), daysMonth) %>%
-  summarize(meanMon = mean(meanT),
+cik.monthly <- cik.daily %>% 
+  mutate(daysMonth = days_in_month(sampleDate),
+         month = month(sampleDate),
+         year = year(sampleDate)) %>% 
+  group_by(SiteID, year, month, daysMonth) %>%
+  summarize(meanMon = mean(meanDT),
             monCt = n()) %>% 
   filter(monCt > (0.9 * daysMonth))
 
-rm(cik_dat)
+# rm(cik.data)
 ```
 
 Plot of daily means using complete so missing data don't have lines on ggplot.
 
 ```{r fig.height=11}
-cik_daily %>%
+cik.daily %>%
   complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
   mutate(year = year(sampleDate),
          mo_day = format(sampleDate, "%m-%d")) %>% 
@@ -85,9 +78,9 @@ Same as above, but filtered on sites with 2019 data and that year is highlighted
 
 ```{r fig.height=8}
 
-sites_2019 <- cik_dat %>% distinct(SiteID, year) %>% filter(year == 2019) %>% pull(SiteID)
+sites_2019 <- cik.data %>% distinct(SiteID, year) %>% filter(year == 2019) %>% pull(SiteID)
 
-cik_daily %>%
+cik.daily %>%
   filter(UseData == 1, SiteID %in% sites_2019) %>% 
   group_by(SiteID, Waterbody_name, sampleDate) %>% 
   summarize(meanT = mean(Temperature)) %>%
@@ -111,26 +104,26 @@ cik_daily %>%
 Plot of monthly temperatures for sites with data for at least 9 years. There is a clear pattern of warm temperatures in 2003 - 2005 or so that makes linear trends hard to see. But, starting in 2006 through 2019, all streams seem to show a pretty clear pattern in increasing temperatures, especially in summer.
 
 ```{r fig.height=8}
-ltSites <- cik_monthly %>% 
+ltSites <- cik.monthly %>% 
   ungroup() %>% 
   distinct(SiteID, year) %>% 
   count(SiteID) %>% 
   filter(n > 8) %>% 
   pull(SiteID)
 
-cik_monthly %>% 
+cik.monthly %>% 
   filter(SiteID %in% ltSites) %>% 
   ggplot(aes(x = year, y = meanMon, color = as.factor(month))) + 
   geom_point() +
   # geom_line() +
   # geom_smooth(method = "lm") +
-  facet_wrap(~Waterbody_name) +
+  facet_wrap(~SiteID) +
   theme_minimal()
 ```
 All Sites.
 
 ```{r}
-cik_monthly %>% 
+cik.monthly %>% 
   # filter(SiteID %in% ltSites) %>% 
   ggplot(aes(x = year, y = meanMon, color = as.factor(month))) + 
   geom_point() +
@@ -152,15 +145,15 @@ They also imputed missing data using a PCA, which might be really useful for the
 These are trends using any sites and months with more than 9 years of data.
 
 ```{r}
-ltMonths <- cik_monthly %>% 
+ltMonths <- cik.monthly %>% 
   ungroup() %>% 
-  distinct(SiteID, Waterbody_name, year, month) %>% 
-  count(SiteID, Waterbody_name, month) %>% 
+  distinct(SiteID, year, month) %>% 
+  count(SiteID, month) %>% 
   filter(n > 8)
 
-monthlyLMs <- cik_monthly %>% 
+monthlyLMs <- cik.monthly %>% 
   right_join(ltMonths) %>% 
-  nest(data = c(-Waterbody_name, -month)) %>% 
+  nest(data = c(-SiteID, -month)) %>% 
   mutate(
     fit = map(data, ~ lm(meanMon ~ year, data = .x)),
     tidied = map(fit, tidy)
@@ -169,11 +162,11 @@ monthlyLMs <- cik_monthly %>%
 
 sig_trends <- monthlyLMs %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  select(Waterbody_name, month)
+  select(month)
 
 monthlyLMs %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  ggplot(aes(x = as.factor(month), y = estimate, color = Waterbody_name)) +
+  ggplot(aes(x = as.factor(month), y = estimate, color = SiteID)) +
   geom_point() +
   theme_minimal() +
   geom_abline(aes(intercept = 0, slope = 0)) 
@@ -183,7 +176,7 @@ monthlyLMs %>%
 Those estimates are really high, ~0.2 deg per year. Plot just these monthly trends and see if average monthly temperatures have actually increased by 2 deg over the last decade.
 
 ```{r}
-cik_monthly %>% 
+cik.monthly %>% 
   right_join(sig_trends) %>% 
   ggplot(aes(x = year, y = meanMon, color = as.factor(month))) + 
   geom_point() +
@@ -195,7 +188,7 @@ cik_monthly %>%
 Just June and July trends, look to see if 2019 is really skewing those high.
 
 ```{r}
-cik_monthly %>% 
+cik.monthly %>% 
   right_join(sig_trends) %>% 
   filter(month %in% 6:8) %>% 
   ggplot(aes(x = as.factor(year), y = meanMon, color = as.factor(month))) + 
@@ -208,10 +201,10 @@ cik_monthly %>%
 How much do trends decrease if we didn't include 2019? 
 
 ```{r fig.height=8}
-monthlyLMs2 <- cik_monthly %>% 
+monthlyLMs2 <- cik.monthly %>% 
   right_join(ltMonths) %>% 
   filter(year < 2019) %>% 
-  nest(data = c(-Waterbody_name, -month)) %>% 
+  nest(data = c(-SiteID, -month)) %>% 
   mutate(
     fit = map(data, ~ lm(meanMon ~ year, data = .x)),
     tidied = map(fit, tidy)
@@ -220,13 +213,13 @@ monthlyLMs2 <- cik_monthly %>%
 
 sig_trends2 <- monthlyLMs2 %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  select(Waterbody_name, month)
+  select(SiteID, month)
 
 nrow(sig_trends) - nrow(sig_trends2) 
 
 monthlyLMs2 %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  ggplot(aes(x = as.factor(month), y = estimate * 10, color = Waterbody_name)) +
+  ggplot(aes(x = as.factor(month), y = estimate * 10, color = SiteID)) +
   geom_point(size = 2) +
   theme_minimal() +
   geom_abline(aes(intercept = 0, slope = 0)) +
@@ -236,7 +229,7 @@ monthlyLMs2 %>%
 Plot of significant trends without 2019.
 
 ```{r}
-cik_monthly %>% 
+cik.monthly %>% 
   right_join(sig_trends2) %>% 
   # filter(month %in% 6:8) %>% 
   ggplot(aes(x = year, y = meanMon, color = Waterbody_name)) + 
@@ -250,12 +243,12 @@ cik_monthly %>%
 Why does Ninilchik River trend for September drop when 2019 isn't included?
 
 ```{r}
-cik_monthly %>% 
+cik.monthly %>% 
   filter(Waterbody_name == "Ninilchik River", month == 9) %>% 
   lm(meanMon ~ year, data = .) %>% 
   summary()
 
-cik_monthly %>% 
+cik.monthly %>% 
   filter(Waterbody_name == "Ninilchik River", month == 9, year < 2019) %>% 
   lm(meanMon ~ year, data = .) %>% 
   summary()
@@ -289,7 +282,7 @@ mk.list <- list()
 sen.list <- list()
 
 for(i in 1:nrow(ltMonths)) {
-  dat <- cik_monthly %>% right_join(ltMonths %>% slice(i)) %>% pull(meanMon)
+  dat <- cik.monthly %>% right_join(ltMonths %>% slice(i)) %>% pull(meanMon)
   mk.list[[i]] <- mk.test(dat)
   # names(mk.list[[i]]) <- paste(site_month[i, "SiteID"], site_month[i, "month"])
   sen.list[[i]] <- sens.slope(dat)
@@ -307,14 +300,14 @@ mk.list
 # Missing data patterns
 
 ```{r}
-all <- cik_monthly %>% right_join(ltMonths) %>% ungroup() %>% expand(SiteID, year, 6:9) %>% rename(month = `6:9`)
+all <- cik.monthly %>% right_join(ltMonths) %>% ungroup() %>% expand(SiteID, year, 6:9) %>% rename(month = `6:9`)
 
-cik_monthly %>% 
+cik.monthly %>% 
   right_join(ltMonths) %>% 
   ungroup() %>% 
   count(SiteID)
 
-cik_monthly %>% 
+cik.monthly %>% 
   ungroup() %>% 
   right_join(all) %>% 
   count(month, year, missing = is.na(meanMon)) %>%
@@ -332,7 +325,7 @@ I think I want to impute missing monthly means for sites by each year.
 library(missMDA)
 
 #2009
-sum2009 <- cik_monthly %>%
+sum2009 <- cik.monthly %>%
   ungroup() %>% 
   filter(year == 2009, month %in% 6:9) %>% 
   select(Waterbody_name, month, meanMon) %>% 
@@ -368,7 +361,7 @@ Impute data for June through September for 14 long-term sites.
 
 ```{r}
 
-sum.df <- cik_monthly %>%
+sum.df <- cik.monthly %>%
   ungroup() %>% 
   filter(month %in% 6:9, SiteID %in% ltSites) %>% 
   mutate(mo_yr = paste(month, year, sep = "_")) %>% 

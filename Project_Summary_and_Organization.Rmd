@@ -19,6 +19,7 @@ Note: supplemental funding from FWS to include Kodiak temperature data in this p
 1. Data Availability
 
 All metadata and data ready:
+NOTE: need to update temperature model datasets to remove redundant CIK sites.
 
 * Deshka temperature model output - CIK and FWS data from 2017-2019
 * Kenai temperature model output - Ben Meyers, CIK and KWF
@@ -32,6 +33,7 @@ Data need QA after formatting:
 * USFS data from Luca.
 * ADFG data from Heather.
 * NPS data from Trey.
+* (in BB repo) NPS data from Krista collected by Dan Young.
 
 Data received, need to read in and format new data and create metadata (some may be done already):
 
