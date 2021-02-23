@@ -15,119 +15,104 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+library(gridExtra)
 
 ```
 
+There is a timezone error in the KNB data for CIK, it looks like times were converted from AK DST (GMT -8) to GMT time. Sue provided the raw data files that she sent to NCEAS so those will be read in and combined with new data.
 
-# Data archived on KNB - sites through 2017.
+Note that Sue provided some, but not all data, for the Bristol Bay sites. These data have been formatted in the SW partnership data repo and will be brought in separately for all the data in Bristol Bay.
 
-Read in data files saved on S drive. These are all the data that Sue archived on KNB. These include some Bristol Bay data that will have to be removed. The site IDs for just Cook Inlet sites all have "CIK" in the name.
+# Data through 2017
 
-```{r}
-cik.files <- list.files("S:/Stream Temperature Data/Cook Inletkeeper", pattern = ".csv", full.names = TRUE)
+Sue provided three data folders with all of the data that she sent to NCEAS for the SASAP effort. Each individual site by year, but no metadata files. May want to rely on the knb metadata file to get waterbody names, lat/longs, akoats ids, etc.
 
-cik.files <- cik.files[!grepl("SiteLevelMetadata_Mauger", cik.files)]
+```{r nceas data}
+nceas.files <- list.files("S:/Stream Temperature Data/Cook Inletkeeper/Data files sent to NCEAS/", full.names = TRUE)
 
-```
-
-Metadata
-
-```{r}
-cik_md <- read_csv("S:\\Stream Temperature Data\\Cook Inletkeeper\\SiteLevelMetadata_Mauger.csv") 
-
-cik_knb_md <- cik_md %>% 
-  filter(grepl("CIK", SiteID)) %>% 
-  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
-
-cik_knb_md
+cik.data1 <- map_df(nceas.files, function(x) read_excel(x, skip = 1, col_names = FALSE) %>% mutate(file_name = gsub(".xlsx", "", basename(x))))
 
 ```
 
-Combined data files and get information from metadata file.
+Some of the time readings also have valid dates -- e.g. not 1899. But I checked those and they were date - time entries in Excel so they are correctly reading the dates and times together.
 
-```{r}
-cik.data <- cik.files %>% 
-  map_df(function(x) read_csv(x) %>% 
-  mutate(file_name = gsub(".csv","",basename(x))))
+```{r nceas data check dates and times, eval = FALSE}
+summary(cik.data1)
 
-cik.data <- left_join(cik.data, cik_knb_md %>% select(AKOATS_ID, SiteID, Waterbody_name)) %>% 
-  filter(grepl("CIK", SiteID))
+cik.data1 %>% 
+  distinct(year(`...2`))  
 
-cik.data #removed ~500K rows of data that were from Bristol bay, still > 4M rows of data for cook inlet.
+cik.data1 %>% 
+  filter(year(`...2`) == 2006) %>% 
+  group_by(file_name) %>% 
+  slice(1:6)
 ```
 
-Check for duplicates in this dataset. Add in DT first.
+Final formatting of data table.
 
-```{r}
-cik.data <- cik.data %>% 
-  mutate(DT = as.POSIXct(paste(sampleDate, sampleTime)))
+```{r nceas data format}
+cik.data1 <- cik.data1 %>% 
+  # slice(1:6) %>% 
+  mutate(sampleDate = as.Date(`...1`),
+         sampleTime = as_hms(`...2`),
+         DT = as.POSIXct(paste(sampleDate, sampleTime, sep = " "), format = "%Y-%m-%d %H:%M:%S"),
+         SiteID = substr(file_name, 1, nchar(file_name) - 8)) %>% 
+  select(SiteID, sampleDate, sampleTime, DT, Temperature = `...3`)
 ```
 
-Mean and sd of differences between duplicate values by site. They are all really low so I think it's best to average them.
+Loop for error checking problems with files. Moved a worksheet with a graph to the second position so data worksheet read in first. 
 
-```{r}
-dups <- cik.data %>% 
-  count(SiteID, DT) %>% 
-  filter(n > 1)
+```{r nceas data loop, eval = FALSE}
+summary(cik.data1)
+str(cik.data1)
 
-dup_diffs <- left_join(dups, cik.data) %>% 
-  ungroup() %>% 
-  group_by(SiteID, DT) %>% 
-  mutate(id = row_number()) %>% 
-  select(SiteID, id, DT, Temperature) %>% 
-  pivot_wider(names_from = id, values_from = Temperature) %>% 
-  mutate(diff = abs(`1` - `2`))
-
-dup_diffs %>% 
-  group_by(SiteID) %>% 
-  summarize(mean(diff),
-            sd(diff))
-
+cik.data1 <- data.frame()
+for (i in nceas.files) {
+  dat <- read_excel(i, skip = 1, col_names = FALSE, col_types = c("date", "date", "numeric", "skip", "skip")) %>% 
+    mutate(file_name = gsub(".xlsx", "", basename(i)))
+  cik.data1 <- bind_rows(cik.data1, dat)
+}
 ```
-Cleaning out duplicate values in this dataset by taking average.
-
-```{r}
-cik.data %>% 
-  group_by(AKOATS_ID, SiteID, Waterbody_name, sampleDate, sampleTime, DT, UseData) %>% 
-  summarize(Temperature = mean(Temperature))
-```
-
-
 
 
 # New data
 
 Sue sent over two zip files saved in separate folders. One is a submission to NCEAS that she thinks didn't get uploaded -- folder name is "new submissions Dec 2018". It looks like some data from 2017 to 2018. The second zip folder has data from 2018-2020 and is called "UAA". There is a metadata file in each one with site IDs that should link to AKOATs.
 
-I'll remove the Bristol Bay sites and read them in separately in the SWSHP repo. All the Bristol Bay data are being used for one project with Erik and then also being brought into this repo for the larger AKSSF project.
+Some duplicate files provided across the two folders, remove from one.
 
-```{r}
+```{r 2021 files}
 cik_folder <- ("S:/Stream Temperature Data/Cook Inletkeeper")
 
-cik_files1 <- list.files(paste(cik_folder, "/February_2021/new submissions Dec 2018", sep = ""), full.names = TRUE)
-cik_files1 <- cik_files1[!grepl("new submissions Dec 2018.xlsx", cik_files1)]
+cik.files2 <- list.files(paste(cik_folder, "/February_2021/new submissions Dec 2018", sep = ""), full.names = TRUE)
+cik.files2 <- cik.files2[!grepl("new submissions Dec 2018.xlsx", cik.files2)]
 
-cik_files2 <- list.files(paste(cik_folder, "/February_2021/UAA", sep = ""), full.names = TRUE)
-cik_files2 <- cik_files2[!grepl("new submissions Jan 2021.xlsx", cik_files2)]
+cik.files3 <- list.files(paste(cik_folder, "/February_2021/UAA", sep = ""), full.names = TRUE)
+cik.files3 <- cik.files3[!grepl("new submissions Jan 2021.xlsx", cik.files3)]
 
+names1 <- list.files(paste(cik_folder, "/February_2021/new submissions Dec 2018", sep = ""))  
+names2 <- list.files(paste(cik_folder, "/February_2021/UAA", sep = ""))
+
+dup.files <- names1[names1 %in% names2]
+cik.files2 <- cik.files2[!basename(cik.files2) %in% dup.files]
 ```
 
 Read in each set of data and combine them.
 
-```{r}
+```{r 2021 data}
 
-cik_dat1 <- map_df(cik_files1, function(x) read_excel(x) %>% mutate(file_name = gsub(".xlsx", "", basename(x))))
+cik.data2 <- map_df(cik.files2, function(x) read_excel(x) %>% mutate(file_name = gsub(".xlsx", "", basename(x))))
 
-summary(cik_dat1)
+summary(cik.data2)
 
 #two time fields are independent
-cik_dat1 %>% 
+cik.data2 %>% 
   count(is.na(Time), is.na(`Time, GMT-08:00`))
 
 #for site naming pattern, trim last 8 characters (_xx_xxxx) to get SiteID
-cik_dat1 %>% distinct(file_name)
+cik.data2 %>% distinct(file_name)
 
-cik_dat1 <- cik_dat1 %>% 
+cik.data2 <- cik.data2 %>% 
   mutate(sampleDate = as.Date(Date),
          sampleTime = case_when(is.na(`Time, GMT-08:00`) ~ as_hms(Time),
                                 TRUE ~ as_hms(`Time, GMT-08:00`)),
@@ -137,101 +122,240 @@ cik_dat1 <- cik_dat1 %>%
   
 ```
 
-```{r}
-cik_dat2 <- map_df(cik_files2, function(x) read_excel(x) %>% mutate(file_name = gsub(".xlsx", "", basename(x))))
+```{r 2021 data 2}
+cik.data3 <- map_df(cik.files3, function(x) read_excel(x) %>% mutate(file_name = gsub(".xlsx", "", basename(x))))
 
-summary(cik_dat2)
+summary(cik.data3)
 
 #for site naming pattern, trim last 8 characters (_xx_xxxx) to get SiteID
-cik_dat2 %>% distinct(file_name)
+cik.data3 %>% distinct(file_name)
 
-cik_dat2 <- cik_dat2 %>% 
+cik.data3 <- cik.data3 %>% 
   mutate(sampleDate = as.Date(Date),
          sampleTime = as_hms(`Time, GMT-08:00`),
          Temperature = `Temp, °C`,
          SiteID = substr(file_name, 1, nchar(file_name) - 8))  %>% 
   select(SiteID, sampleDate, sampleTime, Temperature)
   
-cik_dat <- bind_rows(cik_dat1, cik_dat2) %>% 
-  filter(grepl("CIK", SiteID))
 
-cik_dat %>% distinct(SiteID)
+cik.data3 %>% distinct(SiteID)
 ```
 
-Make sure that SiteIDs in the data link to AKOATs and get the waterbody name so that we have it for plotting.
+Combine with 2017 data, but add DT field first. For combined dataset, add UseData == 1 to match other datasets where we are doing QA.
+
+```{r combine all data}
+cik.data <- bind_rows(cik.data2, cik.data3) %>%
+  mutate(DT = as.POSIXct(paste(sampleDate, sampleTime, sep = " "), format = "%Y-%m-%d %H:%M:%S"))
+
+intersect(names(cik.data1), names(cik.data))
+cik.data <- bind_rows(cik.data1, cik.data)
+
+cik.data %>% 
+  distinct(SiteID, year = year(sampleDate)) %>% 
+  group_by(SiteID) %>% 
+  summarize(n = n(),
+            minYr = min(year),
+            maxYr = max(year))
+```
+
+Just keep the cook inlet sites, Sue provided more sites and years of data in the data request specifically for Bristol Bay and those data are already formatted there.
 
 ```{r}
+nrow(cik.data) #5906773
+
+cik.data <- cik.data %>% 
+  filter(grepl("CIK", SiteID))
+
+nrow(cik.data) #5311567
+```
+
+
+
+# Metadata
+
+Make sure that SiteIDs in the data link to AKOATs and get the waterbody name so that we have it for plotting. All Cook Inlet sites are in akoats. 
+
+```{r akoats}
 akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "AKOATS_COMPLETE") 
 
 #filter on continuous sites
 akoats <- akoats %>% 
   filter(Sample_interval == "continuous")
 
-```
-
-All are there.
-
-```{r}
-cik_dat <- cik_dat %>% 
-  left_join(akoats %>% select(Agency_ID, seq_id, Waterbody_name), by = c("SiteID" = "Agency_ID")) %>% 
-  rename(AKOATS_ID = seq_id)
+cik.data %>%
+  distinct(SiteID) %>% 
+  left_join(akoats %>% select(Agency_ID, Waterbody_name), by = c("SiteID" = "Agency_ID")) 
 
 ```
 
-Combine with 2017 data, but add UseData field first.
+Remove intermediate files since they are so large.
 
 ```{r}
-cik_dat <- cik_dat %>% 
-  mutate(UseData = 1)
-
-intersect(names(cik.data), names(cik_dat))
-cik_dat <- bind_rows(cik.data, cik_dat)
-
-cik_dat %>% 
-  distinct(SiteID, AKOATS_ID, Waterbody_name, year = year(sampleDate)) %>% 
-  group_by(SiteID, AKOATS_ID, Waterbody_name) %>% 
-  summarize(n = n(),
-            minYr = min(year),
-            maxYr = max(year))
+# rm(cik.data2, cik.data3, cik.data1)
 ```
 
 # Review data
 
-Add year and date time field for plotting.
+Note that DT field is empty from 2-3 am on one day each March because it won't accept times when we lose one hour and go onto daylight savings time in the spring. Sue's loggers are deployed using GMT -8, which is Alaska Daylight Savings Time. Remove the NAs for the one-hour time periods in March where there are not valid times (2 to 3 am).
 
-```{r}
-cik_dat <- cik_dat %>% 
-  mutate(year = year(sampleDate),
-         dt = parse_datetime(paste(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) 
+```{r remove empty DT rows}
+cik.data <- cik.data %>% 
+  filter(!is.na(DT))
 ```
 
-Check for duplicates across KNB and new submission.
 
-```{r}
-cik_dat %>% 
-  count(SiteID, sampleDate, sampleTime) %>% 
+## Duplicate measurements
+
+For duplicates, it looks like a few datasets were provided twice and one should be removed before reading in. I see the two duplicate files for 2018, which were provided in separate folders by Sue for the newest data (post-2017). These are now removed above so not being read in twice. I can't find the duplicate data for CIK 14 in 2011, but the values are exactly the same so averaging won't change anything.
+
+Mean and sd of differences between duplicate values by site. 
+
+I can't find the duplicate reading for CIK_8 on 2009-05-17. The 8.295 reading is accurate based on the file from May 2009 for that site so remove the duplicate reading of 5.670. All of the other differences are pretty minor so can be averaged.
+
+
+```{r duplicate summary, eval = FALSE}
+cik_test <- cik.data #save a new version for testing these problems below with duplicates.
+
+dups <- cik_test %>% 
+  count(SiteID, DT) %>% 
+  filter(n > 1)
+
+dups %>% count(SiteID, year(DT)) %>% arrange(desc(n)) %>% summarize(sum(n) - 5249)
+
+dup_diffs <- left_join(dups, cik_test) %>% 
+  ungroup() %>% 
+  group_by(SiteID, DT) %>% 
+  mutate(id = row_number()) %>% 
+  select(SiteID, id, DT, Temperature) %>% 
+  pivot_wider(names_from = id, values_from = Temperature) %>% 
+  mutate(diff = abs(`1` - `2`))
+
+dup_diffs %>% 
+  group_by(SiteID) %>% 
+  summarize(mn_diff = mean(diff, na.rm = TRUE),
+            sd_diff = sd(diff, na.rm = TRUE)) %>% 
+  arrange(desc(mn_diff))
+
+dup_diffs %>% filter(diff > 0.25) %>% arrange(desc(diff))
+
+```
+
+Cleaning out duplicate values in this dataset by removing one strange reading for CIK_8 and taking average for the remainder.
+
+```{r average of dups}
+cik.data <- cik.data %>% 
+  filter(!(SiteID == "CIK_8" & DT == as.POSIXct("2009-05-17 12:00:00") & Temperature == 5.670)) %>% 
+  group_by(SiteID, sampleDate, sampleTime, DT) %>% 
+  summarize(Temperature = mean(Temperature)) %>% 
+  ungroup()
+
+#check
+cik.data %>% 
+  count(SiteID, DT) %>% 
   filter(n > 1)
 ```
 
-We should also check to see if any of the data from the KNB submission and new set of files overlaps with sites that we used in the stream temperature models. Import the final data frame for those models and check if any sites overlap.
+## Duplicate sites
 
-```{r}
+We should also check to see if any of the data from the KNB submission and new set of files overlaps with sites that we used in the stream temperature models. Import the sites data frame for those models and check if any sites overlap.
+
+All the Deshka sites are new to that model and not in the other data that Sue provided.
+
+```{r Deshka temp model sites}
+deshka_wd <- "W:/Github/Deshka_temperature/output/data_catalog"
+deshka_sites <- read_csv(paste0(deshka_wd, "/deshka_sites.csv", collapse = ""))
+
+left_join(cik.data %>% ungroup() %>% distinct(SiteID) %>% mutate(cik = 1), deshka_sites %>% select(SiteID) %>% mutate(model = 1))
+```
+
+Seven overlapping sites between these the dataset compiled here and the data for the Kenai model. The new data extend for more years than what Sue provided for the Kenai temperature model. Remove these seven sites from the temperature model dataset.
+
+```{r Kenai temp model sites}
+
+kenai_wd <- "W:/Github/Kenai_temperature/output/data_catalog"
+kenai_sites <- read_csv(paste0(kenai_wd, "/kenai_sites.csv", collapse = ""))
+
+dup_kenai_sites <- left_join(cik.data %>% ungroup() %>% distinct(SiteID) %>% mutate(cik = 1), 
+                             kenai_sites %>% select(SiteID) %>% mutate(model = 1)) %>% 
+  filter(model == 1)
+
+kenai_temp <- read_csv(paste0(kenai_wd, "/kenai_temperature_data.csv", collapse = ""))
+
+bind_rows(left_join(dup_kenai_sites %>% distinct(SiteID), kenai_temp) %>% 
+  distinct(SiteID, year = year(sampleDate)) %>% 
+    mutate(type = "model"),
+  left_join(dup_kenai_sites %>% distinct(SiteID), cik.data) %>% 
+  distinct(SiteID, year = year(sampleDate)) %>%
+    mutate(type = "all")) %>% 
+  group_by(SiteID, type) %>% 
+  summarize(range = paste(min(year), max(year), sep = "-"))
+
 
 ```
 
+The site names in the new data have an underscore in them, e.g. CIK_6. Whereas in the Anchor temperature model, they are one string, CIK6. Comparing lat/longs and waterbody names, CIK_14 is a repeat, but the rest are unique: CIK1-CIK8 are in the Anchor River watershed and CIK_1-CIK_8 are sites across Cook Inlet.
 
+```{r Anchor temp model sites}
+
+anchor_wd <- "W:/Github/Temperature_Data/output/data_catalog"
+anchor_sites <- read_csv(paste0(anchor_wd, "/anchor_sites.csv", collapse = ""))
+
+#site names are different so this won't work.
+left_join(cik.data %>% ungroup() %>% distinct(SiteID) %>% mutate(cik = 1), anchor_sites %>% select(SiteID) %>% mutate(model = 1))
+
+dup_anchor_sites <- anchor_sites %>% 
+  filter(grepl("CIK", SiteID)) %>% 
+  mutate(SiteID2 = paste("CIK_", substr(SiteID, 4, 5), sep = "")) #%>% 
+  select(SiteID, SiteID2)
+
+
+#check lat/long against akoats
+left_join(dup_anchor_sites %>% select(SiteID, SiteID2, latitude, longitude), 
+          akoats %>% select(Agency_ID, Latitude, Longitude, Waterbody_name) , by = c("SiteID2" = "Agency_ID"))
+
+anchor_temp <- read_csv(paste0(anchor_wd, "/anchor_temperature_data.csv", collapse = ""))
+
+bind_rows(anchor_temp %>% 
+            filter(SiteID == "CIK14") %>%
+            distinct(SiteID, year = year(sampleDate)) %>%
+            mutate(type = "model"),
+          cik.data %>% 
+            filter(SiteID == "CIK_14") %>%
+            distinct(SiteID, year = year(sampleDate)) %>%
+            mutate(type = "all")) %>%
+  group_by(SiteID, type) %>%
+  summarize(range = paste(min(year), max(year), sep = "-"))
+
+```
+
+Add CIK14 to the duplicate site list and save for importing to the CI_Temperature_Models script.
+
+```{r}
+bind_rows(dup_kenai_sites %>% select(SiteID),
+          data.frame(SiteID = "CIK14")) %>% 
+  saveRDS("data_preparation/duplicate_CIK_sites.rds")
+```
+
+## Exploratory plots
+
+Add year for plotting.
+
+```{r}
+cik.data <- cik.data %>% 
+  mutate(year = year(sampleDate)) 
+```
 
 Plot of raw data, but Sue typically provides only QAed data. Some useData==0 from KNB.
 
 ```{r}
-cik_dat %>% ungroup() %>% count(UseData)
+cik.data %>% ungroup() %>% count(UseData)
 
-cikSites <- cik_dat %>% distinct(SiteID)
+cikSites <- cik.data %>% distinct(SiteID)
 
 pdf("output/CIK raw data by site.pdf")
 
 for(i in 1:nrow(cikSites)) {
-  dat <- left_join(cikSites %>% slice(i), cik_dat)
+  dat <- left_join(cikSites %>% slice(i), cik.data)
   p1 <- dat %>% 
     filter(UseData == 1) %>%
     ggplot(aes(x = dt, y = Temperature)) +
@@ -245,11 +369,191 @@ dev.off()
 
 ```
 
+## Save data and metadata
 
-Save data for downstream reports. 
+Save raw data for AKTEMP, which includes date and time. 
 
 ```{r}
-saveRDS(cik_dat, "data_preparation/formatted_data/cik_dat.rds")
+cik.data %>% 
+  mutate(UseData = 1) %>% 
+  saveRDS("data_preparation/formatted_data/cik.data.rds")
 ```
+
+Save metadata file, which includes extras like lat/long and waterbody name.
+
+```{r}
+
+```
+
+Save daily min, mean, and max for actual analysis. These daily summaries can be used to generate temperature metrics and also the thermal sensitivity. Use function to screen out days with < 90% of measurements.
+
+```{r}
+source("day_and_month_functions.R")
+cik.daily <- temp_msmt_freq(cik.data)
+
+cik.daily %>% 
+  ungroup() %>% 
+  distinct(SiteID, mode_diff)
+
+cik.daily <- daily_screen(cik.daily %>% mutate(UseData = 1))
+
+cik.daily %>% ungroup() %>% distinct(mode_diff, msmtCt)
+cik.daily %>% ungroup() %>% filter(is.na(mode_diff))
+
+cik.daily %>% 
+  select(SiteID, sampleDate, meanDT, maxDT, minDT) %>% 
+  saveRDS("data_preparation/final_data/cik.daily.rds")
+
+```
+
+
+
+# Data archived on KNB - sites through 2017 - ARCHIVE DON'T USE.
+
+Read in data files saved on S drive. These are all the data that Sue archived on KNB. These include some Bristol Bay data that will have to be removed. The site IDs for just Cook Inlet sites all have "CIK" in the name.
+
+```{r knb files}
+cik.files <- list.files("S:/Stream Temperature Data/Cook Inletkeeper", pattern = ".csv", full.names = TRUE)
+
+cik.files <- cik.files[!grepl("SiteLevelMetadata_Mauger", cik.files)]
+
+```
+
+Combined data files and filtering to only include sites from Cook Inlet. The Bristol Bay SiteIDs are waterbody names and will be imported in the other repo.
+
+```{r knb data}
+cik.data1 <- cik.files %>% 
+  map_df(function(x) read_csv(x) %>% 
+  mutate(file_name = gsub(".csv","",basename(x)))) 
+```
+
+Reading in metadata so that I can get the SiteID and filter on Cook Inlet sites only.
+
+```{r knb metadata}
+cik_md <- read_csv("S:\\Stream Temperature Data\\Cook Inletkeeper\\SiteLevelMetadata_Mauger.csv") 
+
+cik.data1 <- left_join(cik.data1, cik_md %>% select(AKOATS_ID, SiteID)) %>% 
+  filter(grepl("CIK", SiteID)) 
+
+```
+
+Check on times for this dataset, there is something strange going on at Kroto Creek.
+
+```{r}
+cik.data1 %>% 
+  filter(SiteID == "CIK_28", year(sampleDate) == 2017, month(sampleDate) %in% 6:8) %>% 
+  group_by(sampleDate) %>% 
+  mutate(max_temp = max(Temperature)) %>% 
+  filter(Temperature == max_temp)
+
+cik.data1 %>% 
+  filter(SiteID == "CIK_14", year(sampleDate) == 2016, month(sampleDate) %in% 6:8) %>% 
+  group_by(sampleDate) %>% 
+  mutate(max_temp = max(Temperature)) %>% 
+  filter(Temperature == max_temp)
+
+cik.data1 %>% 
+  filter(SiteID == "CIK_3", year(sampleDate) == 2016, month(sampleDate) %in% 6:8) %>% 
+  group_by(sampleDate) %>% 
+  mutate(max_temp = max(Temperature)) %>% 
+  filter(Temperature == max_temp)
+
+```
+
+
+## old code comparing times of max daily temps
+
+Plot max temps for comparison with KNB data.
+
+```{r}
+cik.data2
+cik.data3
+
+p1 <- cik.data1 %>%  
+  ungroup() %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  # arrange(SiteID, DT) %>% 
+  group_by(SiteID, sampleDate) %>%
+  mutate(max_temp = max(Temperature),
+         ct = n()) %>% 
+  filter(Temperature == max_temp) %>%
+  mutate(hour = hour(sampleTime)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = SiteID, y = hour)) +
+  theme(axis.text.x = element_text(angle = 90), axis.title.x = element_blank()) +
+  labs(title = "KNB Data")
+
+p2 <- bind_rows(cik.data2, cik.data3) %>% 
+  ungroup() %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  # arrange(SiteID, DT) %>% 
+  group_by(SiteID, sampleDate) %>%
+  mutate(max_temp = max(Temperature),
+         ct = n()) %>% 
+  filter(Temperature == max_temp) %>%
+  mutate(hour = hour(sampleTime)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = SiteID, y = hour)) +
+  theme(axis.text.x = element_text(angle = 90), axis.title.x = element_blank()) +
+  labs(title = "New Data")
+
+p3 <- grid.arrange(p1, p2, ncol = 1)
+
+
+ggsave(filename = "data_preparation/CIK Times of Max Temps.pdf", plot = p3, height = 11, width = 8,
+       units = "in")
+
+```
+Look at the data for yellow creek.
+
+```{r}
+cik.data2 %>% distinct(SiteID)
+
+p <- cik.data2 %>% 
+  filter(SiteID == "Yellow Creek") %>% 
+  mutate(dt = as.POSIXct(paste(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) %>% 
+  ggplot(aes(x = dt, y = Temperature)) +
+    geom_line()
+
+ggplotly(p)
+
+
+bind_rows(cik.data2, cik.data3) %>% 
+  ungroup() %>% 
+  filter(month(sampleDate) %in% 6:8, SiteID == "Yellow Creek") %>% 
+  count(SiteID, year(sampleDate))
+
+bind_rows(cik.data2, cik.data3) %>% 
+  ungroup() %>% 
+  filter(month(sampleDate) %in% 6:8, SiteID == "Yellow Creek") %>% 
+  # arrange(SiteID, DT) %>% 
+  group_by(SiteID, sampleDate) %>%
+  mutate(max_temp = max(Temperature),
+         ct = n()) %>% 
+  filter(Temperature == max_temp) %>%
+  mutate(hour = hour(sampleTime))
+```
+
+Look at our Bristol Bay data, I'm surprised that there are maximum temps at midnight for Yellow creek, but that seems to be from warm days followed by cool days that didn't reach the previous day's maximum.
+
+```{r}
+bb.accs <- read_csv("W:/Github/Bristol-Bay-Temperature/output/BB_Temp_Clean_2020-12-18.csv")
+
+bb.accs %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  group_by(SiteID, sampleDate) %>%
+  mutate(max_temp = max(Temperature),
+         ct = n()) %>% 
+  filter(Temperature == max_temp) %>%
+  mutate(hour = hour(sampleTime)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = SiteID, y = hour)) +
+  theme(axis.text.x = element_text(angle = 90))
+
+bb.accs %>% 
+  count(SiteID, year(sampleDate))
+```
+
+
 
 

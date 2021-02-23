@@ -14,6 +14,11 @@ Mode <- function(x) {
   ux[which.max(tabulate(match(x, ux)))]
 }
 
+test <- c(NA, 1, 1, NA)
+
+Mode(test)
+
+
 temp_msmt_freq <- function(data.in) {
   dat.out <- data.in %>% 
     group_by(SiteID, sampleDate) %>% 
@@ -23,13 +28,22 @@ temp_msmt_freq <- function(data.in) {
   return(dat.out)
 }
 
+daily_screen <- function(data.in) {
+  dat.out <- data.in %>% 
+    filter(UseData == 1, !is.na(mode_diff)) %>% 
+    group_by(SiteID, sampleDate, mode_diff) %>%
+    summarize(meanDT = mean(Temperature, na.rm = TRUE),
+              minDT = min(Temperature, na.rm = TRUE),
+              maxDT = max(Temperature, na.rm = TRUE),
+              msmtCt = n()) %>% 
+    filter(msmtCt > (0.9 * 1440/mode_diff))
+}
+
 
 numberOfDays <- function(date) {
   m <- format(date, format="%m")
-  
   while (format(date, format="%m") == m) {
     date <- date + 1
   }
-  
   return(as.integer(format(date - 1, format="%d")))
 }

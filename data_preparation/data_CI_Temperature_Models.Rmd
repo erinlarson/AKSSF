@@ -5,6 +5,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+
 
 library(readxl)
 library(lubridate)
@@ -14,6 +16,10 @@ library(MARSS)
 
 
 Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series can be used for this analysis as the data are ready. The climate data are for 3-day lags, which we decided we won't use for AKSSF so don't worry about linking to climate data. We do need metadata and data data frames.
+
+# READ IN DUPLICATE SITES FROM sUE'S COMPLETE DATASET AND REMOVE HERE.
+Note on sites with metadata in AKOATS. All Deshka sites are new. The Kenai sites and CIK14 in the Anchor are included in Sue's other dataset with additional years of data. The Anchor River watershed sites CIK1-CIK8 are distinct and don't have metadata in AKOATS.
+
 
 # Read in data from Deshka, Anchor, and Kenai - v2 raw data only
 
@@ -146,6 +152,7 @@ kenai_daily <- kenai_temp %>%
   summarize(meanTemp = mean(Temperature))
 
 kenai_daily %>% summary
+
 ```
 
 

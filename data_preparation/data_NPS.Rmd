@@ -1,0 +1,268 @@
+---
+title: "data_NPS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+
+library(broom)
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+```
+
+Trey Simmons with NPS has data for the Wrangell-St Elias NP that covers our study area. Some data were archived on KNB and he also send over additional data. I'm going to combine all data sources here.
+
+# Read in data, format and combine
+
+##  KNB Data
+
+Read in files on S drive.
+
+```{r knb files}
+nps.files1 <- list.files("S:/Stream Temperature Data/NPS Simmons/data", pattern = ".csv", full.names = TRUE)
+
+nps.files1 <- nps.files1[!grepl("SiteLevelMetadata", nps.files1)]
+nps.files1 <- nps.files1[!grepl("SpotTempData", nps.files1)]
+```
+
+Metadata
+
+```{r knb metadata}
+nps_md <- read_csv("S:\\Stream Temperature Data\\NPS Simmons\\data\\SiteLevelMetadata_Simmons.csv") 
+
+nps_akssf_md <- nps_md %>% 
+  filter(SiteID %in% c("Rufus Creek", "Caribou Creek", "Rock Creek WRST", 
+                       "Gilahina River", "Crystal Creek", "Lakina River", "Long Lake Creek")) %>% 
+  select(AKOATS_ID, SiteID, SourceName, Contact_person, Latitude, Longitude, Waterbody_name)
+
+```
+
+Combined data files and get information from metadata file.
+
+```{r knb data}
+nps.data1 <- nps.files %>% 
+  map_df(function(x) read_csv(x) %>% 
+  mutate(file_name = gsub(".csv","",basename(x))))
+
+nps.data1 <- left_join(nps.data1, nps_akssf_md %>% select(AKOATS_ID, SiteID, Waterbody_name))
+
+nps.data1 <- nps.data1 %>% 
+  filter(SiteID %in% c("Rufus Creek", "Caribou Creek", "Rock Creek WRST", 
+                       "Gilahina River", "Crystal Creek", "Lakina River", "Long Lake Creek")) %>% 
+  mutate(year = year(sampleDate),
+         DT = parse_datetime(paste(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) 
+
+nps.data1 %>% distinct(SiteID)
+nps.data1 %>% count(UseData)
+```
+
+## 2021 Data
+
+```{r new data}
+nps.files2 <- list.files("S:/Stream Temperature Data/NPS Simmons/additional data 2021", pattern = ".csv", full.names = TRUE) 
+
+nps.data2 <- nps.files2 %>% 
+  map_df(function(x) read_csv(x, skip = 2, col_names = FALSE) %>% 
+  mutate(file_name = gsub(".csv","",basename(x))))
+
+nps.data2 %>% distinct(file_name)
+nps.data2 %>% mutate(leng = nchar(X2)) %>% group_by(leng) %>% slice(1:5)
+
+nps.data2 <- nps.data2 %>%
+  rename(input_dt = X2,
+         Temperature = X3) %>% 
+  mutate(DT = parse_date_time(input_dt, orders = c("mdY HM", "mdy HMSp"), train = FALSE),
+         sampleDate = as.Date(DT),
+         sampleTime = as.hms(DT),
+         SiteID = case_when(grepl("Gila", file_name) ~ "Gilahina River",
+                            grepl("Rufus", file_name) ~ "Rufus Creek",
+                            grepl("Rock", file_name) ~ "Rock Creek WRST",
+                            grepl("Caribou", file_name) ~ "Caribou Creek"),
+         UseData = 1) %>% 
+  select(-X1, -input_dt) 
+
+nps.data2 %>% count(UseData)
+
+nps.data2 <- left_join(nps.data2, nps_akssf_md %>% select(AKOATS_ID, SiteID, Waterbody_name))
+
+nps.data2 %>% distinct(SiteID, AKOATS_ID, Waterbody_name)
+
+```
+Combine the KNB and new datasets.
+
+```{r all data}
+intersect(names(nps.data1), names(nps.data2))
+
+nps.data <- bind_rows(nps.data1, nps.data2) %>% 
+  select(-file_name)
+
+```
+
+
+# Review data
+
+Check for duplicate measurements -- none!
+
+```{r duplicate data}
+nps.data %>% count(UseData)
+
+dups <- nps.data %>% 
+  # filter(UseData == 1) %>% 
+  count(SiteID, DT) %>% 
+  filter(n > 1)
+
+```
+
+Check that maximum daily temperatures are generally occurring at a reasonable time each day. There looks like some error in times in the KNB archive for CIK data.
+
+```{r}
+nps.data %>%  
+  ungroup() %>% 
+  filter(month(DT) %in% 6:8) %>% 
+  arrange(SiteID, DT) %>% 
+  group_by(SiteID, sampleDate) %>%
+  mutate(max_temp = max(Temperature),
+         ct = n()) %>% 
+  filter(Temperature == max_temp) %>%
+  mutate(hour = hour(DT)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = SiteID, y = hour))
+
+
+```
+
+
+Get air temperature data from a nearby GHCN site: GHCND:USR0000AKLA, using Dustin's code from Bristol Bay Temp repo. Bad data in first year, filter to 2000 on.
+
+```{r}
+
+air.dat <- meteo_pull_monitors("USR0000AKLA")  
+
+air.dat <- air.dat %>% 
+  # Temperature and Precipitation values are in tenths of degree/mm
+  mutate_if( is.numeric, ~ . * 0.1) %>% 
+  mutate(year = year(date)) %>% 
+  filter(year > 2000)
+
+summary(air.dat)
+
+air.plot <- air.dat %>% 
+  ggplot( aes( x = date)) +
+  geom_line( aes(y = tmin, color = "Air min")) +
+  geom_line( aes(y = tmax, color = "Air max")) 
+
+ggplotly(air.plot) 
+
+```
+
+
+Plot of raw data.
+
+```{r}
+nps.data %>% count(UseData) #no 0s
+
+nps.sites <- nps.data %>% distinct(SiteID, year = year(sampleDate))
+
+pdf("output/nps raw data by site.pdf")
+
+for(i in 1:nrow(nps.sites)) {
+  dat <- left_join(nps.sites %>% slice(i), nps.data)
+  p1 <- dat %>% 
+    # filter(UseData == 1) %>%
+    ggplot(aes(x = dt, y = Temperature)) +
+    geom_line() +
+    facet_wrap(~year) +
+    labs(title = dat %>% distinct(SiteID))
+  print(p1)  
+}
+
+dev.off()
+
+
+```
+Interactive plot of raw temperatures to see if times seem off like they are in CIK data -- possibly converted to GMT?
+
+```{r}
+nps.data %>% 
+  filter(SiteID == "Gilahina River", month(sampleDate) %in% 6:8) %>% 
+  group_by(sampleDate) %>% 
+  mutate(max_temp = max(Temperature)) %>% 
+  filter(Temperature == max_temp)
+
+p <- ggplot() +
+  geom_line(data = nps.data %>% filter(SiteID == "Gilahina River"),
+            aes(x = dt, y = Temperature))
+ggplotly(p)
+```
+
+
+
+Interactive plot with air temps as well. Convert to dailies first. 
+Crystal creek follows maximums much more closely than other sites, but seems to be draining a series of lakes upstream of McCarthy Road. Same pattern with long lake creek, which is outlet of Long Lake. Rufus Creek looks to have lots of gw, stay warm in winter. Rock Creek is strange, possibly getting buried, but too hard to know for sure.
+
+```{r}
+
+nps.daily <- nps.data %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meanTemp = mean(Temperature),
+            n = n()) %>% 
+  filter(n > 23)
+
+nps.daily %>% 
+  count(SiteID, n) %>% 
+  arrange(desc(n))
+nps.daily %>% filter(n == 180)
+nps.data %>% filter(SiteID == "Caribou Creek", sampleDate == as.Date("2008-05-22"))
+  
+  
+nps.sites %>% distinct(SiteID)
+
+p <- ggplot() +
+  geom_line(data = air.dat, aes(x = date, y = tmin, color = "blue")) +
+  geom_line(data = air.dat ,aes(x = date, y = tmax, color = "red")) +
+  geom_line(data = nps.daily %>% filter(SiteID == "Gilahina River"),
+            aes(x = sampleDate, y = meanTemp))
+ggplotly(p)
+```
+
+For Lakina and Gilahina Rivers, the stream temps mostly follow minimums except right in early June 2008 when both were very high for a few days. But raw temps look fine so no need to remove.
+
+```{r}
+nps.data %>% 
+    filter(SiteID == "Lakina River", month(sampleDate) == 6, year == 2008) %>%
+    ggplot(aes(x = dt, y = Temperature)) +
+    geom_line() +
+    facet_wrap(~year) +
+    labs(title = dat %>% distinct(SiteID))
+```
+
+Plot of all data to share with Trey as a reminder.
+
+```{r}
+nps.data %>% 
+  # filter(SiteID == "Lakina River", month(sampleDate) == 6, year == 2008) %>%
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meanT = mean(Temperature)) %>%
+  complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
+  mutate(year = year(sampleDate),
+         mo_day = format(sampleDate, "%m-%d")) %>% 
+  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(year))) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b") +
+  facet_wrap(~ SiteID) +
+  labs(x = "Date", y = "Mean Daily Temperature", color = "Year",
+       title = "NPS Original Logger Data by Site and Year") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+ggsave("output/NPS daily data.pdf", width = 10, height = 8.5)
+
+```
+
