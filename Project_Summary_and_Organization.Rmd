@@ -24,7 +24,7 @@ NOTE: need to update temperature model datasets to remove redundant CIK sites.
 * Deshka temperature model output - CIK and FWS data from 2017-2019
 * Kenai temperature model output - Ben Meyers, CIK and KWF
 * Anchor temperature model output - CIK, APU, and KBRR
-* CIK data on KNB - this will include all 48 sites in network, but only through 2017.
+* CIK data on KNB - this will include all 48 sites in network, but only through 2017
 * NPS data on KNB from Trey Simmons
 * ADFG data on KNB for Kodiak Island, three streams with one summer of data
 

@@ -1,0 +1,49 @@
+---
+title: "data_QA_TEMPLATE"
+output: html_document
+---
+
+Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+```
+
+Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we are only reviewing June - September data and flagging obvious air temperatures. Burials are a lot harder to confirm without a duplicate logger.
+
+
+# QA data for air temperatures
+
+
+# Save QAed dataset for AKTEMP
+
+Save a copy of the final data with the QA flags for AKTEMP as a .csv.
+
+# Remove sites
+
+Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
+
+# Save daily data
+
+Save a copy of the daily statistics in the final data folder for the AKSSF analysis. There are two helper functions that add the mode of the time difference for each day and calculate the daily min, mean, and max and removed days with less than 90% of measurements.
+
+* temp_msmt_freq
+* daily_screen
+
+```{r}
+source("day_and_month_functions.R")
+
+```
+
+

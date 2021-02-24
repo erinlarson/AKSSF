@@ -226,6 +226,7 @@ monthlyLMs2 %>%
   labs(x = "Month", y = "Decadal Trend in Mean Monthly Temperature", title = "Significant Trends (p-value < 0.05) in Mean Monthly Temperatures \n from 2002-2018 for Cook Inlet Streams", color = "Stream: ") +
   theme(legend.position = "bottom")
 ```
+
 Plot of significant trends without 2019.
 
 ```{r}

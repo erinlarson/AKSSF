@@ -1,0 +1,36 @@
+---
+title: "data_TEMPLATE"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+```
+
+
+Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
+
+This file is for reading in data from a single provider. I usually read in files separately by folder depending on how the data were provided and formatted. This might not be needed. The final saved data frame can be .rds for importing into the data QA report. If data have been QAed, then the final data file, metadata file, and daily data can be saved as .csv. Add a UseData == 1 for data that have already been reviewed.
+
+# Read in data and format
+
+## Data
+
+## Metadata
+
+# Review data
+
+## Duplicate measurements
+
+## Save data 
+
+If data have been reviewed by the data provider, these should be .csv of the final data, metadata, and daily data (see data_QA_TEMPLATE). Otherwise, an .rds or .csv to be passed to the data QA script.
