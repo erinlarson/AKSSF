@@ -21,11 +21,18 @@ Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of
 
 This file is for reading in data from a single provider. I usually read in files separately by folder depending on how the data were provided and formatted. This might not be needed. The final saved data frame can be .rds for importing into the data QA report. If data have been QAed, then the final data file, metadata file, and daily data can be saved as .csv. Add a UseData == 1 for data that have already been reviewed.
 
+# Define Functions
+Define any functions that are used for data formatting or duplicate measurement identification 
+```{r Functions}
+
+
+```
+
 # Read in data and format
 
-## Data
-
 ## Metadata
+
+## Data
 
 # Review data
 

@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath(".."))
 
 library(tidyverse)
@@ -18,6 +18,8 @@ library(hms)
 
 ```
 
+# Define Functions
+Functions not needed for this dataset but included as example
 
 ```{r Define Functions}
 
@@ -36,80 +38,35 @@ log_sn_fun <- function(string){
 
 ```
 
-
-# Get air temperatures from GHCN sites using rnoaa
-
-Not working, I can't find a site with daily summaries in cordova. The airport is part of the local climatological data online - WBAN:26410, but it's not working with the lcd function.
-
-DM Notes: Can't get lcd function to work either but here is a workaround.
-
-```{r NOAA data, message=FALSE, warning=FALSE}
-
-#Token obtained from NOAA to access API
-noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
-
-# lcd(station = "26410", year = 2013)
-# 
-# ncdc_locs(locationcategoryid = "CITY")
-
-#Station Codes for area of interest
-cd.climStat <- c( "USC00502179","USW00026410", "USW00096405")
-
-
-cd.climDat <- tibble( name = c( "CORDOVA WWTP", "CORDOVA AIRPORT",
-"CORDOVA 14"),
-                 id = cd.climStat)
-
-# Pull Climate data from Cordova Airport
-climDat <- meteo_pull_monitors(cd.climStat)  
-str(climDat)
-  
-
-cd.climDat <- cd.climDat %>% 
-  left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
-  filter( date >= "2008-06-01",
-          date <= "2020-12-30",
-          name == "CORDOVA AIRPORT") %>% 
-  # Temperature and Precipitation values are in tenths of degree/mm
-  mutate_if( is.numeric, ~ . * 0.1) %>% 
-  mutate(year = as.factor(year(date)),
-         day = yday(date),
-         dt = as.POSIXct(paste(date), format = "%Y-%m-%d"))
-  
-
-cd.climDat
-
-```
-
-
-# USFS
+# Review Data
 ## Metadata
 
-Priscilla was able to link most of these file names to site names in AKOATS. For the four sites not in AKOATS, she converted the UTM 
-coordinates to latitude/longitude. Read in that google sheet so that we can get simple site names on the data sheet and also start a metadata file with the locations.
+DM - I updated the depracated metadata sheet to correct a few sites that were in AKOATS and add new sites from Luca that were not in AKOATS.  Sheet is stored locally but I can upload a copy if needed.  
 
-```{r read in metadata}
+```{r Metadata not in AKOATS}
 
 # Access google sheet with metadata for usfs chugach sites
-depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
 
-usfs_dpmd <- read_sheet(depracated_metadata, sheet = "Sheet1",
-                    col_names = TRUE,
-                    col_types = "c") %>% 
+# depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
+
+# Created a spreadsheet to link AKOATS IDs and Site names/Coords using data filename----
+depracated_metadata <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\formatted_data\\USFS_Chugach_Working_deprecated_md.xlsx"
+
+usfs_dpmd <- read_excel(depracated_metadata, sheet = "deprecated_metadata",
+                    col_names = TRUE) %>% 
   filter(ACCS_Project == "USFS_Chugach") %>% 
   mutate(AKOATS_ID = as.numeric(AKOATS_ID),
          Latitude = as.numeric(Latitude),
          Longitude = as.numeric(Longitude)) 
 
-usfs_dpmd %>% select(Agency_ID, AKOATS_ID, Latitude, Longitude, data_SiteID)
+usfs_dpmd %>% select(Agency_ID, AKOATS_ID, Latitude, Longitude, data_SiteID)  
+  
 
 ```
 
-Read in current copy of akoats so we can get lat longs for Luca's sites that Priscilla could match.
-
 DM Notes: Use GOOGLE SHEET Copy for consistency
 
-```{r akoats}
+```{r AKOATS MD}
 
 # Find and copy AKOATS working excel file in Google Drive
 # x <- drive_find(pattern = "<NAME OF EXCEL FILE STORED IN GOOGLE DRIVE>", type = "xlsx", n_max = 1)
@@ -142,7 +99,7 @@ akoats_fsch
 ```
 Should we create some AKOATS_IDs for the sites that do not have corresponding values?
 
-```{r format fs sites, message=FALSE, warning=FALSE}
+```{r Combine Metadata, message=FALSE, warning=FALSE}
 
 usfs_md <- tibble()
 fs_akoats_sites <- tibble()
@@ -166,50 +123,6 @@ usfs_md
 
 ## Data
 
-Luca provided a big chunk of data in ~2018 that was formatted consistently. He recently sent over some additional data for four sites from the Kenai from 2018-2020 that should be read in separately. 
-
-
-```{r kenai new data, message=FALSE, warning=FALSE}
-
-# # Locate Kenai 2018-2020 data
-# fs_files2 <- list.files("C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\06_USFS_Chugach\\Kenai_2018-20", full.names = TRUE)
-# 
-# center_cr <- read_csv(fs_files2[grepl("CenterCrk", fs_files2)]) %>%
-#   rename(Date = "Date Time,",
-#          Time = "GMT-08:00",
-#          Temperature = "Temp, Â°C (LGR S/N: 20163556, SEN S/N: 20163556)") %>%
-#   mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
-#          Agency_ID = "Center Creek")
-# 
-# bench_cr <- read_excel(fs_files2[grepl("BENCH", fs_files2)]) %>%
-#   rename(Date = "Date",
-#          Time = "Time",
-#          Temperature = "Temp, Â°C (LGR S/N: 10515702, SEN S/N: 10515702)") %>%
-#   mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
-#          Time = as_hms(Time),
-#          Agency_ID = "Bench Creek")
-# 
-# daves_cr <- read_excel(fs_files2[grepl("DavesCrk_surfaceH2O_cz_2018", fs_files2)]) %>%
-#   rename(Date = "Date Time,",
-#          Time = "GMT-08:00",
-#          Temperature = "Temp, Â°C (LGR S/N: 10497829, SEN S/N: 10497829)") %>%
-#   mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
-#          Time = as_hms(Time),
-#          Agency_ID = "Daves Creek")
-# 
-# quartz_cr <- read_excel(fs_files2[grepl("QuartzCrk_surfaceH2O_cz_2018", fs_files2)]) %>%
-#   rename(Date = "Date Time,",
-#          Time = "GMT-09:00",
-#          Temperature = "Temp, Â°C (LGR S/N: 20163535, SEN S/N: 20163535)") %>%
-#   mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
-#          Time = as_hms(Time),
-#          Agency_ID = "Quartz Creek")
-# 
-# kendat <- bind_rows(quartz_cr, daves_cr, bench_cr, center_cr)
-# kendat
-
-```
-
 Extract file name of data set and in new column
 
 ```{r Collect temperature data files}
@@ -220,7 +133,7 @@ source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation
 files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
 
 # Remove metadata sheets and air temp datasets
-patterns <- c("siteinfo", "selectedsites", "AirT", "geospatial", "UTM")
+patterns <- c("siteinfo", "selectedsites", "AirT", "geospatial", "UTM", "USFS_Chugach_Metada")
 
 fs_files <- files
 for (pattern in patterns){
@@ -232,7 +145,7 @@ basename(fs_files)
 
 Bind all input datasets together after removing Airtemp and site info CSVs
 
-```{r Merge data}
+```{r Bind all data, message=FALSE, warning=FALSE}
 
 # Create tibble for fs temperature data
 fsdat <- tibble()
@@ -300,30 +213,21 @@ for ( i in fs_files){
 }
 
 print( paste0(t1, " Formatted correctly" ," | ",t2, " Incorrectly formatted"))
-dput(unique(fsdat$data_filename))
-```
-
-```{r}
-fs_site_names <- unique(fsdat$data_filename)
-fs_site_names
- 
-as.data.frame(fs_site_names) %>% 
-  write_csv(path = "data_preparation/formatted_data/usfs_site_names.csv")
 
 ```
 
+```{r Export csv of temp data filenames}
 
+# Export CSV with list of filenames to identify measurement location and link AKOATS
+# IDs where possible
 
-```{r read in data from csv, message=FALSE, warning=FALSE}
+unique(fsdat$data_filename)
 
-# # Remove QAQC datasets
-# fs_files <- fs_files[!grepl("QAQC", fs_files)] 
-
-# Extract file name and save to new column for fs_files 
-fsdat <- fs_files %>% 
-  map_df(function(x) read_csv_and_name(x)) 
-
-fsdat
+# fs_site_names <- unique(fsdat$data_filename)
+# fs_site_names
+#  
+# as.data.frame(fs_site_names) %>% 
+#   write_csv(path = "data_preparation/formatted_data/usfs_site_names.csv")
 
 ```
 
@@ -331,31 +235,30 @@ Some problems with dates - some are 2 digit and some are 4 digit. In as.Date fun
 
 ```{r fix dates, message=FALSE, warning=FALSE}
 
-fsdat %>% 
-  mutate(year1 = sub(".*/.*/", "", Date)) %>% 
-  distinct(year1)
-
-fsdat <- fsdat %>% 
-  mutate(year1 = sub(".*/.*/", "", Date),
-         sampleDate = case_when(nchar(year1) == 4 ~ as.Date(Date, format = "%m/%d/%Y"),
-                                TRUE ~ as.Date(Date, format = "%m/%d/%y"))) %>% 
-  rename(sampleTime = Time, Temperature = Temp)
+fsdat2 <- fsdat %>% 
+  mutate(year1 = sub(".*/.*/", "", sampleDate),
+         sampleDate2 = case_when(nchar(year1) == 4 ~ as.Date(sampleDate,
+                                                             format = "%m/%d/%Y"),
+                                 TRUE ~ as.Date(sampleDate, format = "%m/%d/%y")),
+         sampleDate = sampleDate2,
+         dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "),
+                    format = "%Y-%m-%d %H:%M"))
 
 # fsdat %>%
-#   group_by(file_name) %>%
+#   group_by(data_filename) %>%
 #   summarize(min(sampleDate), max(sampleDate))
 # 
 # fsdat %>%
 #   distinct(year = year(sampleDate)) %>%
 #   arrange(year)
-#
+# 
 # fsdat %>%
-#   distinct(file_name, year = year(sampleDate)) %>%
-#   count(file_name) %>%
+#   distinct(data_filename, year = year(sampleDate)) %>%
+#   count(data_filename) %>%
 #   arrange(n) %>%
 #   summarize(median(n))
 
-fsdat
+fsdat2
 
 ```
 
@@ -366,117 +269,66 @@ Additional fields to add to data frame:
 * Add date-time and year for plotting.
 
 ```{r add new fields, message=FALSE, warning=FALSE}
-
-fsdat <- left_join(fsdat, usfs_dpmd %>%
+fsdat2 <- left_join(fsdat2, usfs_dpmd %>%
                      select(data_SiteID, Agency_ID),
-                   by = c("file_name" = "data_SiteID")) 
-fsdat
+                   by = c("data_filename" = "data_SiteID")) 
+fsdat2
 ```
 
-Combined new data for four Kenai sites with larger dataset.
 
-```{r Combine Data Sets}
-
-fsdat <- kendat %>%
-  rename( sampleTime = Time,
-  sampleDate = Date) %>% 
-  bind_rows(fsdat)
-fsdat
-```
-# Drop sites here
+# Remove Duplicates and format output
+## Drop Sites based on Luca Notes in worksheet/email convos
 Drop sites highlighted in yellow on worksheet and any additional sites covered in conversation with Luca A.
 
 Worksheet drops  include: 
 "Clear Creek", "Hatchery Creek", "Ibeck Creek", "Jack Bay River", "McKinley Lake", "NF Williwaw Creek", "Pigot Bay Spawn Channel", "Rude River SC",
-"SF Williwaw Creek", "Solf Lake Inlet" &"Steller Jay Creek"
+"SF Williwaw Creek", "Solf Lake Inlet" & "Steller Jay Creek"
 
-Additional drops: Eyak Lake Trib
+Luca Notes Update 02/24/2021 :
+"L.A.- My initial hunch is that that for Olsen, Eagle, Rude, Pigot, Shelter, and maybe Sheep, the data will useable for the DFA with very limited tidal impacts in the summer"
 
-Possible: Eagle Creek and Shelter Bay are tidally influenced but will keep for now
-
-```{r}
+```{r Remove Duplicates and Classify initial useSite}
+# Tibble for all formatted data with duplicates removed
 fschdat <- tibble()
-fschdat <- fsdat %>% 
+
+# Drop sites based on email conversations and notes in site info workbooks
+fschdat <- fsdat2 %>% 
   mutate(useSite = case_when(
     Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek",
                      "Jack Bay River", "McKinley Lake", "NF Williwaw Creek",
-                     "Pigot Bay Spawn Channel", "Rude River SC",
+                     # Removing pigot and rude based on Luca Email 02/24/2021
+                     #"Pigot Bay Spawn Channel", "Rude River SC",
                      "SF Williwaw Creek", "Solf Lake Inlet",
                      "Steller Jay Creek") ~ 0, TRUE ~ 1),
-    dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "),
-                    format = "%Y-%m-%d %H:%M"),
     SiteID = Agency_ID,
     year = year(sampleDate)) %>% 
-  select(-Date, -file_name, -year1)
+  select( -data_filename, -year1, -sampleDate2, -Agency_ID) %>% 
+  # Drop duplicate records
+  distinct()
 
-fschdat
-```
+#Reorder and save output
+colorder <- c("SiteID","sampleDate", "sampleTime", "Temperature", "dt", "year",
+              "useSite")
 
-# STOPPED HERE - ADDED IN NEW DATA 1/25/21
-
-
-
-Quick plots of data to make sure they read in ok. Start by summarizing daily means because quicker to plot. Looks like some bad winter temps well below zero that could be clipped later. No obvious air temps in summer as everything is < = 20 or so.
-
-```{r plot of dialy means, message=FALSE, warning=FALSE}
-
-fschdat %>% 
-  group_by(SiteID, sampleDate) %>% 
-  summarize(meant = mean(Temperature)) %>% 
-  ggplot(aes(x = sampleDate, y = meant)) +
-  geom_line() +
-  facet_wrap(~SiteID)
+fschdat <- fschdat[,colorder]
 
 ```
 
-Wrong! The sub-daily temps show more errors, definitely some air temps that need to be removed. This will be a good dataset for testing scripts, although it will probably need cleaning sooner rather than later for AKSSF.
+# Save Data
+## Save Temp Data
+Save formatted version prior to QAQC
+```{r Save Formatted USFS Data}
 
-```{r plot of raw data}
-
-fschdat %>% 
-  ggplot(aes(x = dt, y = Temperature)) +
-  geom_line() +
-  facet_wrap(~SiteID)
-
+# Save formatted data for input into qa script
+usfsChug.data <- saveRDS(fschdat, "data_preparation/formatted_data/usfsChug.data.rds")
 
 ```
+## Save Metadata
 
-Rolling pdf of raw data to send to Luca and check on status of data QA.
+```{r Save USFS Metadata}
+# Save metadata 
+usfsChugmd.data <- saveRDS(usfs_md, "data_preparation/formatted_data/usfsChugmd.data.rds")
 
-```{r plot of raw data by site-year}
-fs_sites <- fschdat %>% distinct(Agency_ID, year) %>% arrange(Agency_ID, year)
-
-pdf("data_preparation/USFS Raw Data by Site and Year.pdf", width = 11, height = 8.5)
-
-for(i in 1:nrow(fs_sites)) {
-  dat <- left_join(fs_sites %>% slice(i), fschdat)
-  subtitle <- dat %>% distinct(useSite) %>% pull(useSite)
-  p1 <- dat %>% 
-    ggplot(aes(x = dt, y = Temperature)) +
-    geom_line() +
-    labs(title = fs_sites %>% slice(i) %>% unite(site_year) %>%
-           pull(site_year),
-         subtitle = paste0("Use Site: ", subtitle)) +
-    theme(legend.position = "bottom")
-  print(p1)
-}
-
-dev.off()
-
-```
-
-
-Save file for summary report.
-
-```{r}
-fschdat
-
-names(fschdat)
-
-fschdat %>% 
-  rename(SiteID = Agency_ID) %>% 
-  select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
-  saveRDS("output/fschdat.rds")
 ```
 
 
