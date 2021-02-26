@@ -186,11 +186,20 @@ cik.data %>%
   distinct(SiteID) %>% 
   left_join(akoats %>% select(Agency_ID, Waterbody_name), by = c("SiteID" = "Agency_ID")) 
 
+
+cik.md <- cik.data %>% 
+  distinct(SiteID) %>% 
+  left_join(akoats, by = c("SiteID" = "Agency_ID")) 
+
+cik.md <- cik.md %>% 
+  select(SiteID, AKOATS_ID = seq_id, SourceName:Longitude, Sensor_Placement, Waterbody_name, Waterbody_type,
+         Sensor_accuracy, Sensor_QAQC) 
+
 ```
 
 Remove intermediate files since they are so large.
 
-```{r}
+```{r remove data}
 # rm(cik.data2, cik.data3, cik.data1)
 ```
 
@@ -330,7 +339,7 @@ bind_rows(anchor_temp %>%
 
 Add CIK14 to the duplicate site list and save for importing to the CI_Temperature_Models script.
 
-```{r}
+```{r save dup sites}
 bind_rows(dup_kenai_sites %>% select(SiteID),
           data.frame(SiteID = "CIK14")) %>% 
   saveRDS("data_preparation/duplicate_CIK_sites.rds")
@@ -338,17 +347,12 @@ bind_rows(dup_kenai_sites %>% select(SiteID),
 
 ## Exploratory plots
 
-Add year for plotting.
+Add year for plotting .Plot of raw data, but Sue typically provides only QAed data. 
 
-```{r}
+```{r pdf of raw data by site}
+
 cik.data <- cik.data %>% 
   mutate(year = year(sampleDate)) 
-```
-
-Plot of raw data, but Sue typically provides only QAed data. Some useData==0 from KNB.
-
-```{r}
-cik.data %>% ungroup() %>% count(UseData)
 
 cikSites <- cik.data %>% distinct(SiteID)
 
@@ -371,38 +375,23 @@ dev.off()
 
 ## Save data and metadata
 
-Save raw data for AKTEMP, which includes date and time. 
+Save raw data for AKTEMP, which includes date and time. Save metadata file. Save daily data after screening for days with less than 90% of measurements.
 
-```{r}
-cik.data %>% 
-  mutate(UseData = 1) %>% 
-  saveRDS("data_preparation/formatted_data/cik.data.rds")
-```
+```{r save raw data}
+date.now <- as.Date(Sys.time())
+write.csv(cik.data, paste0("data_preparation/final_data/CIK_AKTemp_", 
+                           as.character(date.now),".csv"), row.names = F)
 
-Save metadata file, which includes extras like lat/long and waterbody name.
+cik.md %>% 
+  select() %>% 
+  write.csv(paste0("data_preparation/final_data/CIK_Metadata_", 
+                           as.character(date.now),".csv"), row.names = F)
 
-```{r}
-
-```
-
-Save daily min, mean, and max for actual analysis. These daily summaries can be used to generate temperature metrics and also the thermal sensitivity. Use function to screen out days with < 90% of measurements.
-
-```{r}
-source("day_and_month_functions.R")
 cik.daily <- temp_msmt_freq(cik.data)
-
-cik.daily %>% 
-  ungroup() %>% 
-  distinct(SiteID, mode_diff)
-
 cik.daily <- daily_screen(cik.daily %>% mutate(UseData = 1))
 
-cik.daily %>% ungroup() %>% distinct(mode_diff, msmtCt)
-cik.daily %>% ungroup() %>% filter(is.na(mode_diff))
-
-cik.daily %>% 
-  select(SiteID, sampleDate, meanDT, maxDT, minDT) %>% 
-  saveRDS("data_preparation/final_data/cik.daily.rds")
+write.csv(cik.daily, paste0("data_preparation/final_data/CIK_Daily_Temp_", 
+                            as.character(date.now),".csv"), row.names = F)
 
 ```
 

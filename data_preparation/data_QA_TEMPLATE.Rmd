@@ -42,7 +42,11 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 * daily_screen
 
 ```{r}
-source("day_and_month_functions.R")
+source('W:/Github/AKSSF/day_and_month_functions.R')
+
+
+date.now <- as.Date(Sys.time())
+write.csv(cik.daily, paste0("data_preparation/final_data/CIK_Daily_Temp_", as.character(date.now),".csv"), row.names = F)
 
 ```
 

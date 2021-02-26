@@ -6,7 +6,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath(".."))
-
+source('W:/Github/AKSSF/day_and_month_functions.R')
 
 library(readxl)
 library(lubridate)
@@ -17,9 +17,7 @@ library(MARSS)
 
 Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series can be used for this analysis as the data are ready. The climate data are for 3-day lags, which we decided we won't use for AKSSF so don't worry about linking to climate data. We do need metadata and data data frames.
 
-# READ IN DUPLICATE SITES FROM sUE'S COMPLETE DATASET AND REMOVE HERE.
-Note on sites with metadata in AKOATS. All Deshka sites are new. The Kenai sites and CIK14 in the Anchor are included in Sue's other dataset with additional years of data. The Anchor River watershed sites CIK1-CIK8 are distinct and don't have metadata in AKOATS.
-
+Note on sites with metadata in AKOATS. All Deshka sites are new. The Kenai sites and CIK14 in the Anchor are included in Sue's other dataset with additional years of data so they are removed from this dataset. The Anchor River watershed sites CIK1-CIK8 are distinct and don't have metadata in AKOATS. 
 
 # Read in data from Deshka, Anchor, and Kenai - v2 raw data only
 
@@ -35,6 +33,9 @@ deshka_wd <- "W:/Github/Deshka_temperature/output/data_catalog"
 
 deshka_temp <- read_csv(paste0(deshka_wd, "/deshka_temperature_data.csv", collapse = ""))
 
+deshka_temp <- temp_msmt_freq(deshka_temp)
+deshka_daily <- daily_screen(deshka_temp)
+
 deshka_daily <- deshka_temp %>%
   filter(useData == 1) %>% 
   group_by(SiteID, sampleDate) %>% 
@@ -45,7 +46,7 @@ deshka_daily %>% distinct(SiteID)
 
 Edits to site table - kroto 5 downstream misspelled, and PMC1 listed twice. In temperature dataset, there is a PMC1 and PMC1-2, which are in the same catchment and just slightly separated. Keep PMC1, which has the longer time series.
 
-```{r deshka catchment ID}
+```{r deshka metadata}
 
 deshka_sites <- read_csv(paste0(deshka_wd, "/deshka_sites.csv", collapse = ""))
 
@@ -74,8 +75,9 @@ deshka_daily
 
 ```
 
+NOT using climate data.
 
-```{r deshka climate data}
+```{r deshka climate data, eval = FALSE}
 
 deshka_climate <- read_csv(paste0(deshka_wd, "/deshka_climate_variables.csv", collapse = ""))
 
@@ -84,6 +86,14 @@ deshka_climate
 deshka_daily <- left_join(deshka_daily, deshka_climate %>% select(catchmentID, sampleDate, tair3))
 
 deshka_daily
+
+```
+
+Save data files
+
+```{r deshka save}
+
+
 
 ```
 
@@ -124,8 +134,9 @@ anchor_daily
 
 ```
 
-
-```{r anchor climate data}
+NOT using climate data.
+ 
+```{r anchor climate data, eval = FALSE}
 
 anchor_climate <- read_csv(paste0(anchor_wd, "/anchor_climate_variables.csv", collapse = ""))
 
@@ -174,8 +185,9 @@ kenai_daily %>% summary
 
 ```
 
+NOT using climate data.
 
-```{r kenai climate data}
+```{r kenai climate data, eval = FALSE}
 
 kenai_climate <- read_csv(paste0(kenai_wd, "/kenai_climate_variables.csv", collapse = ""))
 
@@ -214,6 +226,14 @@ ci_daily <- bind_rows(deshka_daily %>% mutate(wtd = "Deshka"), anchor_daily %>% 
 
 ```
 
+Remove sites in Sue's other dataset and save file in the final data folder.
+
+```{r}
+dup_sites <- readRDS("data_preparation/duplicate_CIK_sites.rds")
+
+ci_daily
+```
+
 
 
 ```{r remove extra data}
@@ -224,7 +244,7 @@ rm(deshka_temp, deshka_sites, deshka_climate)
 ```
 
 
-# Read in data from Deshka, Anchor, and Kenai - v1 with daily data included - EDITED
+# Read in data from Deshka, Anchor, and Kenai - v1 with daily data included - ARCHIVE NOT RUN.
 
 ## Deshka 
 

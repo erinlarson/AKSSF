@@ -92,20 +92,27 @@ Data file
 
 Optional fields in the data file to assist with QA:
 
-* Waterbody_name
+* Waterbody_name, character
 * DT, posixct
-* duplicate 
+* duplicate
 
-Sites file
+Sites file. This is a longer list of names from akoats that we should probably keep. We may not know all 
 
 * Agency_ID, ID as provided from the data provider
 * SiteID, unique name that links to the data file, maybe a concatenation of agency_ID + lat + long.
 * AKOATS_ID
 * Waterbody_name
-* latitude
-* longitude
-* Source_Name
-* Contact_Name
+* Latitude
+* Longitude
+* SourceName
+* Contact_person
+* Contact_email
+* Contact_telephone
+* Sensor_Placement
+* Sensor_accuracy
+* Sensor_QAQC
+
+
 
 3. Air temperature extraction
 

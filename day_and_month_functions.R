@@ -47,3 +47,14 @@ numberOfDays <- function(date) {
   }
   return(as.integer(format(date - 1, format="%d")))
 }
+
+
+save_daily_file
+
+save_aktemp_file
+
+save_metadata_file <- function(data.in) {
+  data.in %>% 
+  
+}
+

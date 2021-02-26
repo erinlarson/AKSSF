@@ -21,11 +21,37 @@ Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of
 
 This file is for reading in data from a single provider. I usually read in files separately by folder depending on how the data were provided and formatted. This might not be needed. The final saved data frame can be .rds for importing into the data QA report. If data have been QAed, then the final data file, metadata file, and daily data can be saved as .csv. Add a UseData == 1 for data that have already been reviewed.
 
+# Define Functions
+Define any functions that are used for data formatting or duplicate measurement identification 
+
+```{r Functions}
+
+
+```
+
 # Read in data and format
 
-## Data
-
 ## Metadata
+
+Sites file. This is a longer list of names from akoats that we should probably keep. Some basic ones should be filled in for providers with data not entered into akoats.
+
+Notes on new names:
+
+* Agency_ID should equal the SiteID in the data table. So during left_join, use by = c("SiteID" = "Agency_ID"). If this is a problem because a data provided used stream names, concatenate the agency acronym to the Agency_ID. E.g. USFS_Cold Creek.
+* AKOATS_ID = seq_id.
+
+
+```{r}
+akoats_fields <- c("seq_id", "Agency_ID", "SourceName", "Contact_person", 
+"Contact_email", "Contact_telephone", "Latitude", "Longitude", 
+"Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
+"Sensor_QAQC")
+
+```
+
+
+
+## Data
 
 # Review data
 
