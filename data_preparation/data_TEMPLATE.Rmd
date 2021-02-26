@@ -43,10 +43,7 @@ Notes on new names:
 
 
 ```{r}
-akoats_fields <- c("seq_id", "Agency_ID", "SourceName", "Contact_person", 
-"Contact_email", "Contact_telephone", "Latitude", "Longitude", 
-"Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
-"Sensor_QAQC")
+
 
 ```
 
