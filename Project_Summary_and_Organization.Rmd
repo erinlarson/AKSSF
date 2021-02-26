@@ -76,7 +76,7 @@ Note: We can restrict our QA of data to just the months of June-September. So fo
 
 2c. To obtain the data to be used for AKSSF, we need to filter on complete daily values to calculate daily min, mean, and max. And, may also filter to June - September to see how much available data we have across sites and years.
 
-Data file
+AKTEMP Data file
 
 * SiteID, character
 * sampleDate, date
@@ -90,7 +90,16 @@ Optional fields in the data file to assist with QA:
 * DT, posixct
 * duplicate
 
-Sites file. This is a longer list of names from akoats that we should probably keep. We may not know all 
+Daily Data file - see helper functions for creating this from AKTEMP data file
+
+* SiteID, character
+* sampelDate, date
+* meanDT, numeric
+* maxDT, numeric
+* minDT, numeric
+
+
+Sites file. This is a longer list of names from akoats that we should probably keep. We may not know all if sites were not previously submitted to akoats. Not a big deal, just capture what we can for each data provider for now. Could email them later when actually submitting data to AKTEMP.
 
 * Agency_ID, ID as provided from the data provider
 * SiteID, unique name that links to the data file, maybe a concatenation of agency_ID + lat + long.
