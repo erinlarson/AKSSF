@@ -387,8 +387,10 @@ cik.md %>%
   write.csv(paste0("data_preparation/final_data/CIK_Metadata_", 
                            as.character(date.now),".csv"), row.names = F)
 
-cik.daily <- temp_msmt_freq(cik.data)
+cik.daily <- temp_msmt_freq(cik.data)  
 cik.daily <- daily_screen(cik.daily %>% mutate(UseData = 1))
+
+#daily.file <- temp_msmt_freq(x) %>% daily_screen(.)
 
 write.csv(cik.daily, paste0("data_preparation/final_data/CIK_Daily_Temp_", 
                             as.character(date.now),".csv"), row.names = F)

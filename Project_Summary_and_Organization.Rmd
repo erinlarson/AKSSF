@@ -28,12 +28,12 @@ NOTE: need to update temperature model datasets to remove redundant CIK sites.
 
 Data need QA after formatting:
 
-* USFS data from Luca.
-* ADFG data from Heather. Note that she had also archived ~ 1 year of data on KNB, but sent everything over so no longer using that data.
-* NPS data from Trey. Note that source/data folder is what was on the KNB archive and has been formatted. But need to bring in new data and combine.
-* Native Village of Eyak - 2 sites.
-* (in BB repo) NPS data from Krista collected by Dan Young.
-* (in BB repo) UW data, streams are formatted, but need QA. 
+* USFS data from Luca - DM almost done.
+* ADFG data from Heather. Note that she had also archived ~ 1 year of data on KNB, but sent everything over so no longer using that data. DM will format.
+* NPS data from Trey. Note that source/data folder is what was on the KNB archive and has been formatted. But need to bring in new data and combine. Becky will format
+* Native Village of Eyak - 2 sites. DM 
+* (in BB repo) NPS data from Krista collected by Dan Young. DM 
+* (in BB repo) UW data, streams are formatted, but need QA. Becky will format
 
 Data received, need to read in and format new data and create metadata (some may be done already):
 
@@ -102,7 +102,7 @@ Daily Data file - see helper functions for creating this from AKTEMP data file
 Sites file. This is a longer list of names from akoats that we should probably keep. We may not know all if sites were not previously submitted to akoats. Not a big deal, just capture what we can for each data provider for now. Could email them later when actually submitting data to AKTEMP.
 
 * Agency_ID, ID as provided from the data provider
-* SiteID, unique name that links to the data file, maybe a concatenation of agency_ID + lat + long.
+* SiteID, unique name that links to the data file, maybe a concatenation of agency_ID + acronym.
 * AKOATS_ID
 * Waterbody_name
 * Latitude
