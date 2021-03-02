@@ -15,6 +15,7 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+library(plotly)
 ```
 
 Trey Simmons with NPS has data for the Wrangell-St Elias NP that covers our study area. Some data were archived on KNB and he also send over additional data. I'm going to combine all data sources here.
@@ -26,7 +27,7 @@ Trey Simmons with NPS has data for the Wrangell-St Elias NP that covers our stud
 Read in files on S drive.
 
 ```{r knb files}
-nps.files1 <- list.files("S:/Stream Temperature Data/NPS Simmons/data", pattern = ".csv", full.names = TRUE)
+nps.files1 <- list.files("S:/Stream Temperature Data/NPS Trey Simmons/data", pattern = ".csv", full.names = TRUE)
 
 nps.files1 <- nps.files1[!grepl("SiteLevelMetadata", nps.files1)]
 nps.files1 <- nps.files1[!grepl("SpotTempData", nps.files1)]
@@ -35,7 +36,7 @@ nps.files1 <- nps.files1[!grepl("SpotTempData", nps.files1)]
 Metadata
 
 ```{r knb metadata}
-nps_md <- read_csv("S:\\Stream Temperature Data\\NPS Simmons\\data\\SiteLevelMetadata_Simmons.csv") 
+nps_md <- read_csv("S:\\Stream Temperature Data\\NPS Trey Simmons\\data\\SiteLevelMetadata_Simmons.csv") 
 
 nps_akssf_md <- nps_md %>% 
   filter(SiteID %in% c("Rufus Creek", "Caribou Creek", "Rock Creek WRST", 
@@ -47,7 +48,7 @@ nps_akssf_md <- nps_md %>%
 Combined data files and get information from metadata file.
 
 ```{r knb data}
-nps.data1 <- nps.files %>% 
+nps.data1 <- nps.files1 %>% 
   map_df(function(x) read_csv(x) %>% 
   mutate(file_name = gsub(".csv","",basename(x))))
 
@@ -66,7 +67,8 @@ nps.data1 %>% count(UseData)
 ## 2021 Data
 
 ```{r new data}
-nps.files2 <- list.files("S:/Stream Temperature Data/NPS Simmons/additional data 2021", pattern = ".csv", full.names = TRUE) 
+nps.files2 <- list.files("S:/Stream Temperature Data/NPS Trey Simmons/additional data 2021", 
+                         pattern = ".csv", full.names = TRUE) 
 
 nps.data2 <- nps.files2 %>% 
   map_df(function(x) read_csv(x, skip = 2, col_names = FALSE) %>% 
@@ -80,7 +82,7 @@ nps.data2 <- nps.data2 %>%
          Temperature = X3) %>% 
   mutate(DT = parse_date_time(input_dt, orders = c("mdY HM", "mdy HMSp"), train = FALSE),
          sampleDate = as.Date(DT),
-         sampleTime = as.hms(DT),
+         sampleTime = as_hms(DT),
          SiteID = case_when(grepl("Gila", file_name) ~ "Gilahina River",
                             grepl("Rufus", file_name) ~ "Rufus Creek",
                             grepl("Rock", file_name) ~ "Rock Creek WRST",
@@ -100,7 +102,7 @@ Combine the KNB and new datasets.
 ```{r all data}
 intersect(names(nps.data1), names(nps.data2))
 
-nps.data <- bind_rows(nps.data1, nps.data2) %>% 
+nps.data <- bind_rows(nps.data1, nps.data2 %>% mutate(year = year(sampleDate))) %>% 
   select(-file_name)
 
 ```
@@ -118,15 +120,14 @@ dups <- nps.data %>%
   count(SiteID, DT) %>% 
   filter(n > 1)
 
+dups
 ```
 
-Check that maximum daily temperatures are generally occurring at a reasonable time each day. There looks like some error in times in the KNB archive for CIK data.
+Check that maximum daily temperatures are generally occurring at a reasonable time each day. There looks like some error in times in the KNB archive for CIK data. These all look fine and are generally late afternoon.
 
 ```{r}
 nps.data %>%  
-  ungroup() %>% 
   filter(month(DT) %in% 6:8) %>% 
-  arrange(SiteID, DT) %>% 
   group_by(SiteID, sampleDate) %>%
   mutate(max_temp = max(Temperature),
          ct = n()) %>% 
@@ -135,9 +136,31 @@ nps.data %>%
   ggplot() +
   geom_boxplot(aes(x = SiteID, y = hour))
 
+```
+
+## Save data files
+
+Save the data frame as an .rds and put on drive for Dustin or Priscilla to QA. For both the data file and the metadata file, modified the site names to include NPS in front since the SiteID is just stream names.
+
+```{r}
+nps.data %>% 
+  select(SiteID, sampleDate, sampleTime, DT, Temperature, UseData) %>% 
+  saveRDS(., file = "data_preparation/formatted_data/nps.data.rds")
+```
+
+Save metadata file in final data folder.
+
+```{r}
+nps.data %>% 
+  distinct(SiteID) %>% 
+  left_join(nps_md) %>% 
+  rename(seq_id = "AKOATS_ID") %>% 
+  save_metadata_file(., "NPS")
 
 ```
 
+
+# Exploratory plotting of data
 
 Get air temperature data from a nearby GHCN site: GHCND:USR0000AKLA, using Dustin's code from Bristol Bay Temp repo. Bad data in first year, filter to 2000 on.
 
@@ -162,23 +185,26 @@ ggplotly(air.plot)
 
 ```
 
-
 Plot of raw data.
 
 ```{r}
 nps.data %>% count(UseData) #no 0s
+nps.data %>% 
+  count(SiteID, year)
 
-nps.sites <- nps.data %>% distinct(SiteID, year = year(sampleDate))
+nps.sites <- nps.data %>% distinct(SiteID, year) %>% 
+  arrange(SiteID, year)
 
 pdf("output/nps raw data by site.pdf")
 
 for(i in 1:nrow(nps.sites)) {
-  dat <- left_join(nps.sites %>% slice(i), nps.data)
+  dat <- left_join(nps.sites %>% slice(i), nps.data) %>% 
+    filter(month(sampleDate) %in% 6:9)
   p1 <- dat %>% 
     # filter(UseData == 1) %>%
-    ggplot(aes(x = dt, y = Temperature)) +
+    ggplot(aes(x = DT, y = Temperature)) +
     geom_line() +
-    facet_wrap(~year) +
+    # facet_wrap(~year) +
     labs(title = dat %>% distinct(SiteID))
   print(p1)  
 }
@@ -187,6 +213,7 @@ dev.off()
 
 
 ```
+
 Interactive plot of raw temperatures to see if times seem off like they are in CIK data -- possibly converted to GMT?
 
 ```{r}
@@ -198,10 +225,9 @@ nps.data %>%
 
 p <- ggplot() +
   geom_line(data = nps.data %>% filter(SiteID == "Gilahina River"),
-            aes(x = dt, y = Temperature))
+            aes(x = DT, y = Temperature))
 ggplotly(p)
 ```
-
 
 
 Interactive plot with air temps as well. Convert to dailies first. 
