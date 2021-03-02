@@ -3,9 +3,11 @@ title: "data_USFS_Chugach"
 output: html_document
 ---
 
+The <knitr::opts_knit$set(root.dir = normalizePath(".."))> only works when run as a chunk and resets to the data prep folder for all following chunks?  Not sure why this is happening.
+
 ```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = setwd(normalizePath("..")))
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
-knitr::opts_knit$set(root.dir = normalizePath(".."))
 
 library(tidyverse)
 library(readxl)
@@ -14,41 +16,18 @@ library(lubridate)
 library(googlesheets4)
 library(rnoaa)
 library(hms)
-#library(googledrive) #Only need if accessing file stored in drive to download
+library(googledrive) #Only need if accessing file stored in drive to download
+source("helper_functions.R")
 
 ```
 
-# Define Functions
-Functions not needed for this dataset but included as example
-
-```{r Define Functions}
-
-# Read in csv and add column with filename
-read_csv_and_name <- function(csv_file_path) {
-  sheet_name <- str_match(csv_file_path, "\\/\\s*(.*?)\\s*\\.csv")[2]
-  dat <- read_csv(csv_file_path) %>% 
-      mutate(file_name = sheet_name)
-}
-
-# Function to pull logger serial# from temp column
-log_sn_fun <- function(string){ 
-  
-  str_extract(string, "\\-*\\d+\\.*\\d*")
-} 
-
-```
 
 # Review Data
 ## Metadata
 
-DM - I updated the depracated metadata sheet to correct a few sites that were in AKOATS and add new sites from Luca that were not in AKOATS.  Sheet is stored locally but I can upload a copy if needed.  
+DM - I updated the depracated metadata sheet to correct a few sites that were in AKOATS and add new sites from Luca that were not in AKOATS. 
 
 ```{r Metadata not in AKOATS}
-
-# Access google sheet with metadata for usfs chugach sites
-
-# depracated_metadata <- "https://docs.google.com/spreadsheets/d/1ymyhRyAomnJZTZqr4IbRmCnJjVaOIpCQYGscJDbCk-w/edit#gid=0"
-
 # Created a spreadsheet to link AKOATS IDs and Site names/Coords using data filename----
 depracated_metadata <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\formatted_data\\USFS_Chugach_Working_deprecated_md.xlsx"
 
@@ -59,7 +38,8 @@ usfs_dpmd <- read_excel(depracated_metadata, sheet = "deprecated_metadata",
          Latitude = as.numeric(Latitude),
          Longitude = as.numeric(Longitude)) 
 
-usfs_dpmd %>% select(Agency_ID, AKOATS_ID, Latitude, Longitude, data_SiteID)  
+usfs_dpmd <- usfs_dpmd %>%
+  select(Agency_ID, AKOATS_ID, Latitude, Longitude, data_SiteID)  
   
 
 ```
@@ -83,8 +63,8 @@ akoats_2020wk <- "https://docs.google.com/spreadsheets/d/1SPZXNGm_Tc39-GuJXY8j7E
 akoats_fsch <- read_sheet(akoats_2020wk, sheet = "AKOATS_COMPLETE",
                     col_names = TRUE,
                     col_types = "c") %>% 
-  select(seq_id,Agency_ID,Contact_person,SourceName,Contact_email,
-         Contact_telephone,Latitude,Longitude,Sensor_accuracy) %>%
+  # select(seq_id,Agency_ID,Contact_person,SourceName,Contact_email,
+  #        Contact_telephone,Latitude,Longitude,Sensor_accuracy) %>%
   rename(AKOATS_ID = seq_id) %>% 
          #SiteID = Agency_ID) %>% 
   mutate(AKOATS_ID = as.numeric(AKOATS_ID),
@@ -101,7 +81,9 @@ Should we create some AKOATS_IDs for the sites that do not have corresponding va
 
 ```{r Combine Metadata, message=FALSE, warning=FALSE}
 
+# Create tibble for combined akoats and depracated md
 usfs_md <- tibble()
+# Create tibble to copy depracated md
 fs_akoats_sites <- tibble()
 
 fs_akoats_sites <- usfs_dpmd %>% 
@@ -113,9 +95,8 @@ keep <- intersect(names(fs_akoats_sites), names(usfs_dpmd))
 
 usfs_md <- bind_rows(fs_akoats_sites,
   usfs_dpmd %>% filter(is.na(AKOATS_ID)) %>%
-    select(one_of(keep)))
-
-# saveRDS(usfs_md, "output/usfs_md.rds")
+    select(one_of(keep))) %>% 
+  distinct()
 
 usfs_md
 
@@ -144,6 +125,7 @@ basename(fs_files)
 ```
 
 Bind all input datasets together after removing Airtemp and site info CSVs
+Add UseData field and calculated temp threshold values - set upper max to 30 for these data
 
 ```{r Bind all data, message=FALSE, warning=FALSE}
 
@@ -169,12 +151,15 @@ for ( i in fs_files){
       t1= t1 + 1
       
       # Format data
-      dat <- dat %>% mutate(data_filename = name) %>%
+      dat <- dat %>% mutate(data_filename = name,
+                            UseData = case_when( Temperature < -0.25 ~ 0,
+                                                 Temperature > 30 ~ 0,
+                                                 TRUE ~ 1)) %>%
         transform(sampleDate = as_date(mdy(sampleDate)),
                   sampleTime = hms::as.hms(sampleTime),
                   Temperature = as.numeric(Temperature))
       fsdat <- bind_rows(fsdat, dat[!is.na(dat$Temperature),]) %>%
-        select(data_filename, sampleDate, sampleTime, Temperature)
+        select(data_filename, sampleDate, sampleTime, Temperature, UseData)
 
     }else{
       print(paste0( name,  " has Different format "))
@@ -196,12 +181,15 @@ for ( i in fs_files){
       t1= t1 + 1
       
       # Format data 
-      dat <- dat %>% mutate(data_filename = name) %>% 
+      dat <- dat %>% mutate(data_filename = name,
+                            UseData = case_when( Temperature < -0.25 ~ 0,
+                                                 Temperature > 30 ~ 0,
+                                                 TRUE ~ 1)) %>% 
         transform(sampleDate = as.Date(sampleDate, format = "%m/%d/%Y"),
                   sampleTime = hms::as.hms(sampleTime),
                   Temperature = as.numeric(Temperature))
       fsdat <- bind_rows(fsdat, dat[!is.na(dat$Temperature),]) %>% 
-        select(data_filename, sampleDate, sampleTime, Temperature)
+        select(data_filename, sampleDate, sampleTime, Temperature, UseData)
       
     }else{
       print(paste0( name,  " has Different format "))
@@ -221,7 +209,7 @@ print( paste0(t1, " Formatted correctly" ," | ",t2, " Incorrectly formatted"))
 # Export CSV with list of filenames to identify measurement location and link AKOATS
 # IDs where possible
 
-unique(fsdat$data_filename)
+# unique(fsdat$data_filename)
 
 # fs_site_names <- unique(fsdat$data_filename)
 # fs_site_names
@@ -235,7 +223,7 @@ Some problems with dates - some are 2 digit and some are 4 digit. In as.Date fun
 
 ```{r fix dates, message=FALSE, warning=FALSE}
 
-fsdat2 <- fsdat %>% 
+fsdat <- fsdat %>% 
   mutate(year1 = sub(".*/.*/", "", sampleDate),
          sampleDate2 = case_when(nchar(year1) == 4 ~ as.Date(sampleDate,
                                                              format = "%m/%d/%Y"),
@@ -258,41 +246,49 @@ fsdat2 <- fsdat %>%
 #   arrange(n) %>%
 #   summarize(median(n))
 
-fsdat2
+fsdat
 
 ```
 
 Additional fields to add to data frame:
 
 * Add SiteIDs to the data. Unfortunately, Luca is using waterbody names for site ids, which can complicate having unique station names down the line - e.g. additional sites on the same stream or another agency monitoring the same stream.
-* In Luca's siteinfo worksheet, he mentions some sites that may not be useful for our thermal sensitivity analysis. Flag those here.
+
 * Add date-time and year for plotting.
 
 ```{r add new fields, message=FALSE, warning=FALSE}
-fsdat2 <- left_join(fsdat2, usfs_dpmd %>%
+
+# Add Agency ID
+fsdat <- left_join(fsdat, usfs_dpmd %>%
                      select(data_SiteID, Agency_ID),
                    by = c("data_filename" = "data_SiteID")) 
-fsdat2
-```
 
+fsdat
+
+```
 
 # Remove Duplicates and format output
 ## Drop Sites based on Luca Notes in worksheet/email convos
-Drop sites highlighted in yellow on worksheet and any additional sites covered in conversation with Luca A.
+
+* In Luca's siteinfo worksheet, he mentions some sites that may not be useful
+for our thermal sensitivity analysis. Flag those here.
 
 Worksheet drops  include: 
-"Clear Creek", "Hatchery Creek", "Ibeck Creek", "Jack Bay River", "McKinley Lake", "NF Williwaw Creek", "Pigot Bay Spawn Channel", "Rude River SC",
-"SF Williwaw Creek", "Solf Lake Inlet" & "Steller Jay Creek"
+"Clear Creek", "Hatchery Creek", "Ibeck Creek", "Jack Bay River",
+"McKinley Lake", "NF Williwaw Creek", "Pigot Bay Spawn Channel",
+"Rude River SC", "SF Williwaw Creek", "Solf Lake Inlet" & "Steller Jay Creek"
 
 Luca Notes Update 02/24/2021 :
-"L.A.- My initial hunch is that that for Olsen, Eagle, Rude, Pigot, Shelter, and maybe Sheep, the data will useable for the DFA with very limited tidal impacts in the summer"
+"L.A.- My initial hunch is that that for Olsen, Eagle, Rude, Pigot, Shelter,
+and maybe Sheep, the data will useable for the DFA with very limited
+tidal impacts in the summer"
 
 ```{r Remove Duplicates and Classify initial useSite}
 # Tibble for all formatted data with duplicates removed
 fschdat <- tibble()
 
 # Drop sites based on email conversations and notes in site info workbooks
-fschdat <- fsdat2 %>% 
+fschdat <- fsdat %>% 
   mutate(useSite = case_when(
     Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek",
                      "Jack Bay River", "McKinley Lake", "NF Williwaw Creek",
@@ -300,35 +296,52 @@ fschdat <- fsdat2 %>%
                      #"Pigot Bay Spawn Channel", "Rude River SC",
                      "SF Williwaw Creek", "Solf Lake Inlet",
                      "Steller Jay Creek") ~ 0, TRUE ~ 1),
-    SiteID = Agency_ID,
+    # Need to make new site id because AGENCY_ID for these data = waterbody_name
+    SiteID = paste0("USFS_", Agency_ID),
     year = year(sampleDate)) %>% 
-  select( -data_filename, -year1, -sampleDate2, -Agency_ID) %>% 
+  select( -data_filename, -year1, -sampleDate2) %>% 
   # Drop duplicate records
   distinct()
 
 #Reorder and save output
-colorder <- c("SiteID","sampleDate", "sampleTime", "Temperature", "dt", "year",
-              "useSite")
+colorder <- c("SiteID","Agency_ID", "sampleDate", "sampleTime", "Temperature",
+              "dt", "year", "useSite","UseData")
 
 fschdat <- fschdat[,colorder]
+fschdat
+
+```
+```{r Format metada for saving}
+# Rename 
+usfs_md <- usfs_md %>% 
+  rename("seq_id" = "AKOATS_ID") 
 
 ```
 
 # Save Data
+Still having trouble with the knitr::opts_knit$set(root.dir = ....) command not applying to subsequent chunks.Must setwd(paste0(rprojroot::find_rstudio_root_file())) in order to run helper save functions
+
 ## Save Temp Data
-Save formatted version prior to QAQC
-```{r Save Formatted USFS Data}
+Save formatted versions of temp data as rds prior to QAQC
+
+```{r Save Formatted USFS Temp Data}
 
 # Save formatted data for input into qa script
-usfsChug.data <- saveRDS(fschdat, "data_preparation/formatted_data/usfsChug.data.rds")
+usfsChug.data <- saveRDS(fschdat, "formatted_data/usfsChug.data.rds")
 
 ```
+
 ## Save Metadata
+Save a copy of the the metadata locally and upload to google drive
 
 ```{r Save USFS Metadata}
+# Knittr setup command not working so must reset and run as chunk here
+setwd(paste0(rprojroot::find_rstudio_root_file()))
 # Save metadata 
+
 usfsChugmd.data <- saveRDS(usfs_md, "data_preparation/formatted_data/usfsChugmd.data.rds")
 
-```
+save_metadata_files(usfs_md, "usfsChug")
 
+```
 
