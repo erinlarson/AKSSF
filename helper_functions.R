@@ -68,7 +68,7 @@ save_aktemp_file <- function(data.in, acronym) {
 save_metadata_file <- function(data.in, acronym) {
   date.now <- as.Date(Sys.time())
   data.out <- paste0("data_preparation/final_data/", acronym, "Metadata", as.character(date.now),".csv")
-  akoats_fields <- c("seq_id", "Agency_ID", "SourceName", "Contact_person", 
+  akoats_fields <- c("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
                      "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
                      "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
                      "Sensor_QAQC")
@@ -90,7 +90,7 @@ save_metadata_files <- function(data.in, acronym) {
   csvname <- paste0 (data.name,".csv")
   # Path of csv - need to use a input for drive_upload
   csvpath <- paste0 ( rprojroot::find_rstudio_root_file(),"/data_preparation/final_data/", csvname)
-  akoats_fields <- c ("seq_id", "Agency_ID", "SourceName", "Contact_person", 
+  akoats_fields <- c ("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
                      "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
                      "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
                      "Sensor_QAQC")
@@ -117,7 +117,7 @@ save_daily_files <- function(data.in, acronym) {
   # Path of csv - need to use a input for drive_upload
   csvpath <- paste0 ( rprojroot::find_rstudio_root_file(),"/data_preparation/final_data/", csvname)
   # Fields to save
-  daily_fields <- c("SiteID", "SampleDate", "meanDT", "minDT", "maxDT")
+  daily_fields <- c("SiteID", "sampleDate", "meanDT", "minDT", "maxDT")
   
   data.in %>% 
     select(one_of(daily_fields)) %>% 
