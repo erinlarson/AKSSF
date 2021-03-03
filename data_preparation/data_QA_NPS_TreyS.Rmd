@@ -55,7 +55,6 @@ nps.climDat <- tibble( name = c( "GLENNALLEN 64 N, AK US", "CHISTOCHINA ALASKA, 
 # Pull Climate data from Cordova Airport
 climDat <- meteo_pull_monitors(nps.climStat)  
 str(climDat)
-  
 
 nps.climDat <- nps.climDat %>% 
   left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
