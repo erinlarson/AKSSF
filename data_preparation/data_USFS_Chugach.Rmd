@@ -127,6 +127,7 @@ basename(fs_files)
 Bind all input datasets together after removing Airtemp and site info CSVs
 Add UseData field and calculated temp threshold values - set upper max to 30 for these data
 
+
 ```{r Bind all data, message=FALSE, warning=FALSE}
 
 # Create tibble for fs temperature data
@@ -156,7 +157,8 @@ for ( i in fs_files){
                                                  Temperature > 30 ~ 0,
                                                  TRUE ~ 1)) %>%
         transform(sampleDate = as_date(mdy(sampleDate)),
-                  sampleTime = hms::as.hms(sampleTime),
+                  # Some times in HMS and some in HM format
+                  sampleTime = format(lubridate::parse_date_time(sampleTime,c('HMS','HM')),'%H:%M:%S'),
                   Temperature = as.numeric(Temperature))
       fsdat <- bind_rows(fsdat, dat[!is.na(dat$Temperature),]) %>%
         select(data_filename, sampleDate, sampleTime, Temperature, UseData)
@@ -169,7 +171,7 @@ for ( i in fs_files){
    
     # Excel Data  
   }else if( endsWith (i,".xlsx")){
-    dat <- read_excel(path = i)
+    dat <- read_excel(path = i,col_types = )
     name = str_sub(basename(i), end = -6)
     
     if(grepl("-", dat[,2]) == TRUE) {
@@ -202,6 +204,7 @@ for ( i in fs_files){
 
 print( paste0(t1, " Formatted correctly" ," | ",t2, " Incorrectly formatted"))
 
+summary(fsdat)
 ```
 
 ```{r Export csv of temp data filenames}
@@ -222,31 +225,13 @@ print( paste0(t1, " Formatted correctly" ," | ",t2, " Incorrectly formatted"))
 Some problems with dates - some are 2 digit and some are 4 digit. In as.Date function, tryFormats won't fix this problem, which is unfortunate. I'll need to get number of digits using regexp and then manually tell it what format it is in.
 
 ```{r fix dates, message=FALSE, warning=FALSE}
-
+# Setting tz = "GMT" removes errors associated with dt not calculating for daylight savings time dates in March
 fsdat <- fsdat %>% 
-  mutate(year1 = sub(".*/.*/", "", sampleDate),
-         sampleDate2 = case_when(nchar(year1) == 4 ~ as.Date(sampleDate,
-                                                             format = "%m/%d/%Y"),
-                                 TRUE ~ as.Date(sampleDate, format = "%m/%d/%y")),
-         sampleDate = sampleDate2,
+  mutate(year = lubridate::year(sampleDate),
          dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "),
-                    format = "%Y-%m-%d %H:%M"))
+                    format = "%Y-%m-%d %H:%M", tz = "GMT"))
 
-# fsdat %>%
-#   group_by(data_filename) %>%
-#   summarize(min(sampleDate), max(sampleDate))
-# 
-# fsdat %>%
-#   distinct(year = year(sampleDate)) %>%
-#   arrange(year)
-# 
-# fsdat %>%
-#   distinct(data_filename, year = year(sampleDate)) %>%
-#   count(data_filename) %>%
-#   arrange(n) %>%
-#   summarize(median(n))
-
-fsdat
+summary(fsdat)
 
 ```
 
@@ -264,7 +249,7 @@ fsdat <- left_join(fsdat, usfs_dpmd %>%
                    by = c("data_filename" = "data_SiteID")) 
 
 fsdat
-
+summary(fsdat)
 ```
 
 # Remove Duplicates and format output
@@ -283,6 +268,10 @@ Luca Notes Update 02/24/2021 :
 and maybe Sheep, the data will useable for the DFA with very limited
 tidal impacts in the summer"
 
+DM Notes: Data from Quartz Creek overlap and there are duplicate measurements 
+in the <QuartzCreek_Surf_2019-11-13> Dataset. Unsure if the two datasets are from
+the same location and where the duplicate measure came from?
+
 ```{r Remove Duplicates and Classify initial useSite}
 # Tibble for all formatted data with duplicates removed
 fschdat <- tibble()
@@ -297,10 +286,9 @@ fschdat <- fsdat %>%
                      "SF Williwaw Creek", "Solf Lake Inlet",
                      "Steller Jay Creek") ~ 0, TRUE ~ 1),
     # Need to make new site id because AGENCY_ID for these data = waterbody_name
-    SiteID = paste0("USFS_", Agency_ID),
-    year = year(sampleDate)) %>% 
-  select( -data_filename, -year1, -sampleDate2) %>% 
-  # Drop duplicate records
+    SiteID = paste0("USFS_", Agency_ID)) %>%
+  select( -data_filename) %>% 
+  # Drop duplicate records - QUARTZ CREEK STILL HAS DUPLICATES POSSIBLY DUE TO MEASUREMENTS FROM 2 LOGGERS BEING INCLUDED IN THE QuartzCreek_Surf_2019-11-13 dataset and overlapping measurements between from the second dataset
   distinct()
 
 #Reorder and save output
@@ -308,7 +296,8 @@ colorder <- c("SiteID","Agency_ID", "sampleDate", "sampleTime", "Temperature",
               "dt", "year", "useSite","UseData")
 
 fschdat <- fschdat[,colorder]
-fschdat
+
+summary(fschdat)
 
 ```
 ```{r Format metada for saving}
@@ -329,6 +318,7 @@ Save formatted versions of temp data as rds prior to QAQC
 # Save formatted data for input into qa script
 usfsChug.data <- saveRDS(fschdat, "formatted_data/usfsChug.data.rds")
 
+save_aktemp_files(fschdat, "usfsChug")
 ```
 
 ## Save Metadata

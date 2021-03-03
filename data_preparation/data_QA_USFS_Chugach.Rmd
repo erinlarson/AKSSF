@@ -6,7 +6,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
-knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+#this sets the root.dir up one level back to the project so that paths are relative to the project directory.
 
 library(readxl)
 library(stringr)
@@ -15,6 +16,17 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+library(plotly)
+library(DT)
+
+```
+
+```{r Source Helper Functions}
+# Check dir
+getwd()
+# Source helper functions
+source("helper_functions.R")
+
 ```
 
 Data QA is done using dynamic plots and reviewing data by site. For AKSSF,
@@ -32,6 +44,7 @@ air temps for period of interest.
 Note - have had trouble with lcd function recently
 
 ```{r NOAA data, message=FALSE, warning=FALSE}
+getwd()
 
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
@@ -69,15 +82,81 @@ cd.climDat
 
 ```
 # Begin QA
-# STOPPED HERE - ADDED IN NEW DATA 1/25/21
-MOVE TO QA
-MAKE REVIEW GROUPS - TIDAL/NOT
+
+```{r Select Formatted Data Output from data script}
+
+# Choose temperature data ouput formatted for qc from data prep script
+
+filename <- file.choose(new = FALSE)
+usfsChug.data <- readRDS(filename)
+
+# Copy and format for qc - limit to usesite and months of interest
+usfsChug.data.qc <- usfsChug.data %>% 
+  filter(useSite==1, month(sampleDate) %in% 6:9)
+
+summary(usfsChug.data.qc)
+
+```
+
+
+??MAKE REVIEW GROUPS - TIDAL/NOT - Time period of interest
+
+## Summary Table
+Start with interactive data summary table
+
+```{r Summary Table, message=TRUE, warning=FALSE}
+
+# create data summary table
+usfsChug.data.summary <- usfsChug.data.qc %>%
+  filter(useSite == 1) %>%
+  group_by(SiteID, year) %>%
+  summarize(meanTemp = mean(Temperature, na.rm = T),
+            maxTemp = max(Temperature, na.rm = T),
+            minTemp = min(Temperature, na.rm = T),
+            sdTemp = sd(Temperature, na.rm = T),
+            n_obs = n())
+
+usfsChug.data.summary %>%
+  datatable() %>%
+  formatRound(columns=c("meanTemp","maxTemp","minTemp","sdTemp"), digits=2)
+
+```
+
+## Check measurement frequency
+DM Notes: Something going on with quartz creek data - have two measurements?? 
+Dataset QuartzCreek_Surf_2019-11-13 has duplicate measurements.  Not sure if these
+are data from two loggers or if something else happened to them.
+
+
+```{r Temp measuremnt frequency}
+msmt_freq <- temp_msmt_freq(usfsChug.data.qc)
+
+summary(msmt_freq)
+
+# Check mode_diff
+msmt_freq[order(msmt_freq$mode_diff, decreasing = FALSE),]
+
+
+```
+
+# Daily screen
+Daily screen also suggests something wrong with USFS_Chickaloon Headwaters
+and USFS_24.9 Mile Creek data in addition to the quartz creek issues
+
+
+```{r Daily Screen}
+
+daily_screen <- daily_screen(msmt_freq)
+
+summary(daily_screen)
+
+```
 
 Quick plots of data to make sure they read in ok. Start by summarizing daily means because quicker to plot. Looks like some bad winter temps well below zero that could be clipped later. No obvious air temps in summer as everything is < = 20 or so.
 
-```{r plot of dialy means, message=FALSE, warning=FALSE}
+```{r plot of daily means, message=FALSE, warning=FALSE}
 
-fschdat %>% 
+usfsChug.data.qc %>% 
   group_by(SiteID, sampleDate) %>% 
   summarize(meant = mean(Temperature)) %>% 
   ggplot(aes(x = sampleDate, y = meant)) +
@@ -90,8 +169,10 @@ Wrong! The sub-daily temps show more errors, definitely some air temps that need
 
 ```{r plot of raw data}
 
-fschdat %>% 
+usfsChug.data.qc %>% 
   ggplot(aes(x = dt, y = Temperature)) +
+  #geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  #geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
   geom_line() +
   facet_wrap(~SiteID)
 
@@ -101,16 +182,21 @@ fschdat %>%
 Rolling pdf of raw data to send to Luca and check on status of data QA.
 
 ```{r plot of raw data by site-year}
-fs_sites <- fschdat %>% distinct(Agency_ID, year) %>% arrange(Agency_ID, year)
+fs_sites <- usfsChug.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
 pdf("data_preparation/USFS Raw Data by Site and Year.pdf", width = 11, height = 8.5)
-
+# Get limits of temp data 
 for(i in 1:nrow(fs_sites)) {
-  dat <- left_join(fs_sites %>% slice(i), fschdat)
+  dat <- left_join(fs_sites %>% slice(i), usfsChug.data.qc)
   subtitle <- dat %>% distinct(useSite) %>% pull(useSite)
+  # add x lims 
+  # dat summarize range
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
+    geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+    geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
     geom_line() +
+    # scale function scale_x
     labs(title = fs_sites %>% slice(i) %>% unite(site_year) %>%
            pull(site_year),
          subtitle = paste0("Use Site: ", subtitle)) +
@@ -122,18 +208,77 @@ dev.off()
 
 ```
 
+# Interactive plot to compare against air temps
 
+site IDs:
+"USFS_Bench Creek", "USFS_Blackhole Creek", "USFS_Cabin Lake Outlet", 
+"USFS_Center Creek","USFS_Chickaloon Headwaters","USFS_Crescent Creek", 
+"USFS_Daves Creek", "USFS_Eagle Creek", "USFS_East Fork 18 Mile",
+"USFS_Middle Arm Eyak", "USFS_Hell's Hole Trib", "USFS_Hook Point", 
+"USFS_Jackpot River", "USFS_Juneau Creek", "USFS_Koppen Creek",
+"USFS_Little Martin River", "USFS_Martin Lake- Inlet", "USFS_Olsen Creek", 
+"USFS_Pigot Bay Spawn Channel", "USFS_Power Creek", "USFS_Quartz Creek",
+"USFS_Resurrection Creek", "USFS_Rude River SC", "USFS_Salmon Creek",
+"USFS_Sheep River", "USFS_Shelter Bay Trib", "USFS_Solf Lake Fish Pass",
+"USFS_Stump Lake Outlet", "USFS_25 Mile", "USFS_24.9 Mile Creek", 
+"USFS_Ibeck Creek-Low", "USFS_18 Mile Middle Fork", "USFS_18 Mile West Fork",
+"USFS_Ibeck Creek-Lower Side Channel", "USFS_18 Mile", "USFS_Eyak Lake Tributary", 
+"USFS_ERB Creek", "USFS_Solf Lake Outlet Creek"
+
+Double Check:
+USFS_Eagle Creek 2016-07-20 - end of year for possible burial - tidal influence too not sure?
+USFS_Middle Arm Eyak - 2015 & 2016 end of summer burials? 2017 end of summer air temps?
+USFS_Little Martin - Suspicious but shallow lake upstream
+USFS_Pigot Bay Spawn Channel & USFS_Rude River SC & Sheep River - tidal influence seems likely - inclined to remove entire series
+USFS_Quartz Creek - 2018 duplicates all year some triplicates around 2018-08-20/22
+USFS_Solf Lake Fish pass - looks strange
+USFS_Ibeck Creek-Low - 2015, 2016 & 2017 missing days and large daily range 2018-2020 look ok
+USFS_18 Mile, USFS_Eyak Lake Tributary, USFS_Solf Lake Outlet Creek - only one full year data
+USFS_ERB Creek - partial 2018 and 2020 full season 2019
+
+
+```{r Interactive Plot With Air Temp}
+# get site ids
+#dput(unique(usfsChug.data.qc$SiteID))
+
+#Change to bb.data.qc to examine qc'd data
+p <- usfsChug.data.qc %>% 
+  filter(SiteID == "USFS_Solf Lake Outlet Creek", UseData == 1) %>% 
+  ggplot() +
+  geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line(aes(x = dt, y = Temperature)) +
+  coord_cartesian(ylim = c(-5, 30)) + 
+  facet_wrap(~SiteID) +
+  theme(legend.title = element_blank()) +
+  labs(title = "Temperature by Site",
+       y = "Temperature degrees C",
+       x = "Time of Measurement")
+
+ggplotly(p)
+
+```
+# Recalculate UseData and UseSite based on visual examination
+
+Temperature data flagged for UseData = 0 based on visual examination of plots 
+and stored in [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2MB_vx9DCcCXYYeOGqrv6VG-Eidx_pyfkk/edit#gid=0).
+
+
+```{r Recalculate UseData}
+◘
+```
+
+# Save File for summary report
 Save file for summary report.
 
 ```{r}
-fschdat
+usfsChug.data
 
-names(fschdat)
+names(usfsChug.data)
 
-fschdat %>% 
-  rename(SiteID = Agency_ID) %>% 
+usfsChug.data %>% 
   select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
-  saveRDS("output/fschdat.rds")
+  saveRDS("output/usfsChug.data.rds")
 ```
 
 # Save QAed dataset for AKTEMP
@@ -141,6 +286,8 @@ fschdat %>%
 Save a copy of the final data with the QA flags for AKTEMP as a .csv.
 
 # Remove sites
+
+UseSites to record sites for AKSSF analysis
 
 Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
 
