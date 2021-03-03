@@ -198,7 +198,7 @@ for(i in 1:nrow(fs_sites)) {
     geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
-    scale_y_continuous(limits = c(-1, 30), labels = waiver()) +
+    scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
     labs(title = fs_sites %>% slice(i) %>% unite(site_year) %>%
            pull(site_year),
          subtitle = paste0("Use Site: ", subtitle)) +
@@ -245,13 +245,19 @@ USFS_ERB Creek - partial 2018 and 2020 full season 2019
 
 #Change to bb.data.qc to examine qc'd data
 p <- usfsChug.data.qc %>% 
-  filter(SiteID == "USFS_Middle Arm Eyak", UseData == 1) %>% 
+  filter(SiteID == "USFS_ERB Creek", UseData == 1)
+
+xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+
+p <- p %>% 
   ggplot() +
   geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
   geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
   geom_line(aes(x = dt, y = Temperature)) +
+  scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
   coord_cartesian(ylim = c(-5, 30)) + 
- #facet_wrap(~SiteID) +
+  facet_wrap(~SiteID) +
   theme(legend.title = element_blank()) +
   labs(title = "Temperature by Site",
        y = "Temperature degrees C",
@@ -260,7 +266,13 @@ p <- usfsChug.data.qc %>%
 ggplotly(p)
 
 ```
-# Recalculate UseData and UseSite based on visual examination
+# Remove sites
+
+UseSites to record sites for AKSSF analysis
+
+Recalculate UseData based on visual examination
+
+Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
 
 Temperature data flagged for UseData = 0 based on visual examination of plots 
 and stored in [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2MB_vx9DCcCXYYeOGqrv6VG-Eidx_pyfkk/edit#gid=0).
@@ -273,7 +285,7 @@ and stored in [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2M
 # Save File for summary report
 Save file for summary report.
 
-```{r}
+```{r Save}
 usfsChug.data
 
 names(usfsChug.data)
@@ -287,11 +299,7 @@ usfsChug.data %>%
 
 Save a copy of the final data with the QA flags for AKTEMP as a .csv.
 
-# Remove sites
 
-UseSites to record sites for AKSSF analysis
-
-Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
 
 # Save daily data
 
