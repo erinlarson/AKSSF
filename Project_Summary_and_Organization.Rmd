@@ -32,6 +32,7 @@ Data need QA after formatting:
 * ADFG data from Heather. Note that she had also archived ~ 1 year of data on KNB, but sent everything over so no longer using that data. DM will format.
 * NPS data from Trey. Note that source/data folder is what was on the KNB archive and has been formatted. But need to bring in new data and combine. Becky formatted for QA. nps.data.rds on google drive AKSSF/data/formatted_data.
 * Native Village of Eyak - 2 sites. DM 
+* Prince William Sounds Science Center data from Pete Rand, 4 sites. DM
 * (in BB repo) NPS data from Krista collected by Dan Young. DM 
 * (in BB repo) UW data, streams are formatted, but need QA. Becky will format
 

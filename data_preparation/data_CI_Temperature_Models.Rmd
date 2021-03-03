@@ -6,7 +6,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath(".."))
-source('W:/Github/AKSSF/day_and_month_functions.R')
+source('W:/Github/AKSSF/helper_functions.R')
 
 library(readxl)
 library(lubridate)
@@ -25,7 +25,7 @@ This version of import - V2, only includes raw temperature data for each project
 
 ## Deshka 
 
-For each watershed, temperature data, site data, and climate data are all needed. Read in temperature data first and convert to daily means, link catchment ids to temperature data using sites table, and join climate data to final temperature dataset. 
+For each watershed, temperature data, site data, and climate data are available. Just reading in site metadata and raw temperature data and using helper functions to save for AKSSF. 
 
 ```{r deshka temp data}
 
@@ -33,15 +33,8 @@ deshka_wd <- "W:/Github/Deshka_temperature/output/data_catalog"
 
 deshka_temp <- read_csv(paste0(deshka_wd, "/deshka_temperature_data.csv", collapse = ""))
 
-deshka_temp <- temp_msmt_freq(deshka_temp)
-deshka_daily <- daily_screen(deshka_temp)
+deshka_daily <- temp_msmt_freq(deshka_temp %>% mutate(UseData = 1)) %>% daily_screen(.)
 
-deshka_daily <- deshka_temp %>%
-  filter(useData == 1) %>% 
-  group_by(SiteID, sampleDate) %>% 
-  summarize(meanTemp = mean(Temperature))
-
-deshka_daily %>% distinct(SiteID)
 ```
 
 Edits to site table - kroto 5 downstream misspelled, and PMC1 listed twice. In temperature dataset, there is a PMC1 and PMC1-2, which are in the same catchment and just slightly separated. Keep PMC1, which has the longer time series.
@@ -92,7 +85,18 @@ deshka_daily
 Save data files
 
 ```{r deshka save}
+cik.md
 
+save_metadata_files(cik.md, "cik")
+
+cik.data
+
+save_aktemp_files(cik.data, "cik")
+
+
+cik.daily <- temp_msmt_freq(cik.data) %>% daily_screen(.)
+
+save_daily_files(cik.daily, "cik")
 
 
 ```

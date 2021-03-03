@@ -16,6 +16,7 @@ library(rnoaa)
 library(hms)
 library(tidyverse)
 library(gridExtra)
+library(googledrive)
 
 ```
 
@@ -57,8 +58,35 @@ cik.data1 <- cik.data1 %>%
          sampleTime = as_hms(`...2`),
          DT = as.POSIXct(paste(sampleDate, sampleTime, sep = " "), format = "%Y-%m-%d %H:%M:%S"),
          SiteID = substr(file_name, 1, nchar(file_name) - 8)) %>% 
-  select(SiteID, sampleDate, sampleTime, DT, Temperature = `...3`)
+  select(SiteID, sampleDate, sampleTime, DT, Temperature = `...3`, file_name)
 ```
+
+Find files with duplicate CIK_14 data.
+
+```{r}
+cik.data1 %>% 
+  filter(SiteID == "CIK_14", year(sampleDate) == 2011, month(sampleDate) == 4) %>% 
+  distinct(file_name)
+
+cik.data1 %>% 
+  filter(SiteID == "CIK_14", year(sampleDate) == 2011) %>% 
+  distinct(file_name) 
+
+cik.data1 %>% 
+  filter(SiteID == "CIK_14", year(sampleDate) == 2011) %>% 
+  count(DT) %>% 
+  filter(n > 1) %>% 
+  distinct(as.Date(DT))
+
+```
+Remove duplicate data for CIK_14 from April and May 2011 in CIK_14_10_2009 file.
+
+```{r}
+cik.data1 <- cik.data1 %>% 
+  filter(!(file_name == "CIK_14_10_2009" & month(sampleDate) %in% 4:5 & year(sampleDate) == 2011)) 
+```
+
+
 
 Loop for error checking problems with files. Moved a worksheet with a graph to the second position so data worksheet read in first. 
 
@@ -158,13 +186,14 @@ cik.data %>%
             maxYr = max(year))
 ```
 
-Just keep the cook inlet sites, Sue provided more sites and years of data in the data request specifically for Bristol Bay and those data are already formatted there.
+Just keep the cook inlet sites, Sue provided more sites and years of data in the data request specifically for Bristol Bay and those data are already formatted there. And add in UseData field to match other QAed data files.
 
 ```{r}
 nrow(cik.data) #5906773
 
 cik.data <- cik.data %>% 
-  filter(grepl("CIK", SiteID))
+  filter(grepl("CIK", SiteID)) %>% 
+  mutate(UseData = 1)
 
 nrow(cik.data) #5311567
 ```
@@ -173,7 +202,7 @@ nrow(cik.data) #5311567
 
 # Metadata
 
-Make sure that SiteIDs in the data link to AKOATs and get the waterbody name so that we have it for plotting. All Cook Inlet sites are in akoats. 
+Make sure that SiteIDs in the data link to AKOATs, all Cook Inlet sites are in akoats. 
 
 ```{r akoats}
 akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "AKOATS_COMPLETE") 
@@ -191,10 +220,6 @@ cik.md <- cik.data %>%
   distinct(SiteID) %>% 
   left_join(akoats, by = c("SiteID" = "Agency_ID")) 
 
-cik.md <- cik.md %>% 
-  select(SiteID, AKOATS_ID = seq_id, SourceName:Longitude, Sensor_Placement, Waterbody_name, Waterbody_type,
-         Sensor_accuracy, Sensor_QAQC) 
-
 ```
 
 Remove intermediate files since they are so large.
@@ -208,6 +233,10 @@ Remove intermediate files since they are so large.
 Note that DT field is empty from 2-3 am on one day each March because it won't accept times when we lose one hour and go onto daylight savings time in the spring. Sue's loggers are deployed using GMT -8, which is Alaska Daylight Savings Time. Remove the NAs for the one-hour time periods in March where there are not valid times (2 to 3 am).
 
 ```{r remove empty DT rows}
+cik.data %>% 
+  filter(is.na(DT)) %>% 
+  distinct(sampleDate)
+
 cik.data <- cik.data %>% 
   filter(!is.na(DT))
 ```
@@ -215,11 +244,11 @@ cik.data <- cik.data %>%
 
 ## Duplicate measurements
 
-For duplicates, it looks like a few datasets were provided twice and one should be removed before reading in. I see the two duplicate files for 2018, which were provided in separate folders by Sue for the newest data (post-2017). These are now removed above so not being read in twice. I can't find the duplicate data for CIK 14 in 2011, but the values are exactly the same so averaging won't change anything.
+For duplicates, it looks like a few datasets were provided twice and one should be removed before reading in. I see the two duplicate files for 2018, which were provided in separate folders by Sue for the newest data (post-2017). These are now removed above so not being read in twice. I also found the duplicate data for CIK 14 in April/May 2011 and removed those from dataset 1.
 
 Mean and sd of differences between duplicate values by site. 
 
-I can't find the duplicate reading for CIK_8 on 2009-05-17. The 8.295 reading is accurate based on the file from May 2009 for that site so remove the duplicate reading of 5.670. All of the other differences are pretty minor so can be averaged.
+Only 6 duplicate readings. I can't find the duplicate reading for CIK_8 on 2009-05-17. The 8.295 reading is accurate based on the file from May 2009 for that site so remove the duplicate reading of 5.670. All of the other differences are pretty minor so can be averaged.
 
 
 ```{r duplicate summary, eval = FALSE}
@@ -238,6 +267,9 @@ dup_diffs <- left_join(dups, cik_test) %>%
   select(SiteID, id, DT, Temperature) %>% 
   pivot_wider(names_from = id, values_from = Temperature) %>% 
   mutate(diff = abs(`1` - `2`))
+
+dup_diffs %>% 
+  arrange(desc(diff))
 
 dup_diffs %>% 
   group_by(SiteID) %>% 
@@ -347,7 +379,7 @@ bind_rows(dup_kenai_sites %>% select(SiteID),
 
 ## Exploratory plots
 
-Add year for plotting .Plot of raw data, but Sue typically provides only QAed data. 
+Add year for plotting. Plot of raw data, but Sue typically provides only QAed data. 
 
 ```{r pdf of raw data by site}
 
@@ -378,23 +410,19 @@ dev.off()
 Save raw data for AKTEMP, which includes date and time. Save metadata file. Save daily data after screening for days with less than 90% of measurements.
 
 ```{r save raw data}
-date.now <- as.Date(Sys.time())
-write.csv(cik.data, paste0("data_preparation/final_data/CIK_AKTemp_", 
-                           as.character(date.now),".csv"), row.names = F)
 
-cik.md %>% 
-  select() %>% 
-  write.csv(paste0("data_preparation/final_data/CIK_Metadata_", 
-                           as.character(date.now),".csv"), row.names = F)
+cik.md
 
-cik.daily <- temp_msmt_freq(cik.data)  
-cik.daily <- daily_screen(cik.daily %>% mutate(UseData = 1))
+save_metadata_files(cik.md, "cik")
 
-#daily.file <- temp_msmt_freq(x) %>% daily_screen(.)
+cik.data
 
-write.csv(cik.daily, paste0("data_preparation/final_data/CIK_Daily_Temp_", 
-                            as.character(date.now),".csv"), row.names = F)
+save_aktemp_files(cik.data, "cik")
 
+
+cik.daily <- temp_msmt_freq(cik.data) %>% daily_screen(.)
+
+save_daily_files(cik.daily, "cik")
 ```
 
 
