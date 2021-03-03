@@ -1,0 +1,144 @@
+---
+title: "data_QA_NPS_TreySimmons"
+output: html_document
+---
+
+Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+library(plotly)
+library(DT)
+
+```
+
+Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we are only reviewing June - September data and flagging obvious air temperatures. Burials are a lot harder to confirm without a duplicate logger.
+# QA data for sites that provider has flagged but provided
+Remove completely from qa process - filter out
+
+# QA data for air temperatures
+## Pull in Airtemp for comparison from NOAA GHCN stations
+
+Go to [GHCN Daily](https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND)
+website and locate stations - try to identify stations with mean/min/max
+air temps for period of interest.
+
+Note - have had trouble with lcd function recently
+
+```{r NOAA data, message=FALSE, warning=FALSE}
+getwd()
+
+#Token obtained from NOAA to access API
+noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
+
+# lcd(station = "26410", year = 2013)
+# 
+# ncdc_locs(locationcategoryid = "CITY")
+
+#Station Codes for area of interest
+nps.climStat <- c("USW00056401","USR0000ACHS")
+
+
+nps.climDat <- tibble( name = c( "GLENNALLEN 64 N, AK US", "CHISTOCHINA ALASKA, AK US"),
+                 id = nps.climStat)
+
+# Pull Climate data from Cordova Airport
+climDat <- meteo_pull_monitors(nps.climStat)  
+str(climDat)
+  
+
+nps.climDat <- nps.climDat %>% 
+  left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
+  filter( date >= "2008-05-01",
+          date <= "2020-12-30",
+          name == "CHISTOCHINA ALASKA, AK US") %>% 
+  # Temperature and Precipitation values are in tenths of degree/mm
+  mutate_if( is.numeric, ~ . * 0.1) %>% 
+  mutate(year = as.factor(year(date)),
+         day = yday(date),
+         DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
+  
+
+nps.climDat
+
+```
+
+# Load Data
+```{r Load Dataset for QA}
+# Choose temperature data ouput formatted for qc from data prep script
+
+filename <- file.choose(new = FALSE)
+npsTreyS.data <- readRDS(filename)
+
+# Copy and format for qc - limit to usesite and months of interest
+npsTreyS.data.qc <- npsTreyS.data %>% 
+  filter(month(sampleDate) %in% 6:9)
+
+summary(npsTreyS.data.qc)
+
+```
+# Interactive Plot
+
+Review Sites with interactive plot and note Airtemps/Burials etc on data flag worksheet stored here [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2MB_vx9DCcCXYYeOGqrv6VG-Eidx_pyfkk/edit#gid=0).
+
+Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter NPS sites and Trey Simmons as contact
+
+Sites:
+"Caribou Creek", "Crystal Creek", "Gilahina River", "Lakina River", 
+"Long Lake Creek", "Rock Creek WRST", "Rufus Creek"
+
+```{r Interactive Plot With Air Temp}
+# get site ids
+dput(unique(npsTreyS.data.qc$SiteID))
+
+#Change to bb.data.qc to examine qc'd data
+p <- npsTreyS.data.qc %>% 
+  filter(SiteID == "Caribou Creek", UseData == 1)
+
+xmin <- as.POSIXct(min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct(max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+
+p <- p %>% 
+  ggplot() +
+  geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line(aes(x = DT, y = Temperature)) +
+  scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+  coord_cartesian(ylim = c(-5, 30)) + 
+  facet_wrap(~SiteID) +
+  theme(legend.title = element_blank()) +
+  labs(title = "Temperature by Site",
+       y = "Temperature degrees C",
+       x = "Time of Measurement")
+
+ggplotly(p)
+
+```
+
+# Remove sites
+
+Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
+
+# Save QAed dataset for AKTEMP
+
+Save a copy of the final data with the QA flags for AKTEMP as a .csv.
+
+# Save daily data
+
+Save a copy of the daily statistics in the final data folder for the AKSSF analysis. There are two helper functions that add the mode of the time difference for each day and calculate the daily min, mean, and max and removed days with less than 90% of measurements.
+
+* temp_msmt_freq
+* daily_screen
+
+
