@@ -98,7 +98,7 @@ save_metadata_files <- function(data.in, acronym) {
     select(one_of(akoats_fields)) %>% 
     write.csv(csvpath, row.names = F)
   # Upload to google drive
-  drive_upload(csvpath, path = as_id(drive_path), data.name, type = "spreadsheet" ,overwrite = TRUE)
+  drive_upload(csvpath, path = as_id(drive_path), csvname ,overwrite = TRUE)
   print(paste0( "Metadata saved to ", csvpath))
   return(csvpath)
   
@@ -123,12 +123,13 @@ save_daily_files <- function(data.in, acronym) {
     select(one_of(daily_fields)) %>% 
     write.csv(csvpath, row.names = F)
   # Upload to google drive
-  drive_upload(csvpath, path = as_id(drive_path), data.name, type = "spreadsheet" ,overwrite = TRUE)
+  drive_upload(csvpath, path = as_id(drive_path), csvname,overwrite = TRUE)
   print(paste0( "Daily summaries saved to ", csvpath))
   return(csvpath)
   
 }
 
+# Save copy for AKTEMP
 save_aktemp_files <- function(data.in, acronym) {
   # Date of file creation
   date.now <- as.Date(Sys.time())
@@ -147,7 +148,7 @@ save_aktemp_files <- function(data.in, acronym) {
     select(one_of(aktemp_fields)) %>% 
     write.csv(csvpath, row.names = F)
   # Upload to google drive
-  drive_upload(csvpath, path = as_id(drive_path), data.name, type = "spreadsheet" ,overwrite = TRUE)
+  drive_upload(csvpath, path = as_id(drive_path), csvname ,overwrite = TRUE)
   print(paste0( "AKTEMP copy saved to ", csvpath))
   return(csvpath)
 }
