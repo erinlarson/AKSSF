@@ -181,6 +181,7 @@ usfsChug.data.qc %>%
 
 Rolling pdf of raw data to send to Luca and check on status of data QA.
 
+
 ```{r plot of raw data by site-year}
 fs_sites <- usfsChug.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
@@ -189,14 +190,15 @@ pdf("data_preparation/USFS Raw Data by Site and Year.pdf", width = 11, height = 
 for(i in 1:nrow(fs_sites)) {
   dat <- left_join(fs_sites %>% slice(i), usfsChug.data.qc)
   subtitle <- dat %>% distinct(useSite) %>% pull(useSite)
-  # add x lims 
-  # dat summarize range
+  xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+  xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
     geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
     geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
     geom_line() +
-    # scale function scale_x
+    scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+    scale_y_continuous(limits = c(-1, 30), labels = waiver()) +
     labs(title = fs_sites %>% slice(i) %>% unite(site_year) %>%
            pull(site_year),
          subtitle = paste0("Use Site: ", subtitle)) +
@@ -243,13 +245,13 @@ USFS_ERB Creek - partial 2018 and 2020 full season 2019
 
 #Change to bb.data.qc to examine qc'd data
 p <- usfsChug.data.qc %>% 
-  filter(SiteID == "USFS_Solf Lake Outlet Creek", UseData == 1) %>% 
+  filter(SiteID == "USFS_Middle Arm Eyak", UseData == 1) %>% 
   ggplot() +
   geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
   geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
   geom_line(aes(x = dt, y = Temperature)) +
   coord_cartesian(ylim = c(-5, 30)) + 
-  facet_wrap(~SiteID) +
+ #facet_wrap(~SiteID) +
   theme(legend.title = element_blank()) +
   labs(title = "Temperature by Site",
        y = "Temperature degrees C",
