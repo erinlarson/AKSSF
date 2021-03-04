@@ -107,15 +107,15 @@ Sites:
 
 #Change to bb.data.qc to examine qc'd data
 p <- npsTreyS.data.qc %>% 
-  filter(SiteID == "Long Lake Creek", UseData == 1)
+  filter(SiteID == "Crystal Creek", UseData == 1)
 
 xmin <- as.POSIXct(min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
 
 p <- p %>% 
   ggplot() +
-  geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
-  geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+  geom_line( data = nps.climDat,aes(x = DT, y = tmax, color = "Air max")) +
   geom_line(aes(x = DT, y = Temperature)) +
   scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
   coord_cartesian(ylim = c(-5, 30)) + 
