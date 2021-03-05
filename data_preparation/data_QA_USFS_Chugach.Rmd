@@ -18,6 +18,7 @@ library(hms)
 library(tidyverse)
 library(plotly)
 library(DT)
+library(beepr)
 
 ```
 
@@ -49,13 +50,8 @@ getwd()
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
 
-# lcd(station = "26410", year = 2013)
-# 
-# ncdc_locs(locationcategoryid = "CITY")
-
 #Station Codes for area of interest
 cd.climStat <- c( "USC00502179","USW00026410", "USW00096405")
-
 
 cd.climDat <- tibble( name = c( "CORDOVA WWTP", "CORDOVA AIRPORT",
 "CORDOVA 14"),
@@ -64,7 +60,6 @@ cd.climDat <- tibble( name = c( "CORDOVA WWTP", "CORDOVA AIRPORT",
 # Pull Climate data from Cordova Airport
 climDat <- meteo_pull_monitors(cd.climStat)  
 str(climDat)
-  
 
 cd.climDat <- cd.climDat %>% 
   left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
@@ -76,11 +71,49 @@ cd.climDat <- cd.climDat %>%
   mutate(year = as.factor(year(date)),
          day = yday(date),
          dt = as.POSIXct(paste(date), format = "%Y-%m-%d"))
-  
 
 cd.climDat
+```
+
+
+## Pull in Tide data from NOAA
+
+```{r NOAA Tides}
+
+
+# Tibble to hold tide data
+cd.tideDat <- tibble()
+datalist = list()
+
+# Start and end dates
+years <- tibble( start = c( 20080101, 20090101, 20100101, 20110101, 20120101,
+                            20130101, 20140101, 20150101, 20160101, 20170101,
+                            20180101, 20190101, 20200101),
+                 stop = c( 20081231, 20091231, 20101231, 20111231, 20121231,
+                           20131231, 20141231, 20151231, 20161231, 20171231,
+                           20181231, 20191231, 20201231))
+
+# Can only access 1 years worth of measurements at a time
+for (row in 1:nrow(years)){
+  yr <- gsub('.{4}$', '', paste(years[row,"start"]))
+  nam <- paste("cd.tideDat", yr, sep = "")
+  startdate <- years[row,"start"]
+  stopdate <- years[row, "stop"]
+  # Get hourly height data one by year for Cordova station 9454050
+  tideDat <- coops_search(station_name = 9454050 , begin_date = startdate,
+                             end_date = stopdate, product = "hourly_height",
+                             datum = "stnd", units = "metric", time_zone = "gmt")
+  datalist[[row]] <- tideDat$data
+  
+}
+
+cd.tideDat <-  do.call(rbind,datalist)
+
+cd.tideDat <- cd.tideDat %>% 
+  rename("dt" = "t", "verified_meters" = "v")
 
 ```
+
 # Begin QA
 
 ```{r Select Formatted Data Output from data script}
@@ -92,7 +125,8 @@ usfsChug.data <- readRDS(filename)
 
 # Copy and format for qc - limit to usesite and months of interest
 usfsChug.data.qc <- usfsChug.data %>% 
-  filter(useSite==1, month(sampleDate) %in% 6:9)
+  #filter(useSite==1, month(sampleDate) %in% 6:9)
+  filter( month(sampleDate) %in% 6:9)
 
 summary(usfsChug.data.qc)
 
@@ -108,7 +142,7 @@ Start with interactive data summary table
 
 # create data summary table
 usfsChug.data.summary <- usfsChug.data.qc %>%
-  filter(useSite == 1) %>%
+  #filter(useSite == 1) %>%
   group_by(SiteID, year) %>%
   summarize(meanTemp = mean(Temperature, na.rm = T),
             maxTemp = max(Temperature, na.rm = T),
@@ -228,24 +262,26 @@ site IDs:
 "USFS_ERB Creek", "USFS_Solf Lake Outlet Creek"
 
 Double Check:
-USFS_Eagle Creek 2016-07-20 - end of year for possible burial - tidal influence too not sure?
+USFS_Eagle Creek 2016-07-20 - 
 USFS_Middle Arm Eyak - 2015 & 2016 end of summer burials? 2017 end of summer air temps?
 USFS_Little Martin - Suspicious but shallow lake upstream
-USFS_Pigot Bay Spawn Channel & USFS_Rude River SC & Sheep River - tidal influence seems likely - inclined to remove entire series
 USFS_Quartz Creek - 2018 duplicates all year some triplicates around 2018-08-20/22
 USFS_Solf Lake Fish pass - looks strange
 USFS_Ibeck Creek-Low - 2015, 2016 & 2017 missing days and large daily range 2018-2020 look ok
 USFS_18 Mile, USFS_Eyak Lake Tributary, USFS_Solf Lake Outlet Creek - only one full year data
 USFS_ERB Creek - partial 2018 and 2020 full season 2019
 
+DM:  Removed 03/05/2021 - USFS_Pigot Bay Spawn Channel & USFS_Rude River SC & Sheep River due to tidal influence
 
-```{r Interactive Plot With Air Temp}
+
+
+```{r Interactive Plot With Air Temp and Tide}
 # get site ids
 #dput(unique(usfsChug.data.qc$SiteID))
 
 #Change to bb.data.qc to examine qc'd data
 p <- usfsChug.data.qc %>% 
-  filter(SiteID == "USFS_ERB Creek", UseData == 1)
+  filter(SiteID == "USFS_Middle Arm Eyak", UseData == 1)
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
@@ -254,6 +290,7 @@ p <- p %>%
   ggplot() +
   geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
   geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line( data = cd.tideDat,aes(x = dt, y = verified_meters, color = "Tide (m)")) +
   geom_line(aes(x = dt, y = Temperature)) +
   scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
   coord_cartesian(ylim = c(-5, 30)) + 
@@ -279,23 +316,27 @@ and stored in [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2M
 
 
 ```{r Recalculate UseData}
-◘
+
 ```
 
 # Save File for summary report
 Save file for summary report.
 
 ```{r Save}
-usfsChug.data
-
-names(usfsChug.data)
-
-usfsChug.data %>% 
-  select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
-  saveRDS("output/usfsChug.data.rds")
+# usfsChug.data
+# 
+# names(usfsChug.data)
+# 
+# usfsChug.data %>% 
+#   select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
+#   saveRDS("output/usfsChug.data.rds")
 ```
 
 # Save QAed dataset for AKTEMP
+
+```{r Save For AKTEMP}
+# INSERT CODE
+```
 
 Save a copy of the final data with the QA flags for AKTEMP as a .csv.
 
@@ -308,8 +349,9 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 * temp_msmt_freq
 * daily_screen
 
-```{r}
-source("day_and_month_functions.R")
+```{r Save Daily}
+
+# INSERT CODE
 
 ```
 
