@@ -125,8 +125,6 @@ basename(fs_files)
 ```
 
 Bind all input datasets together after removing Airtemp and site info CSVs
-Add UseData field and calculated temp threshold values - set upper max to 30 for these data
-
 
 ```{r Bind all data, message=FALSE, warning=FALSE}
 
@@ -152,16 +150,16 @@ for ( i in fs_files){
       t1= t1 + 1
       
       # Format data
-      dat <- dat %>% mutate(data_filename = name,
-                            UseData = case_when( Temperature < -0.25 ~ 0,
-                                                 Temperature > 30 ~ 0,
-                                                 TRUE ~ 1)) %>%
+      dat <- dat %>%  mutate(data_filename = name) %>% 
+      #                       UseData = case_when( Temperature < -0.25 ~ 0,
+      #                                            Temperature > 30 ~ 0,
+      #                                            TRUE ~ 1)) %>%
         transform(sampleDate = as_date(mdy(sampleDate)),
                   # Some times in HMS and some in HM format
                   sampleTime = format(lubridate::parse_date_time(sampleTime,c('HMS','HM')),'%H:%M:%S'),
                   Temperature = as.numeric(Temperature))
       fsdat <- bind_rows(fsdat, dat[!is.na(dat$Temperature),]) %>%
-        select(data_filename, sampleDate, sampleTime, Temperature, UseData)
+        select(data_filename, sampleDate, sampleTime, Temperature)
 
     }else{
       print(paste0( name,  " has Different format "))
@@ -183,15 +181,15 @@ for ( i in fs_files){
       t1= t1 + 1
       
       # Format data 
-      dat <- dat %>% mutate(data_filename = name,
-                            UseData = case_when( Temperature < -0.25 ~ 0,
-                                                 Temperature > 30 ~ 0,
-                                                 TRUE ~ 1)) %>% 
+      dat <- dat %>% mutate(data_filename = name) %>% 
+#                            UseData = case_when( Temperature < -0.25 ~ 0,
+#                                                 Temperature > 30 ~ 0,
+#                                                 TRUE ~ 1)) %>% 
         transform(sampleDate = as.Date(sampleDate, format = "%m/%d/%Y"),
                   sampleTime = hms::as.hms(sampleTime),
                   Temperature = as.numeric(Temperature))
       fsdat <- bind_rows(fsdat, dat[!is.na(dat$Temperature),]) %>% 
-        select(data_filename, sampleDate, sampleTime, Temperature, UseData)
+        select(data_filename, sampleDate, sampleTime, Temperature)
       
     }else{
       print(paste0( name,  " has Different format "))
@@ -269,37 +267,80 @@ and maybe Sheep, the data will useable for the DFA with very limited
 tidal impacts in the summer"
 
 DM Notes: Data from Quartz Creek overlap and there are duplicate measurements 
-in the <QuartzCreek_Surf_2019-11-13> Dataset. Unsure if the two datasets are from
-the same location and where the duplicate measure came from?
+in the <QuartzCreek_Surf_2019-11-13> Dataset. Unsure if the two datasets are from the same location and where the duplicate measure came from?
 
 ```{r Remove Duplicates and Classify initial useSite}
 # Tibble for all formatted data with duplicates removed
 fschdat <- tibble()
 
 # Drop sites based on email conversations and notes in site info workbooks
+# Rude, Pigot, and Sheep dropped due to tidal influence
 fschdat <- fsdat %>% 
   mutate(useSite = case_when(
     Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek",
                      "Jack Bay River", "McKinley Lake", "NF Williwaw Creek",
-                     # Removing pigot and rude based on Luca Email 02/24/2021
-                     #"Pigot Bay Spawn Channel", "Rude River SC",
                      "SF Williwaw Creek", "Solf Lake Inlet",
                      "Steller Jay Creek") ~ 0, TRUE ~ 1),
     # Need to make new site id because AGENCY_ID for these data = waterbody_name
     SiteID = paste0("USFS_", Agency_ID)) %>%
-  select( -data_filename) %>% 
   # Drop duplicate records - QUARTZ CREEK STILL HAS DUPLICATES POSSIBLY DUE TO MEASUREMENTS FROM 2 LOGGERS BEING INCLUDED IN THE QuartzCreek_Surf_2019-11-13 dataset and overlapping measurements between from the second dataset
   distinct()
 
 #Reorder and save output
-colorder <- c("SiteID","Agency_ID", "sampleDate", "sampleTime", "Temperature",
-              "dt", "year", "useSite","UseData")
+colorder <- c("data_filename", "SiteID","Agency_ID", "sampleDate", "sampleTime",
+              "Temperature", "dt", "year", "useSite")
 
 fschdat <- fschdat[,colorder]
 
 summary(fschdat)
+```
+Average temps for Quartz Creek and drop measurements from datasets in Kenai_2018-20 Batch for Quartz and Daves Creeks for day of overlapping measurements 2018-08-22 and Bench on 2018-09-20
+
+
+```{r Average any duplicate measurements and keep distinct records}
+
+fschdat1 <- tibble()
+fschquartz1 <- tibble()
+fschquartz0 <-  tibble()
+fschdat_nodups <- tibble()
+
+# Datasets with overlapping measurements on 2018-08-22
+lap1 <- c("R10_CNF_KPZ_DavesCrk_surfaceH2O_cz_2018_08_22_2020_08_18_10497829_QAQC",
+"R10_CNF_KPZ_QuartzCrk_surfaceH2O_cz_2018_08_22_2020_08_21_20163535_QAQC")
+
+# Dataset with overlapping measurements on 2018-09-20
+lap2 <- "R10_CNF_KPZ_BENCH_surfaceH2O_cz_2018_09_20_2020_09_09_10515702_QAQC"
+
+# Add UseData field and and assign 0 to most recent dataset on day of overlap
+fschdat <- fschdat %>%
+  mutate(UseData = case_when( data_filename %in% lap1 &
+    sampleDate == "2018-08-22" ~ 0,
+  data_filename == lap2 & sampleDate == "2018-09-20" ~ 0,
+  TRUE ~ 1))
+
+# Copy of all sites but quartz creek
+fschdat1 <- fschdat %>% 
+  filter(SiteID != "USFS_Quartz Creek")
+# Copy of quartz creek data on day of overlap from most recent dataset
+fschquartz0 <- fschdat %>% 
+  filter(SiteID == "USFS_Quartz Creek", UseData == 0)
+
+# Calculate Avg Temperature for duplicate measurements at quartz creek
+fschquartz1 <- fschdat %>% 
+  filter(UseData == 1, SiteID == "USFS_Quartz Creek") %>% 
+  group_by(SiteID, dt) %>% 
+  mutate(avgTemp = mean(Temperature, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(Temperature = avgTemp) %>% 
+  select(-avgTemp)
+
+# Merge back together and select distinct records
+fschdat_nodups <- rbind(fschdat1, fschquartz1, fschquartz0) %>% 
+  select(-data_filename) %>% 
+  distinct()
 
 ```
+
 ```{r Format metada for saving}
 # Rename 
 usfs_md <- usfs_md %>% 
@@ -308,17 +349,13 @@ usfs_md <- usfs_md %>%
 ```
 
 # Save Data
-Still having trouble with the knitr::opts_knit$set(root.dir = ....) command not applying to subsequent chunks.Must setwd(paste0(rprojroot::find_rstudio_root_file())) in order to run helper save functions
-
 ## Save Temp Data
 Save formatted versions of temp data as rds prior to QAQC
 
 ```{r Save Formatted USFS Temp Data}
-
 # Save formatted data for input into qa script
-usfsChug.data <- saveRDS(fschdat, "formatted_data/usfsChug.data.rds")
+usfsChug.data <- saveRDS(fschdat_nodups, "formatted_data/usfsChug.data.rds")
 
-save_aktemp_files(fschdat, "usfsChug")
 ```
 
 ## Save Metadata
@@ -334,4 +371,3 @@ usfsChugmd.data <- saveRDS(usfs_md, "data_preparation/formatted_data/usfsChugmd.
 save_metadata_files(usfs_md, "usfsChug")
 
 ```
-

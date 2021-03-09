@@ -18,9 +18,23 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+library(plotly)
+library(DT)
+```
+
+# Source Helpers
+
+```{r Source Helper Functions}
+# Check dir
+getwd()
+# Source helper functions
+source("helper_functions.R")
+
 ```
 
 Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we are only reviewing June - September data and flagging obvious air temperatures. Burials are a lot harder to confirm without a duplicate logger.
+# Load Data
+Load Data from rds or other source
 
 
 # QA data for air temperatures

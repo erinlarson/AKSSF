@@ -22,11 +22,15 @@ Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of
 This file is for reading in data from a single provider. I usually read in files separately by folder depending on how the data were provided and formatted. This might not be needed. The final saved data frame can be .rds for importing into the data QA report. If data have been QAed, then the final data file, metadata file, and daily data can be saved as .csv. Add a UseData == 1 for data that have already been reviewed.
 
 # Define Functions
-Define any functions that are used for data formatting or duplicate measurement identification 
+Define any functions that are used for data formatting or duplicate measurement identification
+
 
 
 ```{r Functions}
-
+# I had to set working directory up one level evan after knitr::opts_knit$set(root.dir = normalizePath(".."))  in order to source the helper function 
+# setwd('..')
+# Source functions in helper function script to ensure proper format of saved data
+source("helper_functions.R")
 
 ```
 
@@ -53,8 +57,22 @@ Notes on new names:
 
 # Review data
 
+
 ## Duplicate measurements
 
+?? Sufficient to just use distinct() on site/temp/dt or more robust method?
+
 ## Save data 
+Save copies of metadata file and temp data formatted for QA to local drive
+Save copies of metadata file and temp data formatted for QA to google drive
+
+```{r Save Outputs}
+# Save copy of formatted data for qc (UseSite vs UseData?)
+# Save metadata - this will save a local copy and upload to google drive
+save_metadata_files(data.in, acronym = "NAME OF OUTPUT")
+
+
+```
+
 
 If data have been reviewed by the data provider, these should be .csv of the final data, metadata, and daily data (see data_QA_TEMPLATE). Otherwise, an .rds or .csv to be passed to the data QA script.

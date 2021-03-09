@@ -119,19 +119,29 @@ cd.tideDat <- cd.tideDat %>%
 ```{r Select Formatted Data Output from data script}
 
 # Choose temperature data ouput formatted for qc from data prep script
+usfsChug.data.noqc <- tibble()
 
 filename <- file.choose(new = FALSE)
 usfsChug.data <- readRDS(filename)
 
 # Copy and format for qc - limit to usesite and months of interest
 usfsChug.data.qc <- usfsChug.data %>% 
-  #filter(useSite==1, month(sampleDate) %in% 6:9)
-  filter( month(sampleDate) %in% 6:9)
+  filter(useSite == 1, month(sampleDate) %in% 6:9)
+
+# Select records that will not be QC'd and bind together - Used for AKTEMP export
+# Use Sites = 1 outside of period of interest
+usfsChug.data.noqc1 <- usfsChug.data %>% 
+  filter(useSite == 1, !month(sampleDate) %in% 6:9)
+# All UseSite = 0
+usfsChug.data.noqc2 <- usfsChug.data %>% 
+  filter(useSite == 0)
+
+# Bind together
+usfsChug.data.noqc <- rbind(usfsChug.data.noqc1, usfsChug.data.noqc2)
 
 summary(usfsChug.data.qc)
 
 ```
-
 
 ??MAKE REVIEW GROUPS - TIDAL/NOT - Time period of interest
 
@@ -142,7 +152,7 @@ Start with interactive data summary table
 
 # create data summary table
 usfsChug.data.summary <- usfsChug.data.qc %>%
-  #filter(useSite == 1) %>%
+  filter(useSite == 1) %>%
   group_by(SiteID, year) %>%
   summarize(meanTemp = mean(Temperature, na.rm = T),
             maxTemp = max(Temperature, na.rm = T),
@@ -262,18 +272,13 @@ site IDs:
 "USFS_ERB Creek", "USFS_Solf Lake Outlet Creek"
 
 Double Check:
-USFS_Eagle Creek 2016-07-20 - 
-USFS_Middle Arm Eyak - 2015 & 2016 end of summer burials? 2017 end of summer air temps?
-USFS_Little Martin - Suspicious but shallow lake upstream
-USFS_Quartz Creek - 2018 duplicates all year some triplicates around 2018-08-20/22
-USFS_Solf Lake Fish pass - looks strange
-USFS_Ibeck Creek-Low - 2015, 2016 & 2017 missing days and large daily range 2018-2020 look ok
-USFS_18 Mile, USFS_Eyak Lake Tributary, USFS_Solf Lake Outlet Creek - only one full year data
-USFS_ERB Creek - partial 2018 and 2020 full season 2019
 
-DM:  Removed 03/05/2021 - USFS_Pigot Bay Spawn Channel & USFS_Rude River SC & Sheep River due to tidal influence
-
-
+~~USFS_Middle Arm Eyak - noted a possible burial in google sheet but leaving UseData = 1 for now~~
+~~USFS_Little Martin River - Notes say shallow lake upstream, may be reason for strange patterns~~
+~~USFS_Quartz Creek - 2018 duplicates all year some triplicates around 2018-08-20/22~~
+~~USFS_Solf Lake Fish Pass - looks strange~~
+~~USFS_18 Mile, USFS_Eyak Lake Tributary, USFS_Solf Lake Outlet Creek - only one full year data~~
+~~USFS_ERB Creek - partial 2018 and 2020 full season 2019~~
 
 ```{r Interactive Plot With Air Temp and Tide}
 # get site ids
@@ -281,7 +286,7 @@ DM:  Removed 03/05/2021 - USFS_Pigot Bay Spawn Channel & USFS_Rude River SC & Sh
 
 #Change to bb.data.qc to examine qc'd data
 p <- usfsChug.data.qc %>% 
-  filter(SiteID == "USFS_Middle Arm Eyak", UseData == 1)
+  filter(SiteID == "USFS_Pigot Bay Spawn Channel")
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
@@ -315,31 +320,102 @@ Temperature data flagged for UseData = 0 based on visual examination of plots
 and stored in [google sheet](https://docs.google.com/spreadsheets/d/1SijMtKMuU2MB_vx9DCcCXYYeOGqrv6VG-Eidx_pyfkk/edit#gid=0).
 
 
+```{r Pull In Googlesheet Flags, message=FALSE, warning=FALSE}
+
+#Must activate a token to read in this sheet - need to investigate why read only
+#access is not working
+gs4_auth()
+
+#gs4_user()
+
+temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1SijMtKMuU2MB_vx9DCcCXYYeOGqrv6VG-Eidx_pyfkk/edit#gid=0"
+
+#Read in flag data sheet
+flagDb <- read_sheet(temp_log_db_gs,sheet = "AKSSF_Data_Flags",
+                    col_names = TRUE,
+                    col_types = "c")
+
+#create cols variable 
+cols <- c("SiteID", "FlagStart", "FlagEnd","Days", "FlagReason", "UseSite", "UseData", "Notes")
+
+# Transform and drop unecessary columns
+flagDb <- flagDb %>%
+  select(all_of(cols)) %>% 
+  transform(SiteID = as.character(SiteID),
+            FlagStart = as_date(ymd(FlagStart)),
+            FlagEnd= as_date(ymd(FlagEnd)),
+            Days = as.numeric(Days),
+            FlagReason = as.character(FlagReason),
+            UseSite = as.numeric(UseSite),
+            UseData = as.numeric(UseData),
+            Notes = as.character(Notes))
+
+#convert date range to dates 
+flagDb2 <- flagDb %>% 
+  mutate(flagDate = map2(FlagStart, FlagEnd, ~seq(from = .x, to = .y,
+                                                  by = "day"))) %>% 
+  unnest() %>%
+  select(SiteID, flagDate, FlagReason) %>%
+  distinct()
+
+str(flagDb2)
+```
 ```{r Recalculate UseData}
+#Tibble for final qc data
+usfsChug.data.finalqc <- tibble()
+
+#Recalculate UseData values using information stored in flagDb tibble
+
+usfsChug.data.finalqc <- usfsChug.data.qc %>% 
+  left_join( flagDb2, by = c("SiteID" = "SiteID", "sampleDate" = "flagDate")) %>% 
+  mutate(UseData = case_when(FlagReason == "Air Temperature" ~ 0,
+                             FlagReason == "Burial" ~ 0,
+                             FlagReason == "Logger Failure" ~ 0,
+                             FlagReason == "Other" ~ 0,
+                             FlagReason == "Tidal Influence" ~ 0,
+                             TRUE ~ UseData))
+  
+
+usfsChug.data.finalqc %>% count(SiteID, year, UseData, FlagReason)
+
+
+```
+# Save Data
+```{r}
+# Set output name for save functions - will be appended with appropriate date and suffix 
+acronym = "usfsChug"
 
 ```
 
-# Save File for summary report
-Save file for summary report.
+# Save reviewed data with additional UseData flags
 
-```{r Save}
-# usfsChug.data
-# 
-# names(usfsChug.data)
-# 
-# usfsChug.data %>% 
-#   select(SiteID, useSite, sampleDate, sampleTime, dt, year, Temperature) %>% 
-#   saveRDS("output/usfsChug.data.rds")
+```{r Save QA }
+
+# Save copy of qa data with data flags
+usfsChug.data.finalqc %>% 
+  select(SiteID, Agency_ID , sampleDate, sampleTime, dt, year, Temperature, UseData, FlagReason) %>% 
+  saveRDS("formatted_data/usfsChug.data.finalqc")
+
 ```
+
 
 # Save QAed dataset for AKTEMP
+AKTEMP Data file
+
+* SiteID, character
+* sampleDate, date
+* sampleTime, hms
+* Temperature, numeric
+* useData, numeric
 
 ```{r Save For AKTEMP}
-# INSERT CODE
+# Tibble for AKTEMP data copy of all data - QC'd Period of interest and data excluded from qc process
+AKTEMP_Data <- bind_rows(usfsChug.data.noqc, usfsChug.data.finalqc)
+
+# save copy of data formatted for AKTEMP
+save_aktemp_files(AKTEMP_Data, acronym = acronym )
+
 ```
-
-Save a copy of the final data with the QA flags for AKTEMP as a .csv.
-
 
 
 # Save daily data
@@ -350,8 +426,17 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 * daily_screen
 
 ```{r Save Daily}
+# Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
+AKSSF_Data <- usfsChug.data.finalqc %>% 
+  filter(UseData == 1)
 
-# INSERT CODE
+daily_data <- temp_msmt_freq(AKSSF_Data) %>% 
+  daily_screen()
+
+daily_data
+
+# Save Daily Summaries
+save_daily_files(daily_data, acronym = acronym )
 
 ```
 
