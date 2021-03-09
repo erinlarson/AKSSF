@@ -419,6 +419,8 @@ Save raw data for AKTEMP, which includes date and time. Save metadata file. Save
 
 ```{r save raw data}
 
+source("W:/Github/AKSSF/helper_functions.R")
+
 cik.md
 
 save_metadata_files(cik.md, "cik")

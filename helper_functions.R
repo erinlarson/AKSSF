@@ -49,34 +49,34 @@ numberOfDays <- function(date) {
 }
 
 
-save_daily_file <- function(data.in, acronym) {
-  daily_fields <- c("SiteID", "SampleDate", "meanDT", "minDT", "maxDT")
-  date.now <- as.Date(Sys.time())
-  data.in %>% 
-    select(one_of(daily_fields)) %>% 
-    write.csv(paste0("data_preparation/final_data/", acronym, "Daily_Data", as.character(date.now),".csv"), row.names = F)
-}
-
-save_aktemp_file <- function(data.in, acronym) {
-  aktemp_fields <- c("SiteID", "sampleDate", "sampleTime", "Temperature", "UseData")
-  date.now <- as.Date(Sys.time())
-  data.in %>% 
-    select(one_of(aktemp_fields)) %>% 
-    write.csv(paste0("data_preparation/final_data/", acronym, "AKTemp_Data", as.character(date.now),".csv"), row.names = F)
-}
-
-save_metadata_file <- function(data.in, acronym) {
-  date.now <- as.Date(Sys.time())
-  data.out <- paste0("data_preparation/final_data/", acronym, "Metadata", as.character(date.now),".csv")
-  akoats_fields <- c("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
-                     "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
-                     "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
-                     "Sensor_QAQC")
-  data.in %>% 
-    select(one_of(akoats_fields)) %>% 
-    write.csv(data.out, row.names = F)
-  return(data.out)
-}
+# save_daily_file <- function(data.in, acronym) {
+#   daily_fields <- c("SiteID", "SampleDate", "meanDT", "minDT", "maxDT")
+#   date.now <- as.Date(Sys.time())
+#   data.in %>% 
+#     select(one_of(daily_fields)) %>% 
+#     write.csv(paste0("data_preparation/final_data/", acronym, "Daily_Data", as.character(date.now),".csv"), row.names = F)
+# }
+# 
+# save_aktemp_file <- function(data.in, acronym) {
+#   aktemp_fields <- c("SiteID", "sampleDate", "sampleTime", "Temperature", "UseData")
+#   date.now <- as.Date(Sys.time())
+#   data.in %>% 
+#     select(one_of(aktemp_fields)) %>% 
+#     write.csv(paste0("data_preparation/final_data/", acronym, "AKTemp_Data", as.character(date.now),".csv"), row.names = F)
+# }
+# 
+# save_metadata_file <- function(data.in, acronym) {
+#   date.now <- as.Date(Sys.time())
+#   data.out <- paste0("data_preparation/final_data/", acronym, "Metadata", as.character(date.now),".csv")
+#   akoats_fields <- c("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
+#                      "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
+#                      "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
+#                      "Sensor_QAQC")
+#   data.in %>% 
+#     select(one_of(akoats_fields)) %>% 
+#     write.csv(data.out, row.names = F)
+#   return(data.out)
+# }
 
 # Save csv locally and google drive copy of Metadata
 save_metadata_files <- function(data.in, acronym) {
