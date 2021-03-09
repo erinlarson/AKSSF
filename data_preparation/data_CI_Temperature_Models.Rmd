@@ -14,6 +14,8 @@ library(tidyverse)
 library(MARSS)
 ```
 
+3/2/21 finish metadata corrections, trying to get seq-id from akoats where it applies for kenai dataset and getting correct contact info on anchor dataset. resave all three datasets bc I may have accidentally saved over deshka. When done with these three, check on formatting of uw streams data so that priscilla can qa.
+
 
 Stream temperature models for the Deshka, Anchor, and Kenai watersheds were completed for USFWS in Fall 2020. The reviewed temperature time series can be used for this analysis as the data are ready. The climate data are for 3-day lags, which we decided we won't use for AKSSF so don't worry about linking to climate data. We do need metadata and data data frames.
 
@@ -33,18 +35,23 @@ deshka_wd <- "W:/Github/Deshka_temperature/output/data_catalog"
 
 deshka_temp <- read_csv(paste0(deshka_wd, "/deshka_temperature_data.csv", collapse = ""))
 
-deshka_daily <- temp_msmt_freq(deshka_temp %>% mutate(UseData = 1)) %>% daily_screen(.)
+deshka_temp %>% distinct(SiteID)
+
+deshka_daily <- temp_msmt_freq(deshka_temp %>% mutate(UseData = 1)) %>% daily_screen(.) %>% ungroup()
+
+deshka_daily %>% distinct(SiteID)
 
 ```
 
 Edits to site table - kroto 5 downstream misspelled, and PMC1 listed twice. In temperature dataset, there is a PMC1 and PMC1-2, which are in the same catchment and just slightly separated. Keep PMC1, which has the longer time series.
 
 ```{r deshka metadata}
-
 deshka_sites <- read_csv(paste0(deshka_wd, "/deshka_sites.csv", collapse = ""))
 
-deshka_sites %>% 
-  arrange(SiteID)
+deshka_temp %>% 
+  distinct(SiteID) %>% 
+  arrange(SiteID) %>% 
+  full_join(deshka_sites)
 
 deshka_sites <- deshka_sites %>%
   mutate(SiteID = case_when(SiteID == "Kroto 5 Downstrean" ~ "Kroto 5 Downstream",
@@ -52,21 +59,48 @@ deshka_sites <- deshka_sites %>%
   filter(!(SiteID == "PMC1" & useSite == 1))
 
 deshka_daily %>% 
+  ungroup() %>% 
   filter(SiteID %in% c("PMC1", "PMC1-2")) %>% 
+  group_by(SiteID) %>% 
   summarize(mindate = min(sampleDate),
             maxdate = max(sampleDate))
 
-deshka_daily <- left_join(deshka_daily, deshka_sites %>% select(SiteID, catchmentID))
-
-deshka_daily %>% distinct(SiteID, catchmentID)
-
 #remove pmc1-2
 deshka_daily <- deshka_daily %>% 
-  filter(!(is.na(catchmentID)))
+  filter(!(SiteID == "PMC1-2"))
 
-deshka_daily
+deshka_temp <- deshka_temp %>% 
+  filter(!(SiteID == "PMC1-2"))
 
+deshka_md <- deshka_daily %>% 
+  ungroup() %>% 
+  distinct(SiteID) %>% 
+  left_join(deshka_sites) %>% 
+  mutate(seq_id = NA,
+         SourceName = case_when(grepl("Moose|Kroto|Deshka", SiteID) ~ "CIK",
+                                TRUE ~ "fwsAnchorage"),
+         Contact_person = case_when(SourceName == "CIK" ~ "Sue Mauger",
+                                    TRUE ~ "Daniel Rinella"),
+         Contact_email = case_when(SourceName == "CIK" ~ "sue@inletkeeper.org",
+                                    TRUE ~ "daniel_rinella@fws.gov"),
+         Contact_telephone = case_when(SourceName == "CIK" ~ "907-235-4068",
+                                    TRUE ~ "970-891-3783"),
+         Sensor_Placement = "Main channel",
+         Sensor_accuracy = "level 1  ( +/- 0.2 deg C)",
+         Sensor_QAQC = 4,
+         Waterbody_type = "S",
+         Waterbody_name = case_when(grepl("Moose", SiteID) & grepl("Downstream", SiteID) ~ "Moose",
+                                    grepl("Moose", SiteID) & grepl("Upstream", SiteID) ~ "Moose",
+                                    grepl("Kroto", SiteID) & grepl("Downstream", SiteID) ~ "Kroto",
+                                    grepl("Kroto", SiteID) & grepl("Upstream", SiteID) ~ "Kroto",
+                                    grepl("Deshka", SiteID) & grepl("Downstream", SiteID) ~ "Deshka",
+                                    grepl("Deshka", SiteID) & grepl("Upstream", SiteID) ~ "Deshka",
+                                    TRUE ~ NA_character_))
+
+deshka_md %>% select(SiteID, Waterbody_name)
 ```
+
+
 
 NOT using climate data.
 
@@ -85,19 +119,11 @@ deshka_daily
 Save data files
 
 ```{r deshka save}
-cik.md
+save_metadata_files(deshka_md, "deshka")
 
-save_metadata_files(cik.md, "cik")
+save_aktemp_files(deshka_temp, "deshka")
 
-cik.data
-
-save_aktemp_files(cik.data, "cik")
-
-
-cik.daily <- temp_msmt_freq(cik.data) %>% daily_screen(.)
-
-save_daily_files(cik.daily, "cik")
-
+save_daily_files(deshka_daily, "deshka")
 
 ```
 
@@ -110,31 +136,44 @@ anchor_wd <- "W:/Github/Temperature_Data/output/data_catalog"
 
 anchor_temp <- read_csv(paste0(anchor_wd, "/anchor_temperature_data.csv", collapse = ""))
 
-anchor_daily <- anchor_temp %>%
-  filter(useData == 1) %>% 
-  group_by(SiteID, sampleDate) %>% 
-  summarize(meanTemp = mean(Temperature))
+anchor_daily <- temp_msmt_freq(anchor_temp %>% mutate(UseData = 1)) %>% daily_screen(.) %>% ungroup()
 
 anchor_daily
 ```
 
 
+None of these data were ever entered into AKOATS, except for CIK_14, which is removed before saving because it is in Sue's other dataset.
+Need to enter metadata fields for CIK, KBRR and APU.
 
-```{r anchor catchment ID}
+```{r anchor metadata}
 
 anchor_sites <- read_csv(paste0(anchor_wd, "/anchor_sites.csv", collapse = ""))
 
-anchor_sites %>% 
-  arrange(SiteID)
-
 anchor_daily %>% 
-  distinct(SiteID)
+  distinct(SiteID) %>% 
+  full_join(anchor_sites)
 
-anchor_daily <- left_join(anchor_daily, anchor_sites %>% select(SiteID, catchmentID))
-
-anchor_daily %>% distinct(SiteID, catchmentID)
-
-anchor_daily
+anchor_md <- anchor_daily %>% 
+  distinct(SiteID) %>% 
+  left_join(anchor_sites) %>% 
+  mutate(seq_id = NA,
+         SourceName = case_when(grepl("APU", SiteID) ~ "APU",
+                                grepl("CIK|AR2", SiteID) ~ "CIK",
+                                TRUE ~ "KBRR"),
+         Contact_person = case_when(SourceName == "CIK" ~ "Sue Mauger",
+                                    SourceName == "APU" ~ "John Hagan",
+                                    TRUE ~ "Steve Baird"),
+         Contact_email = case_when(SourceName == "CIK" ~ "sue@inletkeeper.org",
+                                    SourceName == "APU" ~ NA_character_,
+                                    TRUE ~ "sjbaird@alaska.edu"),
+         Contact_telephone = case_when(SourceName == "CIK" ~ "907-235-4068",
+                                    SourceName == "APU" ~ NA_character_,
+                                    TRUE ~ "907-235-1594"),
+         Sensor_Placement = "Main channel",
+         Sensor_accuracy = "level 1  ( +/- 0.2 deg C)",
+         Sensor_QAQC = 4,
+         Waterbody_type = "S",
+         Waterbody_name = NA)
 
 ```
 
@@ -152,8 +191,20 @@ anchor_daily
 
 ```
 
+Remove CIK14, which is the same as CIK_14 and we have in Sue's other dataset.
+
+```{r anchor save }
+save_metadata_files(anchor_md %>% filter(!SiteID == "CIK14"), "anchor")
+
+save_aktemp_files(deshka_temp, "anchor")
+
+save_daily_files(deshka_daily, "anchor")
+```
+
 
 ## Kenai
+
+Read in Kenai data and remove sites that Sue submitted with her other data.
 
 ```{r kenai temp data}
 
@@ -161,32 +212,60 @@ kenai_wd <- "W:/Github/Kenai_temperature/output/data_catalog"
 
 kenai_temp <- read_csv(paste0(kenai_wd, "/kenai_temperature_data.csv", collapse = ""))
 
-kenai_daily <- kenai_temp %>%
-  filter(useData == 1) %>% 
-  group_by(SiteID, sampleDate) %>% 
-  summarize(meanTemp = mean(Temperature))
+dup_sites <- readRDS("output/duplicate_CIK_sites.rds") %>% pull(SiteID)
+
+kenai_temp <- kenai_temp %>% 
+  filter(!SiteID %in% dup_sites) 
+
+kenai_daily <- temp_msmt_freq(kenai_temp %>% mutate(UseData = 1)) %>% daily_screen(.) %>% ungroup()
 
 kenai_daily %>% summary
 
 ```
 
+Create metadata for kwf sites and get metadata info for Ben Meyer from AKOATS. We saved the data with different siteIDs, which can be replaced so that they match what was submitted for AKOATS and what Ben used.
 
-```{r kenai catchment ID}
+```{r kenai metadata}
 
 kenai_sites <- read_csv(paste0(kenai_wd, "/kenai_sites.csv", collapse = ""))
 
-kenai_sites %>% 
-  arrange(SiteID)
-
 kenai_daily %>% 
-  distinct(SiteID)
+  distinct(SiteID) %>% 
+  left_join(kenai_sites)
 
-kenai_daily <- left_join(kenai_daily, kenai_sites %>% select(SiteID, catchmentID))
+akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "AKOATS_COMPLETE") 
+site_loc <- read_csv("W:/Github/Kenai_temperature/data/Kenai/Kenai_site_locations.csv")
 
-kenai_daily %>% distinct(SiteID, catchmentID)
+site_loc %>% select(Description, siteID) %>% 
+  left_join(akoats, by = c("Description" = "Agency_ID"))
 
-kenai_daily %>% summary
 
+benM <- akoats %>% filter(Contact_person == "Benjamin Meyer") %>% 
+  select(Agency_ID, SourceName, Contact_person, Contact_email, Contact_telephone, Sensor_Placement)
+
+kenai_md <- kenai_daily %>% 
+  distinct(SiteID) %>% 
+  left_join(kenai_sites) %>% 
+  mutate(seq_id = NA,
+         SourceName = case_when(grepl("KWF1|KWF2|KWF3", SiteID) ~ "KWF",
+                                TRUE ~ "UAF"),
+         Contact_person = case_when(SourceName == "KWF" ~ "Brandon Borneman",
+                                    TRUE ~ "Ben Meyer"),
+         Contact_email = case_when(SourceName == "CIK" ~ "sue@inletkeeper.org",
+                                    TRUE ~ "daniel_rinella@fws.gov"),
+         Contact_telephone = case_when(SourceName == "CIK" ~ "907-235-4068",
+                                    TRUE ~ "970-891-3783"),
+         Sensor_Placement = "Main channel",
+         Sensor_accuracy = "level 1  ( +/- 0.2 deg C)",
+         Sensor_QAQC = 4,
+         Waterbody_type = "S",
+         Waterbody_name = case_when(grepl("Moose", SiteID) & grepl("Downstream", SiteID) ~ "Moose",
+                                    grepl("Moose", SiteID) & grepl("Upstream", SiteID) ~ "Moose",
+                                    grepl("Kroto", SiteID) & grepl("Downstream", SiteID) ~ "Kroto",
+                                    grepl("Kroto", SiteID) & grepl("Upstream", SiteID) ~ "Kroto",
+                                    grepl("Deshka", SiteID) & grepl("Downstream", SiteID) ~ "Deshka",
+                                    grepl("Deshka", SiteID) & grepl("Upstream", SiteID) ~ "Deshka",
+                                    TRUE ~ NA_character_))
 ```
 
 NOT using climate data.
@@ -228,14 +307,6 @@ ci_daily <- bind_rows(deshka_daily %>% mutate(wtd = "Deshka"), anchor_daily %>% 
   ungroup() %>% 
   mutate(year = year(sampleDate))
 
-```
-
-Remove sites in Sue's other dataset and save file in the final data folder.
-
-```{r}
-dup_sites <- readRDS("data_preparation/duplicate_CIK_sites.rds")
-
-ci_daily
 ```
 
 

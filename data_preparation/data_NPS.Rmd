@@ -20,6 +20,8 @@ library(plotly)
 
 Trey Simmons with NPS has data for the Wrangell-St Elias NP that covers our study area. Some data were archived on KNB and he also send over additional data. I'm going to combine all data sources here.
 
+Note: Priscilla is reviewing all sites except Caribou Creek. From Trey's email that site may not have very good data and/or may not have been a good location due to drying. Dustin and I can revisit and determine if there is anything to salvage.
+
 # Read in data, format and combine
 
 ##  KNB Data
@@ -62,6 +64,7 @@ nps.data1 <- nps.data1 %>%
 
 nps.data1 %>% distinct(SiteID)
 nps.data1 %>% count(UseData)
+
 ```
 
 ## 2021 Data
@@ -97,12 +100,13 @@ nps.data2 <- left_join(nps.data2, nps_akssf_md %>% select(AKOATS_ID, SiteID, Wat
 nps.data2 %>% distinct(SiteID, AKOATS_ID, Waterbody_name)
 
 ```
-Combine the KNB and new datasets.
+
+Combine the KNB and new datasets. Note that there is overlap in data for Caribou Creek from NCEAS and from Trey's most recent set of files. Keep the filename so we can plot them side by side.
 
 ```{r all data}
 intersect(names(nps.data1), names(nps.data2))
 
-nps.data <- bind_rows(nps.data1, nps.data2 %>% mutate(year = year(sampleDate))) %>% 
+nps.data <- bind_rows(nps.data1, nps.data2 %>% mutate(year = year(sampleDate))) #%>% 
   select(-file_name)
 
 ```
@@ -144,7 +148,7 @@ Save the data frame as an .rds and put on drive for Dustin or Priscilla to QA. F
 
 ```{r}
 nps.data %>% 
-  select(SiteID, sampleDate, sampleTime, DT, Temperature, UseData) %>% 
+  select(SiteID, sampleDate, sampleTime, DT, Temperature, UseData, file_name) %>% 
   saveRDS(., file = "data_preparation/formatted_data/nps.data.rds")
 ```
 
@@ -224,8 +228,8 @@ nps.data %>%
   filter(Temperature == max_temp)
 
 p <- ggplot() +
-  geom_line(data = nps.data %>% filter(SiteID == "Gilahina River"),
-            aes(x = DT, y = Temperature))
+  geom_line(data = nps.data %>% filter(SiteID == "Caribou Creek", month(sampleDate) %in% 6:9),
+            aes(x = DT, y = Temperature, color = file_name))
 ggplotly(p)
 ```
 

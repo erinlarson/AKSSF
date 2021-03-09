@@ -211,6 +211,14 @@ akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "AKO
 akoats <- akoats %>% 
   filter(Sample_interval == "continuous")
 
+akoats %>% 
+  filter(Sample_interval == "continuous", Waterbody_type == "S")
+
+akoats %>% distinct(SourceName)
+akoats %>% 
+  filter(Sample_interval == "continuous", Waterbody_type == "S",
+         grepl("nps|usfs|blm|usgs|DFG|fws|AEA|DNR", SourceName))
+
 cik.data %>%
   distinct(SiteID) %>% 
   left_join(akoats %>% select(Agency_ID, Waterbody_name), by = c("SiteID" = "Agency_ID")) 
