@@ -274,7 +274,6 @@ in the <QuartzCreek_Surf_2019-11-13> Dataset. Unsure if the two datasets are fro
 fschdat <- tibble()
 
 # Drop sites based on email conversations and notes in site info workbooks
-# Rude, Pigot, and Sheep dropped due to tidal influence
 fschdat <- fsdat %>% 
   mutate(useSite = case_when(
     Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek",
@@ -362,6 +361,7 @@ usfsChug.data <- saveRDS(fschdat_nodups, "formatted_data/usfsChug.data.rds")
 Save a copy of the the metadata locally and upload to google drive
 
 ```{r Save USFS Metadata}
+
 # Knittr setup command not working so must reset and run as chunk here
 setwd(paste0(rprojroot::find_rstudio_root_file()))
 getwd()
@@ -370,12 +370,23 @@ getwd()
 usfs_md_udpate <- usfs_md %>% 
   mutate( SiteID = paste0("USFS_",Agency_ID),
     Contact_person = case_when (is.na(Contact_person) ~ "Luca Adelfio",
-          TRUE ~ Contact_person))
+          TRUE ~ Contact_person),
+    # Calculate use site 
+    useSite = case_when(
+    Agency_ID %in% c("Clear Creek", "Hatchery Creek", "Ibeck Creek",
+                     "Jack Bay River", "McKinley Lake", "NF Williwaw Creek",
+                     "SF Williwaw Creek", "Solf Lake Inlet",
+                     "Steller Jay Creek") ~ 0, TRUE ~ 1))
+
+usfs_md_udpate
 
 # Save metadata 
 # Must use absolute path?? save stopped working with relative
 usfsChugmd.data <- saveRDS(usfs_md_udpate, "C://Users//dwmerrigan//Documents//GitHub//AKSSF//data_preparation//formatted_data//usfsChugmd.data.rds")
 
-save_metadata_files(usfs_md_update, "usfsChug")
+# Filter out sites that have not been qa'd for AKSSF
+usfs_md_udpate %>% 
+  filter(useSite == 1) %>% 
+  save_metadata_files("usfsChug")
 
-1```
+```
