@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath(".."))
 source('W:/Github/AKSSF/helper_functions.R')
 
+library(googledrive)
 library(readxl)
 library(lubridate)
 library(tidyverse)
@@ -95,7 +96,9 @@ deshka_md <- deshka_daily %>%
                                     grepl("Kroto", SiteID) & grepl("Upstream", SiteID) ~ "Kroto",
                                     grepl("Deshka", SiteID) & grepl("Downstream", SiteID) ~ "Deshka",
                                     grepl("Deshka", SiteID) & grepl("Upstream", SiteID) ~ "Deshka",
-                                    TRUE ~ NA_character_))
+                                    TRUE ~ NA_character_)) %>% 
+  rename(Latitude = latitude,
+         Longitude = longitude)
 
 deshka_md %>% select(SiteID, Waterbody_name)
 ```
@@ -173,7 +176,9 @@ anchor_md <- anchor_daily %>%
          Sensor_accuracy = "level 1  ( +/- 0.2 deg C)",
          Sensor_QAQC = 4,
          Waterbody_type = "S",
-         Waterbody_name = NA)
+         Waterbody_name = NA) %>% 
+  rename(Latitude = latitude,
+         Longitude = longitude)
 
 ```
 
@@ -196,9 +201,9 @@ Remove CIK14, which is the same as CIK_14 and we have in Sue's other dataset.
 ```{r anchor save }
 save_metadata_files(anchor_md %>% filter(!SiteID == "CIK14"), "anchor")
 
-save_aktemp_files(deshka_temp, "anchor")
+save_aktemp_files(anchor_temp, "anchor")
 
-save_daily_files(deshka_daily, "anchor")
+save_daily_files(anchor_daily, "anchor")
 ```
 
 
@@ -236,36 +241,24 @@ kenai_daily %>%
 akoats <- read_excel("S:/EPA AKTEMP/AKOATS_DATA_2020_working.xlsx", sheet = "AKOATS_COMPLETE") 
 site_loc <- read_csv("W:/Github/Kenai_temperature/data/Kenai/Kenai_site_locations.csv")
 
-site_loc %>% select(Description, siteID) %>% 
-  left_join(akoats, by = c("Description" = "Agency_ID"))
-
-
-benM <- akoats %>% filter(Contact_person == "Benjamin Meyer") %>% 
-  select(Agency_ID, SourceName, Contact_person, Contact_email, Contact_telephone, Sensor_Placement)
+#get akoats ids for Ben's sites.
+benM <- site_loc %>% select(Description, siteID) %>% 
+  left_join(akoats %>% filter(Contact_person == "Benjamin Meyer"), by = c("Description" = "Agency_ID")) %>% 
+  rename(SiteID = siteID)
 
 kenai_md <- kenai_daily %>% 
   distinct(SiteID) %>% 
-  left_join(kenai_sites) %>% 
-  mutate(seq_id = NA,
-         SourceName = case_when(grepl("KWF1|KWF2|KWF3", SiteID) ~ "KWF",
+  left_join(kenai_sites) 
+
+kenai_md <- kenai_md %>% 
+  left_join(benM %>% select(SiteID, seq_id, Description)) %>% 
+  rename(Agency_ID = Description,
+         Latitude = latitude,
+         Longitude = longitude) %>% 
+  mutate(SourceName = case_when(grepl("KWF1|KWF2|KWF3", SiteID) ~ "KWF",
                                 TRUE ~ "UAF"),
          Contact_person = case_when(SourceName == "KWF" ~ "Brandon Borneman",
-                                    TRUE ~ "Ben Meyer"),
-         Contact_email = case_when(SourceName == "CIK" ~ "sue@inletkeeper.org",
-                                    TRUE ~ "daniel_rinella@fws.gov"),
-         Contact_telephone = case_when(SourceName == "CIK" ~ "907-235-4068",
-                                    TRUE ~ "970-891-3783"),
-         Sensor_Placement = "Main channel",
-         Sensor_accuracy = "level 1  ( +/- 0.2 deg C)",
-         Sensor_QAQC = 4,
-         Waterbody_type = "S",
-         Waterbody_name = case_when(grepl("Moose", SiteID) & grepl("Downstream", SiteID) ~ "Moose",
-                                    grepl("Moose", SiteID) & grepl("Upstream", SiteID) ~ "Moose",
-                                    grepl("Kroto", SiteID) & grepl("Downstream", SiteID) ~ "Kroto",
-                                    grepl("Kroto", SiteID) & grepl("Upstream", SiteID) ~ "Kroto",
-                                    grepl("Deshka", SiteID) & grepl("Downstream", SiteID) ~ "Deshka",
-                                    grepl("Deshka", SiteID) & grepl("Upstream", SiteID) ~ "Deshka",
-                                    TRUE ~ NA_character_))
+                                    TRUE ~ "Ben Meyer"))
 ```
 
 NOT using climate data.
@@ -297,6 +290,18 @@ kenai_daily %>%
 
 ```
 
+
+Save final files.
+
+```{r anchor save }
+save_metadata_files(kenai_md, "kenai")
+
+save_aktemp_files(kenai_temp, "kenai")
+
+save_daily_files(kenai_daily, "kenai")
+
+kenai_daily %>% distinct(SiteID)
+```
 
 ## Combine
 

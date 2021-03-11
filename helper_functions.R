@@ -81,7 +81,7 @@ numberOfDays <- function(date) {
 # Save csv locally and google drive copy of Metadata
 save_metadata_files <- function(data.in, acronym) {
   # Date of file creation
-  date.now <- as.Date(Sys.time())
+  date.now <- Sys.Date()
   # Address to folder on google drive
   drive_path <- drive_get("https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
   # Use same name for csv and googlesheet copy
@@ -107,7 +107,7 @@ save_metadata_files <- function(data.in, acronym) {
 # Save csv locally and google drive copy of Daily Summaries
 save_daily_files <- function(data.in, acronym) {
   # Date of file creation
-  date.now <- as.Date(Sys.time())
+  date.now <- Sys.Date()
   # Address to folder on google drive
   drive_path <- drive_get("https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
   # Use same name for csv and googlesheet copy
@@ -132,7 +132,7 @@ save_daily_files <- function(data.in, acronym) {
 # Save copy for AKTEMP
 save_aktemp_files <- function(data.in, acronym) {
   # Date of file creation
-  date.now <- as.Date(Sys.time())
+  date.now <- Sys.Date()
   # Address to folder on google drive
   drive_path <- drive_get("https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
   # Use same name for csv and googlesheet copy
