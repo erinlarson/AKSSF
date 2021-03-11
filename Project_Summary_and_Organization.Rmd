@@ -62,7 +62,6 @@ Bristol Bay:
 All Bristol Bay data are being cleaned in a separate [github repo](https://github.com/rsshaftel/SWSHP-Bristol-Bay-Thermal-Diversity).
 (Note that the only data we are missing in Bristol Bay are Dan Young's sites, otherwise everything should be good. Also need to QA UW data - talk to Dan and Jackie.)
 
-
 2. Data cleaning
 
 All data need to be formatted consistently so that we can combine them for the data analysis step. All datasets should be saved as separate data files and sites files for import to AKTEMP later. 
@@ -99,7 +98,6 @@ Daily Data file - see helper functions for creating this from AKTEMP data file
 * maxDT, numeric
 * minDT, numeric
 
-
 Sites file. This is a longer list of names from akoats that we should probably keep. We may not know all if sites were not previously submitted to akoats. Not a big deal, just capture what we can for each data provider for now. Could email them later when actually submitting data to AKTEMP.
 
 * Agency_ID, ID as provided from the data provider
@@ -115,8 +113,6 @@ Sites file. This is a longer list of names from akoats that we should probably k
 * Sensor_Placement
 * Sensor_accuracy
 * Sensor_QAQC
-
-
 
 3. Air temperature extraction
 

@@ -286,7 +286,7 @@ Double Check:
 
 #Change to bb.data.qc to examine qc'd data
 p <- usfsChug.data.qc %>% 
-  filter(SiteID == "USFS_Pigot Bay Spawn Channel")
+  filter(SiteID == "USFS_Eyak Lake Tributary")
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")

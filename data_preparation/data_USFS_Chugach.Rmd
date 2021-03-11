@@ -4,6 +4,7 @@ output: html_document
 ---
 
 The <knitr::opts_knit$set(root.dir = normalizePath(".."))> only works when run as a chunk and resets to the data prep folder for all following chunks?  Not sure why this is happening.
+1
 
 ```{r setup, include=FALSE}
 knitr::opts_knit$set(root.dir = setwd(normalizePath("..")))
@@ -16,7 +17,7 @@ library(lubridate)
 library(googlesheets4)
 library(rnoaa)
 library(hms)
-library(googledrive) #Only need if accessing file stored in drive to download
+library(googledrive) 
 source("helper_functions.R")
 
 ```
@@ -109,7 +110,7 @@ Extract file name of data set and in new column
 ```{r Collect temperature data files}
 
 # Folder containing source datasets
-source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source"
+source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\06_USFS_Chugach"
 
 files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
 
@@ -168,10 +169,9 @@ for ( i in fs_files){
     }
    
     # Excel Data  
-  }else if( endsWith (i,".xlsx")){
-    dat <- read_excel(path = i,col_types = )
-    name = str_sub(basename(i), end = -6)
-    
+  }else if( endsWith ( i,".xlsx")){
+    dat <- read_excel( path = i)
+    name = str_sub( basename( i), end = -6)
     if(grepl("-", dat[,2]) == TRUE) {
       dat <- dat[1:3]
       colnames(dat) <- c("sampleDate", "sampleTime", "Temperature")
@@ -364,10 +364,18 @@ Save a copy of the the metadata locally and upload to google drive
 ```{r Save USFS Metadata}
 # Knittr setup command not working so must reset and run as chunk here
 setwd(paste0(rprojroot::find_rstudio_root_file()))
+getwd()
+
+# Resolve NA values for sites not in AKOATS
+usfs_md_udpate <- usfs_md %>% 
+  mutate( SiteID = paste0("USFS_",Agency_ID),
+    Contact_person = case_when (is.na(Contact_person) ~ "Luca Adelfio",
+          TRUE ~ Contact_person))
+
 # Save metadata 
+# Must use absolute path?? save stopped working with relative
+usfsChugmd.data <- saveRDS(usfs_md_udpate, "C://Users//dwmerrigan//Documents//GitHub//AKSSF//data_preparation//formatted_data//usfsChugmd.data.rds")
 
-usfsChugmd.data <- saveRDS(usfs_md, "data_preparation/formatted_data/usfsChugmd.data.rds")
+save_metadata_files(usfs_md_update, "usfsChug")
 
-save_metadata_files(usfs_md, "usfsChug")
-
-```
+1```
