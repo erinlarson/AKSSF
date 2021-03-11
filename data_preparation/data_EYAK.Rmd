@@ -1,0 +1,148 @@
+---
+title: "data_TEMPLATE"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(xlsx)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+library(googledrive) 
+```
+
+
+```{r Functions}
+
+# Source functions in helper function script to ensure proper format of saved data
+source("helper_functions.R")
+
+acronym = "nv_Eyak_"
+#Check marcus's name
+
+```
+
+# Read in data and format
+Two files from Native Village of Eyak
+
+```{r Get temp data}
+# Folder containing source datasets
+source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\13_Native_Village_Eyak\\source"
+
+files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
+
+basename(files)
+eyakmd <- tibble()
+eyak.data <- tibble()
+
+for ( i in files){
+  filename <-  as.character(basename(i))
+  print (filename)
+  if (grepl("Hartney", filename)){
+    harmddat <- read_excel(path = i, range = "A2:B12", col_names = FALSE) %>% 
+      pivot_wider(names_from = "...1", values_from = "...2") %>% 
+      mutate(data_filename = filename)
+    hartdat <- read_excel( path = i, skip = 19 ) %>% 
+      select(-"...2",- "...3") %>% 
+      na.omit() %>% 
+      set_names(c("dt","Temperature")) %>% 
+      mutate(data_filename = as.character(filename))
+  }else if(grepl( "heney", filename)){
+    henmddat <- read_excel(path = i, range = "A1:B11", col_names = FALSE) %>%
+      pivot_wider(names_from = "...1", values_from = "...2") %>%
+      mutate(data_filename = filename)
+    hentdat <- read_excel(path = i, skip = 14) %>%
+      select(-"...2",- "...3") %>% 
+      set_names("dt","Temperature") %>%
+      mutate(data_filename = as.character(filename))
+  }
+}
+
+eyakmd <- bind_rows(harmddat, henmddat) %>% 
+  mutate( SiteID = paste0(acronym, Site),
+          seq_id = NA,
+          SourceName = acronym,
+          Agency_ID = Site,
+          SourceName = "nvEyak",
+          Contact_person = "James Paley",
+          Contact_telephone = NA,
+          Contact_email = "james.paley@eyak-nsn.gov",
+          Sensor_Placement = NA,
+          Waterbody_name = Site,
+          Waterbody_type = "S",
+          Sensor_accuracy = NA,
+          Sensor_QAQC = NA)
+
+eyak.data <- bind_rows(hartdat, hentdat) %>% 
+  mutate( sampleDate = as_date(dt),
+          sampleTime = as_hms(dt),
+          year = year(dt),
+          UseData = 1,
+          UseSite = 1) %>% 
+  left_join(eyakmd, by = "data_filename") %>% 
+  select(SiteID, sampleDate, sampleTime, dt, year, Temperature, UseData, UseSite) %>% 
+  distinct()
+
+summary(eyak.data)
+  
+
+```
+
+## Create Metadata
+Sites not in AKOATS so Metadata will be limited to what is available from provider
+
+```{r Save Metadata}
+
+akoats_fields <- c ("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
+                     "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
+                     "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
+                     "Sensor_QAQC")
+eyakmd <- eyakmd %>% 
+  select(all_of(akoats_fields))
+
+eyakmd
+
+# Save Metadata
+save_metadata_files(eyakmd, acronym)
+
+```
+
+```{r plot of raw data by site-year}
+getwd()
+
+eyak.data.qc <- eyak.data %>% 
+  filter( month(sampleDate) %in% 6:9)
+
+saveRDS(eyak.data.qc, "formatted_data/eyak.data.rds")
+
+eyak_sites <- eyak.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
+
+pdf("nv_Eyak Raw Data by Site and Year.pdf", width = 11, height = 8.5)
+# Get limits of temp data 
+for(i in 1:nrow(eyak_sites)) {
+  dat <- left_join(eyak_sites %>% slice(i), eyak.data.qc)
+  subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
+  xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M")
+  xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M")
+  p1 <- dat %>% 
+    ggplot(aes(x = dt, y = Temperature)) +
+    geom_line() +
+    scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+    scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
+    labs(title = eyak_sites %>% slice(i) %>% unite(site_year) %>%
+           pull(site_year),
+         subtitle = paste0("Use Site: ", subtitle)) +
+    theme(legend.position = "bottom")
+  print(p1)
+}
+
+dev.off()
+
+```
