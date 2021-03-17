@@ -107,25 +107,25 @@ Sites:
 
 #Change to bb.data.qc to examine qc'd data
 p <- npsTreyS.data.qc %>% 
-  filter(SiteID == "Crystal Creek", UseData == 1)
+  filter( SiteID == "Crystal Creek", UseData == 1)
 
-xmin <- as.POSIXct(min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
-xmax <- as.POSIXct(max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmin <- as.POSIXct( min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct( max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
 
 p <- p %>% 
   ggplot() +
   geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
   geom_line( data = nps.climDat,aes(x = DT, y = tmax, color = "Air max")) +
-  geom_line(aes(x = DT, y = Temperature)) +
-  scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
-  coord_cartesian(ylim = c(-5, 30)) + 
-  facet_wrap(~SiteID) +
-  theme(legend.title = element_blank()) +
-  labs(title = "Temperature by Site",
+  geom_line( aes(x = DT, y = Temperature)) +
+  scale_x_datetime( limits = c(xmin, xmax), labels = waiver()) +
+  coord_cartesian( ylim = c(-5, 30)) + 
+  facet_wrap( ~SiteID) +
+  theme( legend.title = element_blank()) +
+  labs( title = "Temperature by Site",
        y = "Temperature degrees C",
        x = "Time of Measurement")
 
-ggplotly(p)
+ggplotly( p)
 
 ```
 
