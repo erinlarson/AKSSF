@@ -55,11 +55,12 @@ Olga Creek:
 The location where the temperature logger is located is tidally influenced.
 
 ```{r Get temp data}
+getwd()
 # Folder containing source datasets
-source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\14_ADFG_Heather_Finkle\\source"
+source_fol <- ".\\data_preparation\\source\\14_ADFG_Heather_Finkle\\source"
 
 files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
-
+basename(files)
 # Remove metadata sheets
 patterns <- c("AKOATS")
 
@@ -167,9 +168,7 @@ summary(adfgKod.data)
 
 # Rolling pdf of sites by year
 ```{r plot of raw data by site-year}
-getwd()
-
-
+# Filter on period of interest
 adfgKod.data.qc <- adfgKod.data %>% 
   filter( month(sampleDate) %in% 6:9)
 
@@ -177,8 +176,7 @@ saveRDS(adfgKod.data.qc, "data_preparation/formatted_data/adfgKod.data.rds")
 
 adfgKod_sites <- adfgKod.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
-setwd("data_preparation/")
-pdf("adfg Kodiak Raw Data by Site and Year.pdf", width = 11, height = 8.5)
+pdf("data_preparation/adfg Kodiak Raw Data by Site and Year.pdf", width = 11, height = 8.5)
 # Get limits of temp data 
 for(i in 1:nrow(adfgKod_sites)) {
   dat <- left_join(adfgKod_sites %>% slice(i), adfgKod.data.qc)
@@ -202,7 +200,7 @@ dev.off()
 ```
 # Save metadata
 ## Create Metadata
-Sites not in AKOATS so Metadata will be limited to what is available from provider
+One site not in AKOATS but data provider has included AKOATS md
 
 ```{r Save Metadata}
 
