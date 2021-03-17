@@ -29,8 +29,9 @@ source("helper_functions.R")
 DM - I updated the depracated metadata sheet to correct a few sites that were in AKOATS and add new sites from Luca that were not in AKOATS. 
 
 ```{r Metadata not in AKOATS}
+getwd()
 # Created a spreadsheet to link AKOATS IDs and Site names/Coords using data filename----
-depracated_metadata <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\formatted_data\\USFS_Chugach_Working_deprecated_md.xlsx"
+depracated_metadata <- ".\\formatted_data\\USFS_Chugach_Working_deprecated_md.xlsx"
 
 usfs_dpmd <- read_excel(depracated_metadata, sheet = "deprecated_metadata",
                     col_names = TRUE) %>% 
@@ -110,7 +111,7 @@ Extract file name of data set and in new column
 ```{r Collect temperature data files}
 
 # Folder containing source datasets
-source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\06_USFS_Chugach"
+source_fol <- ".\\source\\06_USFS_Chugach"
 
 files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
 
@@ -382,7 +383,7 @@ usfs_md_udpate
 
 # Save metadata 
 # Must use absolute path?? save stopped working with relative
-usfsChugmd.data <- saveRDS(usfs_md_udpate, "C://Users//dwmerrigan//Documents//GitHub//AKSSF//data_preparation//formatted_data//usfsChugmd.data.rds")
+usfsChugmd.data <- saveRDS(usfs_md_udpate, ".//formatted_data//usfsChugmd.data.rds")
 
 # Filter out sites that have not been qa'd for AKSSF
 usfs_md_udpate %>% 
