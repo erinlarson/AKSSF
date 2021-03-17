@@ -33,12 +33,13 @@ acronym = "nv_Eyak_"
 Two files from Native Village of Eyak
 
 ```{r Get temp data}
+getwd()
 # Folder containing source datasets
-source_fol <- "C:\\Users\\dwmerrigan\\Documents\\GitHub\\AKSSF\\data_preparation\\source\\13_Native_Village_Eyak\\source"
+source_fol <- ".\\source\\13_Native_Village_Eyak\\source"
 
 files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
-
 basename(files)
+
 eyakmd <- tibble()
 eyak.data <- tibble()
 
