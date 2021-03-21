@@ -1,0 +1,243 @@
+---
+title: "data_kod_Tribes"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(xlsx)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+library(googledrive) 
+```
+
+
+```{r Functions}
+
+# Source functions in helper function script to ensure proper format of saved data
+source("helper_functions.R")
+
+acronym = "kod_Tribes_"
+
+```
+# AKOATS
+DM Notes: Use GOOGLE SHEET Copy for consistency
+
+```{r AKOATS MD}
+
+akoats_2020wk <- "https://docs.google.com/spreadsheets/d/1SPZXNGm_Tc39-GuJXY8j7Eb1lX6DwXTQ1en2_LvCI1I/edit#gid=1281874712"
+
+akoats_kod_Tribes <- read_sheet(akoats_2020wk, sheet = "AKOATS_COMPLETE",
+                    col_names = TRUE,
+                    col_types = "c") %>% 
+  # select(seq_id,Agency_ID,Contact_person,SourceName,Contact_email,
+  #        Contact_telephone,Latitude,Longitude,Sensor_accuracy) %>%
+  rename(AKOATS_ID = seq_id) %>% 
+         #SiteID = Agency_ID) %>% 
+  mutate(AKOATS_ID = as.numeric(AKOATS_ID),
+         Latitude = as.numeric(Latitude),
+         Longitude = as.numeric(Longitude))
+
+akoats_kod_Tribes <- akoats_kod_Tribes %>% 
+  filter(SourceName == "TribAlutiiqOldHarbor"|SourceName == "TribLarsenBay")
+akoats_kod_Tribes
+
+
+```
+
+# Read in data and format
+Two files from Native Village of kod_Tribes
+
+```{r Get temp data}
+getwd()
+# Folder containing source datasets
+source_fol <- ".\\data_preparation\\source\\16_Kodiak_Tribes\\source"
+
+files <- list.files(source_fol, full.names = T, recursive = T, pattern = ".*.csv|.*.xlsx")
+
+# pattern used to name air temp files
+pattern <- "_at_"
+
+# Remove airtemp files
+files <- files[!grepl(pattern, files)]
+print(basename(files))
+
+#tibble for all data
+kod_Tribes.data <- tibble()
+
+#dt temp tibble
+kod_Tribes.data.a <- tibble()
+
+#date time temp tibble
+kod_Tribes.data.b <- tibble()
+
+for ( i in files){
+  filename <-  as.character( basename( i))
+  print( filename)
+  dat <- read_excel( path = i, col_names = FALSE, skip = 10)
+  # print( paste0( sapply( dat, class)))
+  
+  # Format for Datetime and Temp
+  if ( class( dat$"...1") == "POSIXct" && class(dat$...2) == "numeric"){
+    print( "Column 1 = dt|Column 2 = Temp")
+    dat <- dat[1:2]
+    colnames(dat) <- c("dt", "Temperature")
+    dat <- dat %>% 
+      mutate( data_filename = filename,
+              sampleDate = as_date(dt),
+              sampleTime = as_hms(dt),
+              year = year(dt),
+              UseData = 1,
+              UseSite = 1)
+    kod_Tribes.data.a <- bind_rows(kod_Tribes.data.a, dat[!is.na(dat$Temperature),])
+    
+    # Format for Date, Time and Temp  
+  }else if (class(dat$"...1") == "POSIXct" && class(dat$"...2") == "POSIXct"){
+    print( "Column 1 = Date | Column 2 = Time | Column 3  = Temp")
+    dat <- dat[1:3]
+    colnames(dat) <- c("sampleDate", "sampleTime", "Temperature")
+    dat <- dat %>% 
+    mutate( data_filename = filename,
+            sampleTime = as_hms(sampleTime),
+            sampleDate = as_date(sampleDate),
+            dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "),
+                    format = "%Y-%m-%d %H:%M", tz = "GMT"),
+            year = year(dt),
+            UseData = 1,
+            UseSite = 1)
+    
+    kod_Tribes.data.b <- bind_rows(kod_Tribes.data.b, dat[!is.na(dat$Temperature),])
+    
+    # Format for Plot Number, DateTime and Temp    
+  }else if (class(dat$"...2") == "POSIXct" && class(dat$"...3") == "numeric"){
+    print( "Column 1 = Meas# | Column 2 = DateTime | Column 3 = Temp")
+    dat <- dat[2:3]
+    colnames(dat) <- c("dt", "Temperature")
+    dat <- dat %>% 
+      mutate( data_filename = filename,
+              sampleDate = as_date(dt),
+              sampleTime = as_hms(dt),
+              year = year(dt),
+              UseData = 1,
+              UseSite = 1)
+    
+    kod_Tribes.data.a <- bind_rows(kod_Tribes.data.a, dat[!is.na(dat$Temperature),])
+    
+    # Format for Plot Number, Date, Time and Temp    
+  }else if (class(dat$"...2") == "POSIXct" && class(dat$"...3") == "POSIXct"){
+    print( "Column 1 = Meas# | Column 2 = Date | Column 3 = Time | Column 4 = Temp" )
+    dat <- dat[2:4]
+    colnames(dat) <- c("sampleDate", "sampleTime", "Temperature")
+    dat <- dat %>% 
+    mutate( data_filename = filename,
+            sampleTime = as_hms(sampleTime),
+            sampleDate = as_date(sampleDate),
+            dt = as.POSIXct(paste(sampleDate, sampleTime, sep = " "),
+                    format = "%Y-%m-%d %H:%M", tz = "GMT"),
+            year = year(dt),
+            UseData = 1,
+            UseSite = 1)
+    
+    kod_Tribes.data.b <- bind_rows(kod_Tribes.data.b, dat[!is.na(dat$Temperature),])
+    
+  }else{
+    print( paste0( "Format not recognized for file ", filename))
+  }
+  
+}
+
+kod_Tribes.data <- bind_rows(kod_Tribes.data.a, kod_Tribes.data.b)
+
+dput(unique(kod_Tribes.data$data_filename))
+
+#Create Temporary Site IDs for comparison
+siteid <- tibble( 
+  data_filename = c("kdk_bigcr01_10709379_20161104qc.xlsx",
+                    "kdk_bigcr01a_20151019qc.csv.xlsx", "kdk_bigcr01a_20161104qc.xlsx",
+                    "kdk_bigcr01a_20180801qc.xlsx", "kdk_bigcr01a_20181024qc.xlsx",
+                    "kdk_bigcr01b_20151019qc.csv.xlsx", "kdk_bigcr01b_20161104qc.xlsx",
+                    "kdk_karrv_02a_20151030qc.xlsx", "kdk_karrv_02a_20170712qc.xlsx",
+                    "kdk_karrv_02a_20180714qc.xlsx", "kdk_karrv_02a_20181108qc.xlsx",
+                    "kdk_karrv_02b_20151030qc.xlsx", "kdk_karrv_02b_20170712qc.xlsx",
+                    "kdk_karrv_02b_20180714qc.xlsx", "kdk_karrv_02c_20180714qc.xlsx",
+                    "kdk_karrv_02c_20181108qc.xlsx", "kdk_bigcr01a_20160405qc.xlsx",
+                    "kdk_bigcr01b_20160629qc.xlsx", "kdk_karrv_02a_20160903qc.xlsx",
+                    "kdk_karrv_02a_20171020qc.xlsx", "kdk_karrv_02b_20160903qc.xlsx",
+                    "kdk_karrv_02b_20171020qc.xlsx", "kdk_karrv_02c_20171020qc.xlsx"),
+  SiteID_temp = c("big creek",
+                  "big creeka", "big creeka",
+                  "big creeka", "big creeka",
+                  "big creekb", "big creekb",
+                  "karluka", "karluka",
+                  "karluka", "karluka",
+                  "karlukb", "karlukb",
+                  "karlukb", "karlukc",
+                  "karlukc", "big creeka",
+                  "big creekb", "karluka",
+                  "karluka", "karlukb",
+                  "karlukb", "karlukc"))
+
+kod_Tribes.data <- kod_Tribes.data %>% 
+  left_join(siteid)
+
+```
+
+## Create Metadata
+Pull Site info from AKOATS
+Seems to be duplicate loggers at each site (a,b,c suffixes) - plot by dataset first and compare
+
+```{r Save Metadata}
+
+# akoats_fields <- c ("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
+#                      "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
+#                      "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
+#                      "Sensor_QAQC")
+# kod_Tribesmd <- kod_Tribesmd %>% 
+#   select(all_of(akoats_fields))
+# 
+# kod_Tribesmd
+# 
+# # Save Metadata
+# save_metadata_files(kod_Tribesmd, acronym)
+
+```
+
+```{r plot of raw data by site-year}
+getwd()
+
+kod_Tribes.data.qc <- kod_Tribes.data %>%
+  filter( month(sampleDate) %in% 6:9)
+
+#saveRDS(kod_Tribes.data.qc, "./data_preparation/formatted_data/kod_Tribes.data.rds")
+
+kod_Tribes_sites <- kod_Tribes.data.qc %>% distinct(SiteID_temp, year) %>% arrange(SiteID_temp, year)
+
+pdf("./data_preparation/kod_Tribes Raw Data by Site and Year.pdf", width = 11, height = 8.5)
+# Get limits of temp data
+for(i in 1:nrow(kod_Tribes_sites)) {
+  dat <- left_join(kod_Tribes_sites %>% slice(i), kod_Tribes.data.qc)
+  subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
+  xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M")
+  xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M")
+  p1 <- dat %>%
+    ggplot(aes(x = dt, y = Temperature)) +
+    geom_line() +
+    scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+    scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
+    labs(title = kod_Tribes_sites %>% slice(i) %>% unite(site_year) %>%
+           pull(site_year),
+         subtitle = paste0("Use Site: ", subtitle)) +
+    theme(legend.position = "bottom")
+  print(p1)
+}
+
+dev.off()
+
+```
