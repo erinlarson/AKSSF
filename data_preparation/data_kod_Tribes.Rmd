@@ -53,7 +53,7 @@ akoats_kod_Tribes
 ```
 
 # Read in data and format
-Two files from Native Village of kod_Tribes
+Two files from Kodiak Tribes
 
 ```{r Get temp data}
 getwd()
@@ -157,7 +157,7 @@ kod_Tribes.data <- bind_rows(kod_Tribes.data.a, kod_Tribes.data.b)
 
 dput(unique(kod_Tribes.data$data_filename))
 
-#Create Temporary Site IDs for comparison
+# Create Temporary Site IDs for comparison and add Agency_ID from AKOATS
 siteid <- tibble( 
   data_filename = c("kdk_bigcr01_10709379_20161104qc.xlsx",
                     "kdk_bigcr01a_20151019qc.csv.xlsx", "kdk_bigcr01a_20161104qc.xlsx",
@@ -171,6 +171,7 @@ siteid <- tibble(
                     "kdk_bigcr01b_20160629qc.xlsx", "kdk_karrv_02a_20160903qc.xlsx",
                     "kdk_karrv_02a_20171020qc.xlsx", "kdk_karrv_02b_20160903qc.xlsx",
                     "kdk_karrv_02b_20171020qc.xlsx", "kdk_karrv_02c_20171020qc.xlsx"),
+  
   SiteID_temp = c("big creek",
                   "big creeka", "big creeka",
                   "big creeka", "big creeka",
@@ -182,10 +183,27 @@ siteid <- tibble(
                   "karlukc", "big creeka",
                   "big creekb", "karluka",
                   "karluka", "karlukb",
-                  "karlukb", "karlukc"))
+                  "karlukb", "karlukc"),
+  
+  Agency_ID = c("kdk_bigcr01",
+                  "kdk_bigcr01", "kdk_bigcr01",
+                  "kdk_bigcr01", "kdk_bigcr01",
+                  "kdk_bigcr01", "kdk_bigcr01",
+                  "kdk_karrv02", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_bigcr01",
+                  "kdk_bigcr01", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_karrv02",
+                  "kdk_karrv02", "kdk_karrv02"))
 
 kod_Tribes.data <- kod_Tribes.data %>% 
   left_join(siteid)
+
+kod_Tribes.data %>% 
+ count(SiteID_temp, year)
+  
 
 ```
 
@@ -208,22 +226,117 @@ Seems to be duplicate loggers at each site (a,b,c suffixes) - plot by dataset fi
 # save_metadata_files(kod_Tribesmd, acronym)
 
 ```
+## Rolling pdf by site and year
+Split by waterbody because there are multiple loggers/site
+No data for big creek during summertime in 2017
 
 ```{r plot of raw data by site-year}
 getwd()
 
-kod_Tribes.data.qc <- kod_Tribes.data %>%
+kod_Tribes.data.qc <- kod_Tribes.data %>% 
   filter( month(sampleDate) %in% 6:9)
 
-#saveRDS(kod_Tribes.data.qc, "./data_preparation/formatted_data/kod_Tribes.data.rds")
-
-kod_Tribes_sites <- kod_Tribes.data.qc %>% distinct(SiteID_temp, year) %>% arrange(SiteID_temp, year)
+kod_Tribes_sites <- kod_Tribes.data.qc %>% distinct(Agency_ID, year) %>% arrange(Agency_ID, year)
 
 pdf("./data_preparation/kod_Tribes Raw Data by Site and Year.pdf", width = 11, height = 8.5)
 # Get limits of temp data
 for(i in 1:nrow(kod_Tribes_sites)) {
   dat <- left_join(kod_Tribes_sites %>% slice(i), kod_Tribes.data.qc)
-  subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
+  subtitle <- dat %>% distinct(Agency_ID) %>% pull(Agency_ID)
+  xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M")
+  xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M")
+  p1 <- dat %>%
+    ggplot(aes(x = dt, y = Temperature)) +
+    geom_line(aes(color = SiteID_temp, linetype = SiteID_temp)) +
+    scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+    scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
+    labs(title = kod_Tribes_sites %>% slice(i) %>% unite(agencyid_year) %>%
+           pull(agencyid_year),
+         subtitle = paste0("Agency_ID: ", subtitle)) +
+    theme(legend.position = "bottom")
+  print(p1)
+}
+
+dev.off()
+
+```
+# Interactive Plot
+Examine data to identify loggers with most complete coverage  for time period of interest and remove obvious errors
+
+```{r Interactive Plot With Air Temp and Tide}
+
+# Filter by site: kdk_bigcr01 & kdk_karrv02
+p <- kod_Tribes.data.qc %>% 
+  filter(Agency_ID == "kdk_karrv02")
+
+xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+
+p <- p %>% 
+  ggplot() +
+  #geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  #geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  #geom_line( data = cd.tideDat,aes(x = dt, y = verified_meters, color = "Tide (m)")) +
+  geom_line(aes(x = dt, y = Temperature, color = SiteID_temp, linetype = SiteID_temp)) +
+  scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+  coord_cartesian(ylim = c(-5, 30)) + 
+  facet_wrap(~Agency_ID) +
+  theme(legend.title = element_blank()) +
+  labs(title = "Temperature by Site",
+       y = "Temperature degrees C",
+       x = "Time of Measurement")
+
+ggplotly(p)
+
+```
+
+# Filter out extra logger and average dups
+Both Big Creek and Karluk River have duplicate loggers.  Big Creek should have measurements from Bigcreeka and Bigcreekb averaged and Karluk should have measurements from Karluka and Karlukb averaged.  I only looked at measurements for the time period of interest so these loggers may not provide the most complete series for the entire range but are the best fit for the AKSSF project
+
+```{r Average temp measurements and save}
+
+# Prepare dataset for QC
+kod_Tribes.data.final <- kod_Tribes.data %>% 
+  filter( SiteID_temp %in% c("karluka","karlukb","big creeka", "big creekb"),
+          ( month(sampleDate) %in% 6:9)) %>% 
+  select( Agency_ID, sampleDate, sampleTime, Temperature, UseData, UseSite,
+                        year, dt) %>%
+  group_by(Agency_ID, dt) %>% 
+  mutate( avgTemp = mean(Temperature, na.rm = TRUE)) %>% 
+  ungroup %>% 
+  mutate(Temperature = avgTemp,
+         SiteID = Agency_ID) %>% 
+  select(-avgTemp) %>% 
+  distinct()
+
+#Reorder and save output
+colorder <- c( "SiteID","Agency_ID", "sampleDate", "sampleTime",
+              "Temperature", "dt", "year", "UseSite", "UseData")
+
+kod_Tribes.data.final <- kod_Tribes.data.final[,colorder]
+
+kod_Tribes.data.final %>% 
+  count(Agency_ID, year)
+
+
+# Save copy of the averaged temp data for QC
+
+saveRDS(kod_Tribes.data.final, "./data_preparation/formatted_data/kod_Tribes.data.rds")
+```
+
+# Plot and Rolling PDF of cleaned data
+Plot of cleaned/averaged temp data ready for qc....Data may have already been qd'd by Jeff Davis, awaiting email response
+
+```{r plot of raw data by site-year}
+getwd()
+
+kod_Tribes_sites <- kod_Tribes.data.final %>% distinct(Agency_ID, year) %>% arrange(Agency_ID, year)
+
+pdf("./data_preparation/kod_Tribes Cleaned Data by Site and Year.pdf", width = 11, height = 8.5)
+# Get limits of temp data
+for(i in 1:nrow(kod_Tribes_sites)) {
+  dat <- left_join(kod_Tribes_sites %>% slice(i), kod_Tribes.data.final)
+  subtitle <- dat %>% distinct(Agency_ID) %>% pull(Agency_ID)
   xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M")
   xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M")
   p1 <- dat %>%
@@ -231,9 +344,9 @@ for(i in 1:nrow(kod_Tribes_sites)) {
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
     scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
-    labs(title = kod_Tribes_sites %>% slice(i) %>% unite(site_year) %>%
-           pull(site_year),
-         subtitle = paste0("Use Site: ", subtitle)) +
+    labs(title = kod_Tribes_sites %>% slice(i) %>% unite(agencyid_year) %>%
+           pull(agencyid_year),
+         subtitle = paste0("Agency_ID: ", subtitle)) +
     theme(legend.position = "bottom")
   print(p1)
 }
