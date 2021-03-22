@@ -103,7 +103,7 @@ Sites:
 #dput(unique(NVEyak.data.qc$SiteID))
 #Change to bb.data.qc to examine qc'd data
 p <- NVEyak.data.qc %>% 
-  filter(SiteID == "nv_Eyak_Heney Creek", UseData == 1)
+  filter(SiteID == "nv_Eyak_Hartney Creek", UseData == 1)
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 p <- p %>% 
