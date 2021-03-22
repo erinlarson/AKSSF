@@ -24,6 +24,7 @@ getwd()
 ```
 
 ```{r Functions}
+setwd("..")
 getwd()
 # Source functions in helper function script to ensure proper format of saved data
 source("helper_functions.R")
