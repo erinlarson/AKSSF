@@ -213,17 +213,8 @@ Seems to be duplicate loggers at each site (a,b,c suffixes) - plot by dataset fi
 
 ```{r Save Metadata}
 
-# akoats_fields <- c ("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
-#                      "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
-#                      "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
-#                      "Sensor_QAQC")
-# kod_Tribesmd <- kod_Tribesmd %>% 
-#   select(all_of(akoats_fields))
-# 
-# kod_Tribesmd
-# 
-# # Save Metadata
-# save_metadata_files(kod_Tribesmd, acronym)
+# Save Metadata
+save_metadata_files(akoats_kod_Tribes, acronym)
 
 ```
 ## Rolling pdf by site and year
@@ -352,5 +343,22 @@ for(i in 1:nrow(kod_Tribes_sites)) {
 }
 
 dev.off()
+
+```
+
+# Calculate daily measurements and upload to drive
+
+```{r Save Daily}
+# Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
+AKSSF_Data <- kod_Tribes.data.final %>% 
+  filter(UseData == 1)
+
+daily_data <- temp_msmt_freq(AKSSF_Data) %>% 
+  daily_screen()
+
+daily_data
+
+# Save Daily Summaries
+save_daily_files(daily_data, acronym = acronym )
 
 ```
