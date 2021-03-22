@@ -15,11 +15,19 @@ library(readxl)
 library(stringr)
 library(lubridate)
 library(googlesheets4)
+library(googledrive)
 library(rnoaa)
 library(hms)
 library(tidyverse)
 library(plotly)
 library(DT)
+library(beepr)
+```
+
+```{r Functions}
+#setwd("..")
+getwd()
+source("helper_functions.R")
 
 ```
 
@@ -47,7 +55,6 @@ noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
 
 #Station Codes for area of interest
 nps.climStat <- c("USW00056401","USR0000ACHS")
-
 
 nps.climDat <- tibble( name = c( "GLENNALLEN 64 N, AK US", "CHISTOCHINA ALASKA, AK US"),
                  id = nps.climStat)
@@ -77,10 +84,32 @@ Becky has already formatted these data for qa purposes - Data file = nps.data.rd
 
 ```{r Load Dataset for QA}
 # Choose temperature data ouput formatted for qc from data prep script
-
 filename <- file.choose(new = FALSE)
 npsTreyS.data <- readRDS(filename)
-  
+
+# If needed, add the agency prefix to data in the SiteID column.
+
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Caribou Creek", replacement = "NPS_Caribou Creek")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Long Lake Creek", replacement = "NPS_Long Lake Creek")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Rock Creek WRST", replacement = "NPS_Rock Creek WRST")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Crystal Creek", replacement = "NPS_Crystal Creek")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Lakina River", replacement = "NPS_Lakina River")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Gilahina River", replacement = "NPS_Gilahina River")
+npsTreyS.data <- mutate_if(npsTreyS.data,
+                           is.character,
+                           str_replace_all, pattern = "Rufus Creek", replacement = "NPS_Rufus Creek")
 
 # Copy and format for qc - limit to use site and months of interest
 npsTreyS.data.qc <- npsTreyS.data %>% 
@@ -98,35 +127,32 @@ Review Sites with interactive plot and note Airtemps/Burials etc on data flag wo
 Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter NPS sites and Trey Simmons as contact
 
 Sites:
-"Caribou Creek", "Crystal Creek", "Gilahina River", "Lakina River", 
-"Long Lake Creek", "Rock Creek WRST", "Rufus Creek"
+"NPS_Caribou Creek", "NPS_Crystal Creek", "NPS_Gilahina River", "NPS_Lakina River", 
+"NPS_Long Lake Creek", "NPS_Rock Creek WRST", "NPS_Rufus Creek"
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
 #dput(unique(npsTreyS.data.qc$SiteID))
-
 #Change to bb.data.qc to examine qc'd data
 p <- npsTreyS.data.qc %>% 
-  filter( SiteID == "Crystal Creek", UseData == 1)
+  filter(SiteID == "NPS_Caribou Creek", UseData == 1)
 
-xmin <- as.POSIXct( min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
-xmax <- as.POSIXct( max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmin <- as.POSIXct(min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct(max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
 
 p <- p %>% 
   ggplot() +
-  geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-  geom_line( data = nps.climDat,aes(x = DT, y = tmax, color = "Air max")) +
-  geom_line( aes(x = DT, y = Temperature)) +
-  scale_x_datetime( limits = c(xmin, xmax), labels = waiver()) +
-  coord_cartesian( ylim = c(-5, 30)) + 
-  facet_wrap( ~SiteID) +
-  theme( legend.title = element_blank()) +
-  labs( title = "Temperature by Site",
+  geom_line(data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+  geom_line(data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+  geom_line(aes(x = DT, y = Temperature)) +
+  scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+  #coord_cartesian(ylim = c(-5, 30)) + 
+  facet_wrap(~SiteID) +
+  theme(legend.title = element_blank()) +
+  labs(title = "Temperature by Site",
        y = "Temperature degrees C",
        x = "Time of Measurement")
-
-ggplotly( p)
-
+ggplotly(p)
 ```
 
 # Remove sites
@@ -144,7 +170,7 @@ and stored in [google sheet](https://docs.google.com/spreadsheets/d/1usYGIlMMQzT
 ```{r Pull In Googlesheet Flags, message=FALSE, warning=FALSE}
 #Must activate a token to read in this sheet. This is done by running the chunk and following the prompts that populate in the Console area below. You'll want to enter '1' for Yes to give authorization to read in the sheet. It should then open up a Google page in the web browser and if you follow the prompts, it will provide an authorization code to paste/enter into the Console.
 
-gs4_auth() 
+gs4_auth() #select 1 (yes, to give authorization)
 #gs4_user()
 temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1usYGIlMMQzTqzIqx0r872xo7_aIYth0P_z47YgQoDEc/edit#gid=0"
 
@@ -167,7 +193,7 @@ flagDb <- flagDb %>%
             UseSite = as.numeric(UseSite),
             UseData = as.numeric(UseData),
             Notes = as.character(Notes))
-
+           
 #convert date range to dates 
 flagDb2 <- flagDb %>% 
   mutate(flagDate = map2(FlagStart, FlagEnd, ~seq(from = .x, to = .y,
@@ -208,7 +234,7 @@ Use rolling pdf code to print out pdf of QC'd data by site/year and compare side
 
 #Filters out recalculated UseData from google sheet
 npsTreyS.data.finalqc <- npsTreyS.data.finalqc %>% 
-  filter(UseData = 1)
+  filter(UseData == 1)
 
 nve_sites <- npsTreyS.data.finalqc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
@@ -239,6 +265,25 @@ getwd()
 
 ```
 
+# Check measurement frequency
+
+```{r Temp measuremnt frequency}
+msmt_freq <- temp_msmt_freq(npsTreyS.data.finalqc)
+
+summary(msmt_freq)
+
+# Check mode_diff
+msmt_freq[order(msmt_freq$mode_diff, decreasing = FALSE),]
+```
+
+# Daily screen
+
+```{r Daily Screen}
+daily_screen <- daily_screen(msmt_freq)
+
+summary(daily_screen)
+```
+
 # Save daily data
 
 Save a copy of the daily statistics in the final data folder for the AKSSF analysis. There are two helper functions that add the mode of the time difference for each day and calculate the daily min, mean, and max and removed days with less than 90% of measurements.
@@ -246,4 +291,12 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 * temp_msmt_freq
 * daily_screen
 
+```{r Save Daily}
+# Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
+acronym = "npsTreyS_"
+
+# Save Daily Summaries
+save_daily_files(daily_screen, acronym = acronym)
+getwd()
+```
 
