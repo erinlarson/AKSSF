@@ -78,6 +78,10 @@ cd.climDat
 
 ## Pull in Tide data from NOAA
 
+Find station @ [NOAA Tides and Currents](https://tidesandcurrents.noaa.gov/map/index.shtml?id=9454050)
+for tide and current records
+
+
 ```{r NOAA Tides}
 
 
