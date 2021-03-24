@@ -196,7 +196,7 @@ summary(NVEyak.data.qc)
 # Compare raw data (NVEyak.data.qc) to QC'd data (NVEyak.data.finalqc)
 Use rolling pdf code to print out pdf of QC'd data by site/year and compare side by side with original pdf of these data.  Code starts line 226 pf data_QA_USFS_Chugach.rmd 
 
-```{r plot of raw data by site-year}
+```{r plot of recalculated data by site-year}
 
 #Filters out recalculated UseData from google sheet
 NVEyak.data.finalqc <- NVEyak.data.finalqc %>% 
