@@ -26,10 +26,12 @@ NOTE: need to update temperature model datasets to remove redundant CIK sites.
 * Anchor temperature model output - CIK, APU, and KBRR
 * CIK data for Cook Inlet
 * USFS data from Luca
+* Larsen Bay Tribe, site on Karluk - Data received from and QC'd by Jeff Davis.
+* Alutiiq Tribe, site on Big Creek - Data received from and QC'd by Jeff Davis.
+* ADFG data from Heather. Note that she had also archived ~ 1 year of data on KNB, but sent everything over so no longer using that data. DM will format.
 
 Data need QA after formatting:
 
-* ADFG data from Heather. Note that she had also archived ~ 1 year of data on KNB, but sent everything over so no longer using that data. DM will format.
 * NPS data from Trey. Note that source/data folder is what was on the KNB archive and has been formatted. But need to bring in new data and combine. Becky formatted for QA. nps.data.rds on google drive AKSSF/data/formatted_data.
 * Native Village of Eyak - 2 sites. DM 
 * Prince William Sounds Science Center data from Pete Rand, 4 sites. DM
@@ -42,12 +44,9 @@ Data received, need to read in and format new data and create metadata (some may
 * USGS sites selected in GIS from akoats working. Get data from dataRetrieval library in R
 * ACCS temperature data from Little Susitna watershed - summer 2016 and 2019-2020. Dustin is doing data prep in a separate [Little_Susitna github repo](https://github.com/rsshaftel/Little_Susitna). Grabbed 2016 sites from akoats metadata and combined with 2019 sites from logger database, some might be the same, will need to check in GIS.
 
-
 Outstanding data requests:
 
 * KRAA data for Little Waterfall, Pillar Creeks, and Telrod Creeks - contact is Trenten Dodson, but talked with Nate Weber, he will send over the data, 2015-2019.  
-* Larsen Bay Tribe, site on Karluk - called Alexander Panamaroff, and also talked with Jamie Hubbard. Data will come from Jeff Davis.  
-* Alutiiq Tribe, site on Big Creek - data request to Lepani Nadore, data will come from Jeff Davis and should be ready end February.
 
 Low priority datasets (wait to see if we decide to only look at sensitivity for sites with a minimum number of years of data before we pursue additional datasets):
 
