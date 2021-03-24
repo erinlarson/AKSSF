@@ -24,10 +24,12 @@ getwd()
 ```
 
 ```{r Functions}
-setwd("..")
-getwd()
+
 # Source functions in helper function script to ensure proper format of saved data
+
 source("helper_functions.R")
+
+getwd()
 
 acronym = "PWSCC_"
 
@@ -92,8 +94,8 @@ pwssc_md <- tibble(SiteID = c("PWSCC_Erb", "PWSCC_Gilmour",
                                "PWSCC_Hogan", "PWSCC_Stockdale"),
                    Waterbody_name = c("Erb Creek" ,"Gilmour Creek",
                                       "Hogan Creek", "Stockdale Creek"),
-                   Latitude = c("","","",""),
-                   Longitude = c("","","","")) %>% 
+                   Latitude = c( 60.37702, 60.27138, 60.20842, 60.30413),
+                   Longitude = c( -148.152, -147.187, -147.762, -147.183)) %>% 
   mutate( seq_id = NA,
           SourceName = "PWSSC",
           Agency_ID = SiteID,
