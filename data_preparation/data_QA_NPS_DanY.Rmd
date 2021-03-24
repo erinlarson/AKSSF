@@ -1,5 +1,5 @@
 ---
-title: "data_QA_NV_Eyak"
+title: "data_QA_NPS_DanY"
 output: html_document
 ---
 
@@ -34,7 +34,7 @@ Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we ar
 
 # QA data for air temperatures
 ## Pull in Airtemp for comparison from NOAA GHCN stations
-Cordova Station seems like a good fit for these data
+Iliamna Airport station seems like a good fit for these data
 
 Go to [GHCN Daily](https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND)
 website and locate stations - try to identify stations with mean/min/max
@@ -44,72 +44,144 @@ Note - have had trouble with lcd function recently
 
 ```{r NOAA data, message=FALSE, warning=FALSE}
 getwd()
+
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
+
 # lcd(station = "26410", year = 2013)
 # 
 # ncdc_locs(locationcategoryid = "CITY")
+
 #Station Codes for area of interest
-eyak.climStat <- c("USW00026410")
+nps.climStat <- c("USW00025506")
 
-eyak.climDat <- tibble( name = c( "CORDOVA AIRPORT, AK US"),
-                 id = eyak.climStat)
+nps.climDat <- tibble( name = c( "ILIAMNA AIRPORT, AK US"),
+                 id = nps.climStat)
 
-# Pull Climate data from Cordova Airport
-climDat <- meteo_pull_monitors(eyak.climStat)  
+# Pull Climate data from Iliamna Airport Stations
+climDat <- meteo_pull_monitors(nps.climStat)  
 str(climDat)
 
-eyak.climDat <- eyak.climDat %>% 
+nps.climDat <- nps.climDat %>% 
   left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
   filter( date >= "2008-05-01",
           date <= "2020-12-30",
-          name == "CORDOVA AIRPORT, AK US") %>% 
+          name == "ILIAMNA AIRPORT, AK US") %>% 
   # Temperature and Precipitation values are in tenths of degree/mm
   mutate_if( is.numeric, ~ . * 0.1) %>% 
   mutate(year = as.factor(year(date)),
          day = yday(date),
          DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
-  
-eyak.climDat
+
+nps.climDat
+
 ```
 
 ## Load Data
 Pull in formatted data and make a copy for QA 
-Becky has already formatted these data for qa purposes - Data file = eyak.data.rds
+Becky has already formatted these data for qa purposes - Data file = nps_dy_5sites.rds
 
 ```{r Load Dataset for QA}
 # Choose temperature data ouput formatted for qc from data prep script
 filename <- file.choose(new = FALSE)
-NVEyak.data <- readRDS(filename)
+npsDanY.data <- readRDS(filename)
+
+
+# If needed, add the agency prefix to data in the SiteID column.
+
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Six_Mile_Outlet", replacement = "NPS_Six_Mile_Outlet")
+
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Chulitna_SiteB", replacement = "NPS_Chulitna_SiteB")
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Little_Kijik_River_Dan", replacement = "NPS_Little_Kijik_River_Dan")
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Tazimina_Dan", replacement = "NPS_Tazimina_Dan")
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Newhalen_River", replacement = "NPS_Newhalen_River")
+npsDanY.data <- mutate_if(npsDanY.data,
+                           is.character,
+                           str_replace_all, pattern = "Hardenburg_Bay", replacement = "NPS_Hardenburg_Bay")
+
+# add year column and populate date
+npsDanY.data <- mutate(npsDanY.data,
+                       year = year(sampleDate))
 
 # Copy and format for qc - limit to use site and months of interest
-NVEyak.data.qc <- NVEyak.data %>% 
+npsDanY.data.qc <- npsDanY.data %>% 
   filter(month(sampleDate) %in% 6:9)
-summary(NVEyak.data.qc)
+  
+summary(npsDanY.data.qc)
+
 ```
+
+```{r Print PDF of Raw Data}
+
+npsd2_sites <- npsDanY.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
+
+pdf("data_preparation/NPS DY 5 Raw Data.pdf", width = 11, height = 8.5)
+# Get limits of temp data 
+for(i in 1:nrow(npsd2_sites)) {
+  dat <- left_join(npsd2_sites %>% slice(i), npsDanY.data.qc)
+  #subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
+  xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+  xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+  p1 <- dat %>% 
+    ggplot(aes(x = dt, y = Temperature)) +
+    #geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+    #geom_line( data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+    geom_line() +
+    scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
+    scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
+    labs(title = npsd2_sites %>% slice(i) %>% unite(site_year) %>%
+           pull(site_year))#,
+         #subtitle = paste0("Use Site: ", subtitle)) +
+    theme(legend.position = "bottom")
+  print(p1)
+}
+
+# dev.off()
+
+# getwd()
+
+
+```
+
+
+
 ## Interactive Plot
 
 Walk through list of Sites and note on google sheet any anomalous measurements and leave note for DM to check
 
-Review Sites with interactive plot and note Airtemps/Burials etc on data flag worksheet stored here [google sheet](https://docs.google.com/spreadsheets/d/1XDUhe8hf08epm8yH9vVxZ92DyIAB-TnJGGFV5wRPu8c/edit#gid=0).
+Review Sites with interactive plot and note Airtemps/Burials etc on data flag worksheet stored here [google sheet](https://docs.google.com/spreadsheets/d/1PsDk7xZHQo6qknzZibVOVO4eFdk-I8PqtFHRDTStKnc/edit#gid=0).
 
-Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter Eyak Native Village sites and James Paley as contact
+Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter NPS sites and Dan Young as contact
 
 Sites:
-"nv_Eyak_Hartney Creek", "nv_Eyak_Heney Creek"
+"NPS_Chulitna_SiteB", "NPS_Six_Mile_Outlet", "NPS_Hardenburg_Bay", "NPS_Little_Kijik_River_Dan", "NPS_Newhalen_River"
+
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
-#dput(unique(NVEyak.data.qc$SiteID))
+#dput(unique(npsDanY.data.qc$SiteID))
 #Change to bb.data.qc to examine qc'd data
-p <- NVEyak.data.qc %>% 
-  filter(SiteID == "nv_Eyak_Hartney Creek", UseData == 1)
+p <- npsDanY.data.qc %>% 
+  #filter(UseData == 1) #not filtered by site
+  filter(SiteID == "NPS_Newhalen_River", UseData == 1) #filtered by site
+
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
+
 p <- p %>% 
   ggplot() +
-  geom_line( data = eyak.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-  geom_line( data = eyak.climDat,aes(x = DT, y = tmax, color = "Air max")) +
+  geom_line(data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+  geom_line(data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
   geom_line(aes(x = dt, y = Temperature)) +
   scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
   #coord_cartesian(ylim = c(-5, 30)) + 
@@ -123,10 +195,6 @@ ggplotly(p)
 
 # Remove sites
 
-Recalculate UseData values using flagged data stored in google sheet
-
-# Remove sites
-
 UseSites to record sites for AKSSF analysis
 
 Recalculate UseData based on visual examination
@@ -134,7 +202,7 @@ Recalculate UseData based on visual examination
 Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
 
 Temperature data flagged for UseData = 0 based on visual examination of plots 
-and stored in https://docs.google.com/spreadsheets/d/1XDUhe8hf08epm8yH9vVxZ92DyIAB-TnJGGFV5wRPu8c/edit#gid=0.
+and stored in [google sheet](https://docs.google.com/spreadsheets/d/1usYGIlMMQzTqzIqx0r872xo7_aIYth0P_z47YgQoDEc/edit#gid=0).
 
 
 ```{r Pull In Googlesheet Flags, message=FALSE, warning=FALSE}
@@ -142,14 +210,16 @@ and stored in https://docs.google.com/spreadsheets/d/1XDUhe8hf08epm8yH9vVxZ92DyI
 
 gs4_auth() #select 1 (yes, to give authorization)
 #gs4_user()
-temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1XDUhe8hf08epm8yH9vVxZ92DyIAB-TnJGGFV5wRPu8c/edit#gid=0"
+temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1PsDk7xZHQo6qknzZibVOVO4eFdk-I8PqtFHRDTStKnc/edit#gid=0"
 
 #Read in flag data sheet
 flagDb <- read_sheet(temp_log_db_gs,sheet = "AKSSF_Data_Flags",
                     col_names = TRUE,
                     col_types = "c")
+
 #create cols variable 
 cols <- c("SiteID", "FlagStart", "FlagEnd","Days", "FlagReason", "UseSite", "UseData", "Notes")
+
 # Transform and drop unnecessary columns
 flagDb <- flagDb %>%
   select(all_of(cols)) %>% 
@@ -161,7 +231,7 @@ flagDb <- flagDb %>%
             UseSite = as.numeric(UseSite),
             UseData = as.numeric(UseData),
             Notes = as.character(Notes))
-
+           
 #convert date range to dates 
 flagDb2 <- flagDb %>% 
   mutate(flagDate = map2(FlagStart, FlagEnd, ~seq(from = .x, to = .y,
@@ -169,57 +239,60 @@ flagDb2 <- flagDb %>%
   unnest() %>%
   select(SiteID, flagDate, FlagReason) %>%
   distinct()
+
 str(flagDb2)
 ```
-
 ```{r Recalculate UseData}
 #Tibble for final qc data
-NVEyak.data.finalqc <- tibble()
+npsDanY.data.finalqc <- tibble()
 
 #Recalculate UseData values using information stored in flagDb tibble
-NVEyak.data.finalqc <- NVEyak.data.qc %>% 
+
+npsDanY.data.finalqc <- npsDanY.data.qc %>% 
   left_join( flagDb2, by = c("SiteID" = "SiteID", "sampleDate" = "flagDate")) %>% 
   mutate(UseData = case_when(FlagReason == "Air Temperature" ~ 0,
                              FlagReason == "Burial" ~ 0,
                              FlagReason == "Logger Failure" ~ 0,
                              FlagReason == "Other" ~ 0,
                              FlagReason == "Tidal Influence" ~ 0,
-                             TRUE ~ UseData))
+                             TRUE ~ UseData),
+         year=year(sampleDate))
   
-NVEyak.data.finalqc %>% count(SiteID, year, UseData, FlagReason)
 
-summary(NVEyak.data.finalqc)
+npsDanY.data.finalqc %>% count(SiteID, year, UseData, FlagReason)
 
-summary(NVEyak.data.qc)
+summary(npsDanY.data.finalqc)
+
+summary(npsDanY.data.qc)
 ```
 
-# Compare raw data (NVEyak.data.qc) to QC'd data (NVEyak.data.finalqc)
-Use rolling pdf code to print out pdf of QC'd data by site/year and compare side by side with original pdf of these data.  Code starts line 226 pf data_QA_USFS_Chugach.rmd 
+
+# Compare raw data (npsDanY.data.qc) to QC'd data (npsDanY.data.finalqc)
+Use rolling pdf code to print out pdf of QC'd data by site/year and compare side by side with original pdf of these data.
 
 ```{r plot of recalculated data by site-year}
 
 #Filters out recalculated UseData from google sheet
-NVEyak.data.finalqc <- NVEyak.data.finalqc %>% 
+npsDanY.data.finalqc <- npsDanY.data.finalqc %>% 
   filter(UseData == 1)
 
-nve_sites <- NVEyak.data.finalqc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
+npsd_sites <- npsDanY.data.finalqc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
-#pdf("data_preparation/NV Eyak QC Data by Site and Year.pdf", width = 11, height = 8.5) #original
-pdf(file = "NV Eyak QC Data by Site and Year.pdf", width = 11, height = 8.5) #new but works
-# Get limits of temp data
-for(i in 1:nrow(nve_sites)) {
-  dat <- left_join(nve_sites %>% slice(i), NVEyak.data.finalqc)
+pdf("data_preparation/NPS DanY QC Data by Site and Year.pdf", width = 11, height = 8.5)
+# Get limits of temp data 
+for(i in 1:nrow(npsd_sites)) {
+  dat <- left_join(npsd_sites %>% slice(i), npsDanY.data.finalqc)
   #subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
   xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
-    geom_line( data = eyak.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-    geom_line( data = eyak.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+    geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+    geom_line( data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
     scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
-    labs(title = nve_sites %>% slice(i) %>% unite(site_year) %>%
+    labs(title = npsd_sites %>% slice(i) %>% unite(site_year) %>%
            pull(site_year))#,
          #subtitle = paste0("Use Site: ", subtitle)) +
     theme(legend.position = "bottom")
@@ -235,7 +308,7 @@ getwd()
 # Check measurement frequency
 
 ```{r Temperature Measuremnt Frequency}
-msmt_freq <- temp_msmt_freq(NVEyak.data.finalqc)
+msmt_freq <- temp_msmt_freq(npsDanY.data.finalqc)
 
 summary(msmt_freq)
 
@@ -260,9 +333,10 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 
 ```{r Save Daily}
 # Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
-acronym = "nv_Eyak_"
+acronym = "npsDanY_"
 
 # Save Daily Summaries
 save_daily_files(daily_screen, acronym = acronym)
 getwd()
 ```
+
