@@ -48,10 +48,6 @@ getwd()
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
 
-# lcd(station = "26410", year = 2013)
-# 
-# ncdc_locs(locationcategoryid = "CITY")
-
 #Station Codes for area of interest
 nps.climStat <- c("USW00056401","USR0000ACHS")
 
@@ -86,33 +82,13 @@ Becky has already formatted these data for qa purposes - Data file = nps.data.rd
 filename <- file.choose(new = FALSE)
 npsTreyS.data <- readRDS(filename)
 
-# If needed, add the agency prefix to data in the SiteID column.
-
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Caribou Creek", replacement = "NPS_Caribou Creek")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Long Lake Creek", replacement = "NPS_Long Lake Creek")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Rock Creek WRST", replacement = "NPS_Rock Creek WRST")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Crystal Creek", replacement = "NPS_Crystal Creek")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Lakina River", replacement = "NPS_Lakina River")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Gilahina River", replacement = "NPS_Gilahina River")
-npsTreyS.data <- mutate_if(npsTreyS.data,
-                           is.character,
-                           str_replace_all, pattern = "Rufus Creek", replacement = "NPS_Rufus Creek")
-
 # Copy and format for qc - limit to use site and months of interest
 npsTreyS.data.qc <- npsTreyS.data %>% 
-  filter(month(sampleDate) %in% 6:9)
+  mutate(SiteID = paste0("NPS_", SiteID),
+         UseData = case_when( SiteID == "NPS_Caribou Creek" & second(DT) == 29 ~ 0,
+                             TRUE ~ UseData)) %>% 
+           filter(month(sampleDate) %in% 6:9,
+                  UseData == 1)
   
 summary(npsTreyS.data.qc)
 
@@ -126,15 +102,28 @@ Review Sites with interactive plot and note Airtemps/Burials etc on data flag wo
 Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter NPS sites and Trey Simmons as contact
 
 Sites:
-"NPS_Caribou Creek", "NPS_Crystal Creek", "NPS_Gilahina River", "NPS_Lakina River", 
-"NPS_Long Lake Creek", "NPS_Rock Creek WRST", "NPS_Rufus Creek"
+"NPS_Caribou Creek"
+
+"NPS_Crystal Creek"
+
+"NPS_Gilahina River"
+
+"NPS_Lakina River" 
+
+"NPS_Long Lake Creek"
+
+"NPS_Rock Creek WRST"
+**DM Notes: Trey notes Burial in Rock Creek on 2012-07-19 & 07-21 but data this is not evident to me in the temp data where this burial may have started - Data very erratic in June 2008/2009**
+
+"NPS_Rufus Creek"
+
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
 #dput(unique(npsTreyS.data.qc$SiteID))
 #Change to bb.data.qc to examine qc'd data
 p <- npsTreyS.data.qc %>% 
-  filter(SiteID == "NPS_Caribou Creek", UseData == 1)
+  filter(SiteID == "NPS_Rock Creek WRST", UseData == 1)
 
 xmin <- as.POSIXct(min(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$DT),format = "%Y-%m-%d %H:%M", tz = "GMT")
@@ -259,8 +248,6 @@ for(i in 1:nrow(npst_sites)) {
 }
 
 dev.off()
-
-getwd()
 
 ```
 
