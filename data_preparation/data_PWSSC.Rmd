@@ -125,8 +125,10 @@ pwssc_md <- pwssc_md %>%
 
 save_metadata_files(pwssc_md, acronym)
 
-# Save Temp data
+# Save rds of metadata for mapping purposes
+saveRDS(pwssc_md, "formatted_data/pwssc.md.rds")
 
+# Save Temp data
 pwssc.data <- pwssc_dat %>% 
   distinct()
 
