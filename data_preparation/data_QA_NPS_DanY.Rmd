@@ -3,10 +3,6 @@ title: "data_QA_NPS_DanY"
 output: html_document
 ---
 
-Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
-
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
@@ -40,7 +36,7 @@ Go to [GHCN Daily](https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND)
 website and locate stations - try to identify stations with mean/min/max
 air temps for period of interest.
 
-Note - have had trouble with lcd function recently
+DM Notes to PL:  You can adjust the dates of the climate data query to match the data you are working with - Dan's data go back to 2000 so changed line 63 accordingly
 
 ```{r NOAA data, message=FALSE, warning=FALSE}
 getwd()
@@ -64,7 +60,7 @@ str(climDat)
 
 nps.climDat <- nps.climDat %>% 
   left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
-  filter( date >= "2008-05-01",
+  filter( date >= "2000-05-01",
           date <= "2020-12-30",
           name == "ILIAMNA AIRPORT, AK US") %>% 
   # Temperature and Precipitation values are in tenths of degree/mm
@@ -81,79 +77,66 @@ nps.climDat
 Pull in formatted data and make a copy for QA 
 Becky has already formatted these data for qa purposes - Data file = nps_dy_5sites.rds
 
+**DM Notes to PL:  Updated SiteID prefix calculation to more simple conversion & added UseSite to remove lake data and calculate UseData = 0 for Little Kijik measurements taken every 2 hours in 2003**
+
+
 ```{r Load Dataset for QA}
+
 # Choose temperature data ouput formatted for qc from data prep script
 filename <- file.choose(new = FALSE)
 npsDanY.data <- readRDS(filename)
 
+# Check SiteIDs 
+dput(unique(npsDanY.data$SiteID))
 
-# If needed, add the agency prefix to data in the SiteID column.
-
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Six_Mile_Outlet", replacement = "NPS_Six_Mile_Outlet")
-
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Chulitna_SiteB", replacement = "NPS_Chulitna_SiteB")
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Little_Kijik_River_Dan", replacement = "NPS_Little_Kijik_River_Dan")
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Tazimina_Dan", replacement = "NPS_Tazimina_Dan")
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Newhalen_River", replacement = "NPS_Newhalen_River")
-npsDanY.data <- mutate_if(npsDanY.data,
-                           is.character,
-                           str_replace_all, pattern = "Hardenburg_Bay", replacement = "NPS_Hardenburg_Bay")
-
-# add year column and populate date
-npsDanY.data <- mutate(npsDanY.data,
-                       year = year(sampleDate))
-
-# Copy and format for qc - limit to use site and months of interest
+# Correct SiteIDs if missing NPS_ prefix and  add year column and populate date
 npsDanY.data.qc <- npsDanY.data %>% 
-  filter(month(sampleDate) %in% 6:9)
-  
+  mutate(year = year(sampleDate),
+         # Add NPS_ Prefix to site ids
+         SiteID = paste0("NPS_", SiteID),
+         # Remove Hardenburg Bay and Six Mile Outlet from review as these data are from a lake
+         UseSite = case_when(SiteID %in% c("NPS_Hardenburg_Bay","NPS_Six_Mile_Outlet") ~ 0,
+                             TRUE~ 1 ),
+         # Little Kijik have data from second logger recording ever 2 hours on 2 minutes past the hour - New Halen also have multiple loggers that need to be filtered out starting in July of 2009 with one recording on the hour and the second on the hour + 16 seconds past
+         UseData = case_when( SiteID %in% "NPS_Little_Kijik_River_Dan" & year == 2003 & minute(dt) == 02 ~ 0,
+                              SiteID %in% "NPS_Newhalen_River" & year == 2009 & second(dt) == 16 ~ 0,
+                              TRUE ~ UseData)) %>% 
+  filter(month(sampleDate) %in% 6:9,
+         UseData == 1, UseSite == 1)
+
 summary(npsDanY.data.qc)
 
 ```
 
 ```{r Print PDF of Raw Data}
 
-npsd2_sites <- npsDanY.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
+npsd2_sites <- npsDanY.data.qc %>% filter(UseSite == 1) %>% 
+  distinct(SiteID, year) %>% arrange(SiteID, year)
 
 pdf("data_preparation/NPS DY 5 Raw Data.pdf", width = 11, height = 8.5)
 # Get limits of temp data 
 for(i in 1:nrow(npsd2_sites)) {
   dat <- left_join(npsd2_sites %>% slice(i), npsDanY.data.qc)
-  #subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
+  subtitle <- dat %>% distinct(UseSite) %>% pull(UseSite)
   xmin <- as.POSIXct(min(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
-    #geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-    #geom_line( data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+    geom_line( data = nps.climDat, aes(x = DT, y = tmin, color = "Air min")) +
+    geom_line( data = nps.climDat, aes(x = DT, y = tmax, color = "Air max")) +
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
     scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
     labs(title = npsd2_sites %>% slice(i) %>% unite(site_year) %>%
-           pull(site_year))#,
-         #subtitle = paste0("Use Site: ", subtitle)) +
+           pull(site_year),
+         subtitle = paste0("Use Site: ", subtitle)) +
     theme(legend.position = "bottom")
   print(p1)
 }
 
-# dev.off()
-
-# getwd()
-
+dev.off()
 
 ```
-
-
 
 ## Interactive Plot
 
@@ -164,16 +147,22 @@ Review Sites with interactive plot and note Airtemps/Burials etc on data flag wo
 Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter NPS sites and Dan Young as contact
 
 Sites:
-"NPS_Chulitna_SiteB", "NPS_Six_Mile_Outlet", "NPS_Hardenburg_Bay", "NPS_Little_Kijik_River_Dan", "NPS_Newhalen_River"
+"NPS_Chulitna_SiteB"
 
+"NPS_Little_Kijik_River_Dan" 
+**DM Notes: Looks like data from 2 loggers here in 2003 - 1 recording on the hour and one every 2 hours - filtered these out**
+
+"NPS_Newhalen_River"
+**DM Notes: Multiple loggers recording in 2009 so I have filtered out the duplicate series above - Loggers appear to have been shifted around so I have flagged them in the google sheet for removal where this seems apparent - may want to check with data provider** 
+
+**DM Notes: "NPS_Six_Mile_Outlet" & "NPS_Hardenburg_Bay" are lake data and should not be included.  Most of the older temp data are very "choppy", possibly due to different logger models?**
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
 #dput(unique(npsDanY.data.qc$SiteID))
-#Change to bb.data.qc to examine qc'd data
+
 p <- npsDanY.data.qc %>% 
-  #filter(UseData == 1) #not filtered by site
-  filter(SiteID == "NPS_Newhalen_River", UseData == 1) #filtered by site
+  filter(SiteID == "NPS_Chulitna_SiteB") #filtered by site
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
