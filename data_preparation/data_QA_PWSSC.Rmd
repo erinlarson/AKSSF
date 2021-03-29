@@ -1,0 +1,536 @@
+---
+title: "data_QA_PWSSC"
+author: "dwmerrigan"
+date: "3/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+#this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(googledrive)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+library(plotly)
+library(DT)
+library(beepr)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(sf)
+library(rgeos)
+library(ggrepel)
+library(leaflet)
+
+```
+
+```{r Source Helper Functions}
+# Check dir
+getwd()
+# Source helper functions
+source("helper_functions.R")
+
+```
+
+Data QA is done using dynamic plots and reviewing data by site. For AKSSF,
+we are only reviewing June - September data and flagging obvious air
+temperatures. Burials are a lot harder to confirm without a duplicate logger.
+
+
+# QA data for air temperatures
+## Pull in Airtemp for comparison from NOAA GHCN stations
+
+Go to [GHCN Daily](https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND)
+website and locate stations - try to identify stations with mean/min/max
+air temps for period of interest.
+
+
+```{r NOAA data, message=FALSE, warning=FALSE}
+getwd()
+
+#Token obtained from NOAA to access API
+noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
+
+#Station Codes for area of interest
+cd.climStat <- c( "USC00502179","USW00026410", "USW00096405")
+
+cd.climDat <- tibble( name = c( "CORDOVA WWTP", "CORDOVA AIRPORT",
+"CORDOVA 14"),
+                 id = cd.climStat)
+
+# Pull Climate data from Cordova Airport
+climDat <- meteo_pull_monitors(cd.climStat)  
+str(climDat)
+
+cd.climDat <- cd.climDat %>% 
+  left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
+  filter( date >= "2008-06-01",
+          date <= "2020-12-30",
+          name == "CORDOVA AIRPORT") %>% 
+  # Temperature and Precipitation values are in tenths of degree/mm
+  mutate_if( is.numeric, ~ . * 0.1) %>% 
+  mutate(year = as.factor(year(date)),
+         day = yday(date),
+         dt = as.POSIXct(paste(date), format = "%Y-%m-%d"))
+
+cd.climDat
+```
+
+## Pull in Tide data from NOAA
+Find station @ [NOAA Tides and Currents](https://tidesandcurrents.noaa.gov/map/index.shtml?id=9457292)
+for tide and current records.
+
+Using mean lower low water datum - "mllw"
+
+```{r NOAA Tides}
+
+# Tibble to hold tide data
+cd.tideDat <- tibble()
+datalist = list()
+
+# Start and end dates
+years <- tibble( start = c( 20080101, 20090101, 20100101, 20110101, 20120101,
+                            20130101, 20140101, 20150101, 20160101, 20170101,
+                            20180101, 20190101, 20200101),
+                 stop = c( 20081231, 20091231, 20101231, 20111231, 20121231,
+                           20131231, 20141231, 20151231, 20161231, 20171231,
+                           20181231, 20191231, 20201231))
+
+# Can only access 1 years worth of measurements at a time
+for (row in 1:nrow(years)){
+  yr <- gsub('.{4}$', '', paste(years[row,"start"]))
+  nam <- paste("cd.tideDat", yr, sep = "")
+  startdate <- years[row,"start"]
+  stopdate <- years[row, "stop"]
+  # Get hourly height data one by year for Cordova station 9454050
+  tideDat <- coops_search(station_name = 9454050 , begin_date = startdate,
+                             end_date = stopdate, product = "hourly_height",
+                             datum = "mllw", units = "metric", time_zone = "gmt")
+  datalist[[row]] <- tideDat$data
+  
+}
+
+cd.tideDat <-  do.call(rbind,datalist)
+
+cd.tideDat <- cd.tideDat %>% 
+  rename("dt" = "t", "verified_meters" = "v")
+
+```
+
+
+# Begin QA
+Pull in data and make copy of period of interest (if not already formatted as such)
+
+```{r Select Formatted Data Output from data script}
+
+# Choose temperature data ouput formatted for qc from data prep script
+filename <- file.choose(new = FALSE)
+pwssc.data <- readRDS(filename)
+
+# Pull in metadata file
+filename2 <- file.choose(new = FALSE)
+pwssc.md.data <- readRDS(filename2)
+
+
+# Copy and format for qc - limit to usesite and months of interest
+pwssc.data.qc <- pwssc.data %>% 
+  filter( month(sampleDate) %in% 6:9)
+
+```
+## Summary table
+Summary table shows some pretty high temps 
+```{r Summary Table, message=TRUE, warning=FALSE}
+
+# create data summary table
+pwssc.data.summary <- pwssc.data.qc %>%
+  group_by(SiteID, year) %>%
+  summarize(meanTemp = mean(Temperature, na.rm = T),
+            maxTemp = max(Temperature, na.rm = T),
+            minTemp = min(Temperature, na.rm = T),
+            sdTemp = sd(Temperature, na.rm = T),
+            n_obs = n())
+
+pwssc.data.summary %>%
+  datatable() %>%
+  formatRound(columns=c("meanTemp","maxTemp","minTemp","sdTemp"), digits=2)
+
+```
+
+## Check measurement frequency
+
+```{r Temp measuremnt frequency}
+msmt_freq <- temp_msmt_freq(pwssc.data.qc)
+
+summary(msmt_freq)
+
+# Check mode_diff
+msmt_freq[order(msmt_freq$mode_diff, decreasing = FALSE),]
+
+
+```
+
+## Daily screen
+
+High max and low min suggests some air temps
+
+```{r Daily Screen}
+
+daily_screen <- daily_screen(msmt_freq)
+
+summary(daily_screen)
+
+```
+
+## Plot Daily means 
+```{r plot of daily means, message=FALSE, warning=FALSE}
+
+pwssc.data.qc %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meant = mean(Temperature)) %>% 
+  ggplot(aes(x = sampleDate, y = meant)) +
+  geom_line() +
+  facet_wrap(~SiteID)
+
+```
+
+## Plot Raw Data
+Definitely have some Airtemps and Possible Tide influence??
+
+```{r plot of raw data}
+
+pwssc.data.qc %>% 
+  ggplot(aes(x = dt, y = Temperature)) +
+  #geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  #geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line() +
+  facet_wrap(~SiteID)
+
+```
+
+# Make Rolling PDF
+Rolling pdf of raw data to send to Luca and check on status of data QA.
+
+
+```{r plot of raw data by site-year}
+getwd()
+
+adfg_sites <- pwssc.data.qc %>% 
+  distinct( SiteID, year) %>%
+  arrange(SiteID, year)
+
+pdf("data_preparation/PWSSC Raw WaterTemp-AirTemp-Tide by Site and Year.pdf",
+    width = 11, height = 8.5)
+# Get limits of temp data 
+for(i in 1:nrow(adfg_sites)) {
+  dat <- left_join( adfg_sites %>%
+                      slice(i), pwssc.data.qc)
+  subtitle <- dat %>% 
+    distinct(SiteID) %>% 
+    pull(SiteID)
+  xmin <- as.POSIXct( min( dat$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+  xmax <- as.POSIXct( max( dat$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+  p1 <- dat %>% 
+    ggplot( aes( x = dt, y = Temperature)) +
+    geom_line( data = cd.climDat, aes( x = dt, y = tmin, color = "Air min")) +
+    geom_line( data = cd.climDat,aes( x = dt, y = tmax, color = "Air max")) +
+    # Add threshold line @ 2.5 meters on y axis to help identify Higher tides 
+    geom_hline( yintercept = 2.5, linetype = "dashed", color = "red") +
+    geom_line( data = cd.tideDat,aes( x = dt, y = verified_meters,
+                                       color = "Tide")) +
+    geom_line() +
+    scale_x_datetime( limits = c( xmin, xmax), labels = waiver()) +
+    scale_y_continuous( limits = c( -5, 30), labels = waiver()) +
+    labs(title = adfg_sites %>%
+           slice(i) %>%
+           unite(site_year) %>%
+           pull(site_year), subtitle = paste0("Site: ", subtitle)) +
+    theme( legend.position = "bottom")
+  print( p1)
+}
+
+dev.off()
+
+```
+
+# Map of sites
+Need better background map
+
+```{r Map of sites}
+
+# register_google
+# # Background layer
+# world <- get_googlemap("Cordova, Alaska", zoom = 10, maptype = "terrain")
+# Background layer
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+maplot <- world %>% 
+  ggplot() +
+  geom_sf() +
+  geom_point(data = pwssc.md.data, aes(x = Longitude, y = Latitude, label = SiteID), size = 4,
+             shape = 23, fill = "darkred") +
+  geom_label_repel(data = pwssc.md.data, aes(x = Longitude, y = Latitude, label = SiteID), 
+                   size = 2, col = "black", fontface = "bold", nudge_x = -0.05, nudge_y = 0.05) +
+  coord_sf(xlim = c(-149, -146), ylim = c(59.5, 61), expand = FALSE)
+
+plot(maplot)
+
+```
+
+## Interactive Plot with Air temp and Tide data
+# Read in data and format
+
+Sites:
+"PWSCC_Erb"
+**DM Notes:  Lots of "blocky measurements?  **
+
+"PWSCC_Gilmour"
+
+"PWSCC_Hogan"
+**DM Notes:  Lots of "blocky measurements?  **
+
+"PWSCC_Stockdale"
+**DM Notes:  Lots of "blocky measurements?  **
+
+
+```{r Interactive Plot With Air Temp and Tide}
+# # get site ids
+dput(unique(pwssc.data.qc$SiteID))
+
+#Change to bb.data.qc to examine qc'd data
+p <- pwssc.data.qc %>% 
+  filter(SiteID == "PWSCC_Stockdale")
+
+xmin <- as.POSIXct( min( p$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct( max( p$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+
+p <- p %>% 
+  ggplot() +
+  geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line( data = cd.tideDat,aes(x = dt, y = verified_meters, color = "Tide (m)")) +
+  # Add threshold line @ 2.5 meters on y axis to help identify Higher tides 
+  geom_hline( yintercept = 2.5, linetype = "dashed", color = "red") +
+  geom_line( aes( x = dt, y = Temperature)) +
+  scale_x_datetime( limits = c(xmin, xmax), labels = waiver()) +
+  coord_cartesian( ylim = c(-5, 30)) + 
+  facet_wrap( ~SiteID) +
+  theme( legend.title = element_blank()) +
+  labs( title = "Temperature by Site",
+        y = "Temperature degrees C",
+        x = "Time of Measurement")
+
+ggplotly(p)
+
+```
+
+# Remove sites
+
+Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
+
+Temperature data flagged for UseData = 0 based on visual examination of plots 
+and stored in [google sheet](https://docs.google.com/spreadsheets/d/1D_JP69q8lI9Ub6ZNJj63BOr975HJBwkiTzYkFQtqAPQ/edit#gid=01).
+
+
+```{r Pull In Googlesheet Flags, message=FALSE, warning=FALSE}
+
+#Must activate a token to read in this sheet - need to investigate why read only
+#access is not working
+gs4_auth()
+
+#gs4_user()
+
+temp_log_db_gs = "https://docs.google.com/spreadsheets/d/1D_JP69q8lI9Ub6ZNJj63BOr975HJBwkiTzYkFQtqAPQ/edit#gid=0"
+
+#Read in flag data sheet
+flagDb <- read_sheet(temp_log_db_gs,sheet = "AKSSF_Data_Flags",
+                    col_names = TRUE,
+                    col_types = "c")
+
+#create cols variable 
+cols <- c("SiteID", "FlagStart", "FlagEnd","Days", "FlagReason", "UseSite", "UseData", "Notes")
+
+# Transform and drop unecessary columns
+flagDb <- flagDb %>%
+  select(all_of(cols)) %>% 
+  transform(SiteID = as.character(SiteID),
+            FlagStart = as_date(ymd(FlagStart)),
+            FlagEnd= as_date(ymd(FlagEnd)),
+            Days = as.numeric(Days),
+            FlagReason = as.character(FlagReason),
+            UseSite = as.numeric(UseSite),
+            UseData = as.numeric(UseData),
+            Notes = as.character(Notes))
+
+#convert date range to dates 
+flagDb2 <- flagDb %>% 
+  mutate(flagDate = map2(FlagStart, FlagEnd, ~seq(from = .x, to = .y,
+                                                  by = "day"))) %>% 
+  unnest() %>%
+  select(SiteID, flagDate, FlagReason) %>%
+  distinct()
+
+str(flagDb2)
+```
+
+```{r Recalculate UseData}
+#Tibble for final qc data
+pwssc.data.finalqc <- tibble()
+
+#Recalculate UseData values using information stored in flagDb tibble
+
+pwssc.data.finalqc <- pwssc.data.qc %>% 
+  left_join( flagDb2, by = c("SiteID" = "SiteID", "sampleDate" = "flagDate")) %>% 
+  mutate(UseData = case_when(FlagReason == "Air Temperature" ~ 0,
+                             FlagReason == "Burial" ~ 0,
+                             FlagReason == "Logger Failure" ~ 0,
+                             FlagReason == "Other" ~ 0,
+                             FlagReason == "Tidal Influence" ~ 0,
+                             TRUE ~ UseData),
+         Agency_ID = SiteID)
+
+pwssc.data.finalqc %>% count(SiteID, year, UseData, FlagReason)
+
+```
+
+
+```{r Plot of QC'd data by site-year}
+getwd()
+
+pdfdat <-  pwssc.data.finalqc %>% 
+  filter(UseData == 1)
+
+adfg_sites <- pdfdat %>% 
+  distinct( SiteID, year) %>%
+  arrange(SiteID, year)
+  
+
+pdf("data_preparation/PWSSC QC'd WaterTemp-AirTemp-Tide by Site and Year.pdf",
+    width = 11, height = 8.5)
+# Get limits of temp data 
+for(i in 1:nrow(adfg_sites)) {
+  dat <- left_join( adfg_sites %>%
+                      slice(i), pdfdat)
+  subtitle <- dat %>% 
+    distinct(SiteID) %>% 
+    pull(SiteID)
+  xmin <- as.POSIXct( min( dat$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+  xmax <- as.POSIXct( max( dat$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+  p1 <- dat %>%
+    ggplot( aes( x = dt, y = Temperature)) +
+    geom_line( data = cd.climDat, aes( x = dt, y = tmin, color = "Air min")) +
+    geom_line( data = cd.climDat,aes( x = dt, y = tmax, color = "Air max")) +
+    # Add threshold line @ 2.5 meters on y axis to help identify Higher tides 
+    geom_hline( yintercept = 2.5, linetype = "dashed", color = "red") +
+    geom_line( data = cd.tideDat,aes( x = dt, y = verified_meters,
+                                       color = "Tide")) +
+    geom_line() +
+    scale_x_datetime( limits = c( xmin, xmax), labels = waiver()) +
+    scale_y_continuous( limits = c( -5, 30), labels = waiver()) +
+    labs(title = adfg_sites %>%
+           slice(i) %>%
+           unite(site_year) %>%
+           pull(site_year), subtitle = paste0("Site: ", subtitle)) +
+    theme( legend.position = "bottom")
+  print( p1)
+}
+
+dev.off()
+
+```
+## Plot QC'd Data
+
+
+
+```{r Interactive Plot With Air Temp and Tide}
+# # get site ids
+dput(unique(pwssc.data.qc$SiteID))
+
+#Change to bb.data.qc to examine qc'd data
+p <- pwssc.data.finalqc %>% 
+  filter(SiteID == "PWSCC_Erb",
+         UseData == 1)
+
+xmin <- as.POSIXct( min( p$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+xmax <- as.POSIXct( max( p$dt), format = "%Y-%m-%d %H:%M", tz = "GMT")
+
+p <- p %>% 
+  ggplot() +
+  geom_line( data = cd.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  geom_line( data = cd.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line( data = cd.tideDat,aes(x = dt, y = verified_meters, color = "Tide (m)")) +
+  # Add threshold line @ 2.5 meters on y axis to help identify Higher tides 
+  geom_hline( yintercept = 2.5, linetype = "dashed", color = "red") +
+  geom_line( aes( x = dt, y = Temperature)) +
+  scale_x_datetime( limits = c(xmin, xmax), labels = waiver()) +
+  coord_cartesian( ylim = c(-5, 30)) + 
+  facet_wrap( ~SiteID) +
+  theme( legend.title = element_blank()) +
+  labs( title = "Temperature by Site",
+        y = "Temperature degrees C",
+        x = "Time of Measurement")
+
+ggplotly(p)
+
+```
+
+# Save Data
+## Save reviewed data with additional UseData flags
+
+```{r Save QA }
+getwd()
+# Save copy of qa data with data flags
+pwssc.data.finalqc %>% 
+  select(SiteID, Agency_ID , sampleDate, sampleTime, dt, year, Temperature, UseData, FlagReason) %>% 
+  saveRDS("./data_preparation/formatted_data/pwssc.data.finalqc")
+
+```
+
+## Save QAed dataset for AKTEMP
+AKTEMP Data file
+
+* SiteID, character
+* sampleDate, date
+* sampleTime, hms
+* Temperature, numeric
+* UseData, numeric
+
+```{r Save For AKTEMP}
+# # Tibble for AKTEMP data copy of all data - QC'd Period of interest and data excluded from qc process
+# AKTEMP_Data <- bind_rows(pwssc.data.noqc, pwssc.data.finalqc)
+# 
+# # save copy of data formatted for AKTEMP
+# save_aktemp_files(AKTEMP_Data, acronym = acronym )
+
+```
+
+## Save daily data
+
+Save a copy of the daily statistics in the final data folder for the AKSSF analysis. There are two helper functions that add the mode of the time difference for each day and calculate the daily min, mean, and max and removed days with less than 90% of measurements.
+
+* temp_msmt_freq
+* daily_screen
+
+```{r Save Daily}
+# Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
+acronym = "PWSSC_"
+
+AKSSF_Data <- pwssc.data.finalqc %>% 
+  filter(UseData == 1)
+
+daily_data <- temp_msmt_freq(AKSSF_Data) %>% 
+  daily_screen()
+
+daily_data
+
+# Save Daily Summaries
+save_daily_files(daily_data, acronym = acronym )
+
+```
