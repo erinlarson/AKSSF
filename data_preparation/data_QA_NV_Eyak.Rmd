@@ -3,10 +3,6 @@ title: "data_QA_NV_Eyak"
 output: html_document
 ---
 
-Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
-
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
@@ -46,10 +42,7 @@ Note - have had trouble with lcd function recently
 getwd()
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
-# lcd(station = "26410", year = 2013)
-# 
-# ncdc_locs(locationcategoryid = "CITY")
-#Station Codes for area of interest
+
 eyak.climStat <- c("USW00026410")
 
 eyak.climDat <- tibble( name = c( "CORDOVA AIRPORT, AK US"),
@@ -103,7 +96,7 @@ Sites:
 #dput(unique(NVEyak.data.qc$SiteID))
 #Change to bb.data.qc to examine qc'd data
 p <- NVEyak.data.qc %>% 
-  filter(SiteID == "nv_Eyak_Hartney Creek", UseData == 1)
+  filter(SiteID == "nv_Eyak_Heney Creek", UseData == 1)
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 p <- p %>% 
@@ -205,7 +198,7 @@ NVEyak.data.finalqc <- NVEyak.data.finalqc %>%
 nve_sites <- NVEyak.data.finalqc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
 #pdf("data_preparation/NV Eyak QC Data by Site and Year.pdf", width = 11, height = 8.5) #original
-pdf(file = "NV Eyak QC Data by Site and Year.pdf", width = 11, height = 8.5) #new but works
+pdf(file = "data_preparation/NV Eyak QC Data by Site and Year.pdf", width = 11, height = 8.5) #new but works
 # Get limits of temp data
 for(i in 1:nrow(nve_sites)) {
   dat <- left_join(nve_sites %>% slice(i), NVEyak.data.finalqc)
