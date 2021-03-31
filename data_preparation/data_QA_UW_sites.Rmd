@@ -95,40 +95,15 @@ UWsites.data.qc <- UWsites.data %>%
 summary(UWsites.data.qc)
 
 ```
+
 ## Map of sites
-Need better background map
+Map of site locations
 
 ```{r Map of sites}
 
 # Choose md file to plot sites (RS uploaded draft md file to googledrive)
 filename2 <- file.choose(new = FALSE)
 UWsites.md.data <- read_csv(filename2) 
-
-
-# Get map limits and buffer
-# md <- do.call(cbind, lapply(UWsites.md.data, summary))
-# xmin <- as.numeric(md["Min.","Longitude"]) - .25
-# xmax <- as.numeric(md["Max.","Longitude"]) + .25
-# ymin <- as.numeric(md["Min.","Latitude"]) - .15
-# ymax <- as.numeric(md["Max.","Latitude"]) + .15
-# 
-# # Combine limits
-# map_xlim <- c(xmin, xmax)
-# map_ylim <- c(ymin, ymax)
-
-# world <- ne_countries(scale = "medium", returnclass = "sf")
-# 
-# maplot <- world %>% 
-#   ggplot() +
-#   geom_sf() +
-#   geom_point(data = UWsites.md.data, aes(x = Longitude, y = Latitude, label = SiteID), size = 4,
-#              shape = 23, fill = "darkred") +
-#   geom_label_repel(data = UWsites.md.data, aes(x = Longitude, y = Latitude, label = SiteID), 
-#                    size = 2, col = "black", fontface = "bold", nudge_x = -0.05, nudge_y = 0.05) +
-#   coord_sf(xlim = map_xlim, ylim = map_ylim, expand = FALSE)
-# 
-# plot(maplot)
-
 
 sites <- UWsites.md.data %>% 
   select(SiteID, Latitude, Longitude) %>% 
@@ -149,6 +124,7 @@ sitemap
 ```
 
 ## Rolling PDF 
+Pdf containing plots of raw water temp data and daily Air temperatures for each site by year.
 
 ```{r Print PDF of Raw Data}
 
@@ -178,6 +154,7 @@ for(i in 1:nrow(UW_sites)) {
 dev.off()
 
 ```
+
 ## Daily plots
 
 ```{r Plot of daily means, message=FALSE, warning=FALSE}
@@ -190,6 +167,7 @@ UWsites.data.qc %>%
   facet_wrap(~SiteID)
 
 ```
+
 ```{r plot of raw data}
 
 UWsites.data.qc %>% 
@@ -251,8 +229,6 @@ ggplotly(p)
 
 # Remove sites
 
-UseSites to record sites for AKSSF analysis
-
 Recalculate UseData based on visual examination
 
 Filter to remove any sites that are not being used for the AKSSF analysis. These could be sites with very incomplete time series or sites that have hydrologic inputs that affect stream temperatures -- e.g. tidally-influenced sites. Note that a list of these sites may be developed at the top of this script so that we don't spend time reviewing data for these sites. That is fine, just note that the sites not used for the AKSSF analysis were NOT reviewed.
@@ -262,6 +238,7 @@ and stored in [google sheet](https://docs.google.com/spreadsheets/d/1usYGIlMMQzT
 
 
 ```{r Pull In Googlesheet Flags, message=FALSE, warning=FALSE}
+
 #Must activate a token to read in this sheet. This is done by running the chunk and following the prompts that populate in the Console area below. You'll want to enter '1' for Yes to give authorization to read in the sheet. It should then open up a Google page in the web browser and if you follow the prompts, it will provide an authorization code to paste/enter into the Console.
 
 gs4_auth() #select 1 (yes, to give authorization)
