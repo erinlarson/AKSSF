@@ -3,10 +3,6 @@ title: "data_QA_UW_sites"
 output: html_document
 ---
 
-Notes to Dustin: Take a look at the yaml and the setup chunk too. I think all of this could be fixed across the different datasets and it would make it go quicker.
-
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
@@ -21,7 +17,14 @@ library(hms)
 library(tidyverse)
 library(plotly)
 library(DT)
-library(beepr)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggrepel)
+library(tmap)
+library(tmaptools)
+library(sf)
+library(mapview)
+
 ```
 
 ```{r Functions}
@@ -48,32 +51,41 @@ getwd()
 #Token obtained from NOAA to access API
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
 
-# lcd(station = "26410", year = 2013)
-# 
-# ncdc_locs(locationcategoryid = "CITY")
-
 #Station Codes for area of interest
-uw.climStat <- c("USR0000AKIL")
+uw.climStat <- c("USR0000AKIL", "USW00026562", "USW00025503")
 
-uw.climDat <- tibble( name = c( "KILBUCK ALASKA, AK US"),
+uw.climDat <- tibble( name = c( "KILBUCK ALASKA, AK US", "Iliamna Airport", "King Salmon Airport"),
                  id = uw.climStat)
 
 # Pull Climate data from Kilbuck Station
 climDat <- meteo_pull_monitors(uw.climStat)  
 str(climDat)
 
-uw.climDat <- uw.climDat %>% 
+# Temp records from Iliamna Airport
+uw.climDat1 <- uw.climDat %>% 
   left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
-  filter( date >= "2008-05-01",
+  filter( date >= "2017-05-01",
           date <= "2020-12-30",
-          name == "KILBUCK ALASKA, AK US") %>% 
+          name == "Iliamna Airport") %>% 
   # Temperature and Precipitation values are in tenths of degree/mm
   mutate_if( is.numeric, ~ . * 0.1) %>% 
   mutate(year = as.factor(year(date)),
          day = yday(date),
          DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
 
-uw.climDat
+# Temp records from King Salmon Airport
+uw.climDat2 <- uw.climDat %>% 
+  left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
+  filter( date >= "2017-05-01",
+          date <= "2020-12-30",
+          name == "King Salmon Airport") %>% 
+  # Temperature and Precipitation values are in tenths of degree/mm
+  mutate_if( is.numeric, ~ . * 0.1) %>% 
+  mutate(year = as.factor(year(date)),
+         day = yday(date),
+         DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
+
+uw.climDat2
 
 ```
 
@@ -84,8 +96,8 @@ Becky has already formatted these data for qa purposes - Data file = uw.post16.t
 ```{r Load Dataset for QA}
 # Choose temperature data ouput formatted for qc from data prep script
 filename <- file.choose(new = FALSE)
-UWsites.data <- readRDS(filename)  #%>% 
- 
+UWsites.data <- readRDS(filename)
+
 # If needed, add the agency prefix to data in the SiteID column.
 acronym <- "UW_"
 UWsites.data <- mutate(UWsites.data, SiteID = paste0(acronym, SiteID))
@@ -97,12 +109,66 @@ UWsites.data.qc <- UWsites.data %>%
 summary(UWsites.data.qc)
 
 ```
+## Map of sites
+Need better background map
+
+```{r Map of sites}
+
+# Choose md file to plot sites (RS uploaded draft md file to googledrive)
+filename2 <- file.choose(new = FALSE)
+UWsites.md.data <- read_csv(filename2) 
+
+
+# Get map limits and buffer
+# md <- do.call(cbind, lapply(UWsites.md.data, summary))
+# xmin <- as.numeric(md["Min.","Longitude"]) - .25
+# xmax <- as.numeric(md["Max.","Longitude"]) + .25
+# ymin <- as.numeric(md["Min.","Latitude"]) - .15
+# ymax <- as.numeric(md["Max.","Latitude"]) + .15
+# 
+# # Combine limits
+# map_xlim <- c(xmin, xmax)
+# map_ylim <- c(ymin, ymax)
+
+# world <- ne_countries(scale = "medium", returnclass = "sf")
+# 
+# maplot <- world %>% 
+#   ggplot() +
+#   geom_sf() +
+#   geom_point(data = UWsites.md.data, aes(x = Longitude, y = Latitude, label = SiteID), size = 4,
+#              shape = 23, fill = "darkred") +
+#   geom_label_repel(data = UWsites.md.data, aes(x = Longitude, y = Latitude, label = SiteID), 
+#                    size = 2, col = "black", fontface = "bold", nudge_x = -0.05, nudge_y = 0.05) +
+#   coord_sf(xlim = map_xlim, ylim = map_ylim, expand = FALSE)
+# 
+# plot(maplot)
+
+
+sites <- UWsites.md.data %>% 
+  select(SiteID, Latitude, Longitude) %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"),
+           crs= "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") %>% 
+  st_cast("POINT")
+
+
+sitemap <- sites %>% 
+  tm_shape() +
+  tm_dots(id = "SiteID", size = 0.05) +
+  tm_text("SiteID", size = 1.5, shadow = TRUE, auto.placement = TRUE,
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE )+
+  tm_basemap(server = "Esri.WorldTopoMap")
+
+sitemap
+
+```
+
+## Rolling PDF 
 
 ```{r Print PDF of Raw Data}
 
 UW_sites <- UWsites.data.qc %>% distinct(SiteID, year) %>% arrange(SiteID, year)
 
-pdf("data_preparation/UW 16 Raw Data.pdf", width = 11, height = 8.5)
+pdf("data_preparation/UW 16 Raw Data with Iliamna Air Temp.pdf", width = 11, height = 8.5)
 # Get limits of temp data 
 for(i in 1:nrow(UW_sites)) {
   dat <- left_join(UW_sites %>% slice(i), UWsites.data.qc)
@@ -111,8 +177,8 @@ for(i in 1:nrow(UW_sites)) {
   xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
-    #geom_line( data = uw.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-    #geom_line( data = uw.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+    geom_line( data = uw.climDat1, aes(x = DT, y = tmin, color = "Air min")) +
+    geom_line( data = uw.climDat1, aes(x = DT, y = tmax, color = "Air max")) +
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
     scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
@@ -123,14 +189,31 @@ for(i in 1:nrow(UW_sites)) {
   print(p1)
 }
 
-# dev.off()
-
-# getwd()
-
+dev.off()
 
 ```
+## Daily plots
 
+```{r Plot of daily means, message=FALSE, warning=FALSE}
 
+UWsites.data.qc %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(meant = mean(Temperature)) %>% 
+  ggplot(aes(x = sampleDate, y = meant)) +
+  geom_line() +
+  facet_wrap(~SiteID)
+
+```
+```{r plot of raw data}
+
+UWsites.data.qc %>% 
+  ggplot(aes(x = dt, y = Temperature)) +
+  #geom_line( data = uw.climDat, aes(x = dt, y = tmin, color = "Air min")) +
+  #geom_line( data = uw.climDat,aes(x = dt, y = tmax, color = "Air max")) +
+  geom_line() +
+  facet_wrap(~SiteID)
+
+```
 
 ## Interactive Plot
 
@@ -141,26 +224,37 @@ Review Sites with interactive plot and note Airtemps/Burials etc on data flag wo
 Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home/webmap/viewer.html?webmap=364d7ce98dd64b469fce23b06751f989)  - look/filter UW sites
 
 Sites:
-"UW_Aleknagik Bear Creek", "UW_Aleknagik Big Whitefish Creek", "UW_Aleknagik Eagle Creek", "UW_Aleknagik Hansen Creek", "UW_Aleknagik Happy Creek", "UW_Aleknagik Ice Creek", "UW_Aleknagik Mission Creek", "UW_Aleknagik Pfifer Creek", "UW_Aleknagik Silver Salmon Creek", "UW_Aleknagik Squaw Creek", "UW_Aleknagik Yako Creek", "UW_Beverley Hope Creek", "UW_Beverley Moose Creek", "UW_Beverley Uno Creek", "UW_Kulik Grant River", "UW_Kulik K−3 Creek", "UW_Kulik Kulik Creek", "UW_Little Togiak C Creek", "UW_Little Togiak Creek", "UW_Nerka Allah Creek", "UW_Nerka Bear Creek", "UW_Nerka Berm Creek", "UW_Nerka Cabin Creek", "UW_Nerka Chamee Creek", "UW_Nerka Cottonwood Creek", "UW_Nerka Elva Creek", "UW_Nerka Fenno Creek", "UW_Nerka Hidden Lake Creek", "UW_Nerka Joe Creek", "UW_Nerka Kema Creek", "UW_Nerka Lynx Creek", "UW_Nerka Lynx Creek Cold Tributary", "UW_Nerka N4 Creek", "UW_Nerka Pick Creek", "UW_Nerka Rainbow Creek", "UW_Nerka Sam Creek", "UW_Nerka Seventh Creek", "UW_Nerka Stovall Creek", "UW_Nerka Teal Creek"
+"UW_Aleknagik Bear Creek"
+
+"UW_Aleknagik Big Whitefish Creek"
+
+"UW_Aleknagik Eagle Creek"
+
+"UW_Aleknagik Hansen Creek"
+**DM Notes - 2020-7-30 - 2020-8-31 Looks like burial**
+
+"UW_Aleknagik Happy Creek"
+
+"UW_Aleknagik Ice Creek", "UW_Aleknagik Mission Creek", "UW_Aleknagik Pfifer Creek", "UW_Aleknagik Silver Salmon Creek", "UW_Aleknagik Squaw Creek", "UW_Aleknagik Yako Creek", "UW_Beverley Hope Creek", "UW_Beverley Moose Creek", "UW_Beverley Uno Creek", "UW_Kulik Grant River", "UW_Kulik K−3 Creek", "UW_Kulik Kulik Creek", "UW_Little Togiak C Creek", "UW_Little Togiak Creek", "UW_Nerka Allah Creek", "UW_Nerka Bear Creek", "UW_Nerka Berm Creek", "UW_Nerka Cabin Creek", "UW_Nerka Chamee Creek", "UW_Nerka Cottonwood Creek", "UW_Nerka Elva Creek", "UW_Nerka Fenno Creek", "UW_Nerka Hidden Lake Creek", "UW_Nerka Joe Creek", "UW_Nerka Kema Creek", "UW_Nerka Lynx Creek", "UW_Nerka Lynx Creek Cold Tributary", "UW_Nerka N4 Creek", "UW_Nerka Pick Creek", "UW_Nerka Rainbow Creek", "UW_Nerka Sam Creek", "UW_Nerka Seventh Creek", "UW_Nerka Stovall Creek", "UW_Nerka Teal Creek"
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
-#dput(unique(uw5sites.data.qc$SiteID))
+#dput(unique(UWsites.data.qc$SiteID))
+
 #Change to bb.data.qc to examine qc'd data
 p <- UWsites.data.qc %>% 
-  #filter(UseData == 1) #not filtered by site
-  filter(SiteID == "UW_Nerka Kema Creek", UseData == 1) #filtered by site
+  filter(SiteID == "UW_Aleknagik Happy Creek", UseData == 1) # Filtered by site and use data
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 
 p <- p %>% 
   ggplot() +
-  geom_line(data = uw.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-  geom_line(data = uw.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+  geom_line(data = uw.climDat2, aes(x = DT, y = tmin, color = "Air min")) +
+  geom_line(data = uw.climDat2, aes(x = DT, y = tmax, color = "Air max")) +
   geom_line(aes(x = dt, y = Temperature)) +
   scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
-  #coord_cartesian(ylim = c(-5, 30)) + 
+  coord_cartesian(ylim = c(-5, 30)) + 
   facet_wrap(~SiteID) +
   theme(legend.title = element_blank()) +
   labs(title = "Temperature by Site",
