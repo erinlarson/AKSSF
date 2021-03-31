@@ -86,7 +86,14 @@ UWsites.data <- mutate(UWsites.data, SiteID = paste0(acronym, SiteID))
 
 # Copy and format for qc - limit to use site and months of interest
 UWsites.data.qc <- UWsites.data %>% 
-  filter(month(sampleDate) %in% 6:9)
+  filter(month(sampleDate) %in% 6:9) %>% 
+  # Nerka Stovall and Nerka Teal have extra measurements in 2019 & 2018 respectively.  Filter out Stovall measurements recorded @ 4 minutes past and Teal measurements recorded @ 57 minutes past the hour.
+  mutate(UseData = case_when(SiteID == "UW_Nerka Stovall Creek" & year == 2019 &  minute(dt) == 04 ~ 0,
+                             SiteID == "UW_Nerka Teal Creek" & year == 2018 &  minute(dt) == 57 ~ 0,
+                             TRUE ~ UseData),
+         # Remove entire Squaw Creek Site
+         UseSite = case_when(SiteID == "UW_Aleknagik Squaw Creek" ~ 0,
+                             TRUE ~ 1))
   
 summary(UWsites.data.qc)
 
@@ -185,25 +192,52 @@ Most sites also visible in [online mapper](https://accsmaps.maps.arcgis.com/home
 
 Sites:
 "UW_Aleknagik Bear Creek"
-
 "UW_Aleknagik Big Whitefish Creek"
-
 "UW_Aleknagik Eagle Creek"
-
 "UW_Aleknagik Hansen Creek"
-**DM Notes - 2020-7-30 - 2020-8-31 Looks like burial**
-
 "UW_Aleknagik Happy Creek"
-
-"UW_Aleknagik Ice Creek", "UW_Aleknagik Mission Creek", "UW_Aleknagik Pfifer Creek", "UW_Aleknagik Silver Salmon Creek", "UW_Aleknagik Squaw Creek", "UW_Aleknagik Yako Creek", "UW_Beverley Hope Creek", "UW_Beverley Moose Creek", "UW_Beverley Uno Creek", "UW_Kulik Grant River", "UW_Kulik K−3 Creek", "UW_Kulik Kulik Creek", "UW_Little Togiak C Creek", "UW_Little Togiak Creek", "UW_Nerka Allah Creek", "UW_Nerka Bear Creek", "UW_Nerka Berm Creek", "UW_Nerka Cabin Creek", "UW_Nerka Chamee Creek", "UW_Nerka Cottonwood Creek", "UW_Nerka Elva Creek", "UW_Nerka Fenno Creek", "UW_Nerka Hidden Lake Creek", "UW_Nerka Joe Creek", "UW_Nerka Kema Creek", "UW_Nerka Lynx Creek", "UW_Nerka Lynx Creek Cold Tributary", "UW_Nerka N4 Creek", "UW_Nerka Pick Creek", "UW_Nerka Rainbow Creek", "UW_Nerka Sam Creek", "UW_Nerka Seventh Creek", "UW_Nerka Stovall Creek", "UW_Nerka Teal Creek"
+"UW_Aleknagik Ice Creek"
+"UW_Aleknagik Mission Creek"
+"UW_Aleknagik Pfifer Creek"
+"UW_Aleknagik Silver Salmon Creek"
+"UW_Aleknagik Yako Creek"
+"UW_Beverley Hope Creek"
+"UW_Beverley Moose Creek"
+"UW_Beverley Uno Creek"
+"UW_Kulik Grant River"
+"UW_Kulik K−3 Creek"
+"UW_Kulik Kulik Creek"
+"UW_Little Togiak C Creek"
+"UW_Little Togiak Creek"
+"UW_Nerka Allah Creek"
+"UW_Nerka Bear Creek"
+"UW_Nerka Berm Creek"
+"UW_Nerka Cabin Creek"
+"UW_Nerka Chamee Creek"
+"UW_Nerka Cottonwood Creek"
+"UW_Nerka Elva Creek"
+"UW_Nerka Fenno Creek"
+"UW_Nerka Hidden Lake Creek"
+"UW_Nerka Joe Creek"
+"UW_Nerka Kema Creek"
+"UW_Nerka Lynx Creek"
+"UW_Nerka Lynx Creek Cold Tributary"
+"UW_Nerka N4 Creek"
+"UW_Nerka Pick Creek"
+"UW_Nerka Rainbow Creek"
+"UW_Nerka Sam Creek"
+"UW_Nerka Seventh Creek"
+"UW_Nerka Stovall Creek"
+"UW_Nerka Teal Creek"
+**DM Notes in google sheet**
 
 ```{r Interactive Plot With Air Temp}
-# get site ids
-#dput(unique(UWsites.data.qc$SiteID))
+# Get site ids for review (filter out UseSite = 0)
+dput(unique(filter(UWsites.data.qc, UseSite ==1)$SiteID))
 
 #Change to bb.data.qc to examine qc'd data
 p <- UWsites.data.qc %>% 
-  filter(SiteID == "UW_Nerka Stovall Creek", UseData == 1) # Filtered by site and use data
+  filter(SiteID == "UW_Aleknagik Bear Creek", UseData == 1) # Filtered by site and use data
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
@@ -292,7 +326,6 @@ UWsites.data.finalqc %>% count(SiteID, year, UseData, FlagReason)
 
 summary(UWsites.data.finalqc)
 
-summary(UWsites.data.qc)
 ```
 
 
@@ -316,8 +349,8 @@ for(i in 1:nrow(uw_sites)) {
   xmax <- as.POSIXct(max(dat$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
   p1 <- dat %>% 
     ggplot(aes(x = dt, y = Temperature)) +
-    geom_line( data = uw.climDat, aes(x = DT, y = tmin, color = "Air min")) +
-    geom_line( data = uw.climDat, aes(x = DT, y = tmax, color = "Air max")) +
+    geom_line( data = uw.climDat1, aes(x = DT, y = tmin, color = "Air min")) +
+    geom_line( data = uw.climDat1, aes(x = DT, y = tmax, color = "Air max")) +
     geom_line() +
     scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
     scale_y_continuous(limits = c(-5, 30), labels = waiver()) +
@@ -348,6 +381,7 @@ msmt_freq[order(msmt_freq$mode_diff, decreasing = FALSE),]
 # Daily screen
 
 ```{r Daily Screen}
+
 daily_screen <- daily_screen(msmt_freq)
 
 summary(daily_screen)
