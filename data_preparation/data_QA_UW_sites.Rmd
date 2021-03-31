@@ -237,7 +237,7 @@ dput(unique(filter(UWsites.data.qc, UseSite ==1)$SiteID))
 
 #Change to bb.data.qc to examine qc'd data
 p <- UWsites.data.qc %>% 
-  filter(SiteID == "UW_Aleknagik Bear Creek", UseData == 1) # Filtered by site and use data
+  filter(SiteID == "UW_Nerka Teal Creek", UseData == 1) # Filtered by site and use data
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
@@ -396,7 +396,7 @@ Save a copy of the daily statistics in the final data folder for the AKSSF analy
 
 ```{r Save Daily}
 # Calculate temp measurement frequency and daily summaries for qc'd data only for Usedata = 1
-acronym = "UWsites_"
+acronym = "UW_16sites_"
 
 # Save Daily Summaries
 save_daily_files(daily_screen, acronym = acronym)
