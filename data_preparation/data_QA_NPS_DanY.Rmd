@@ -21,9 +21,9 @@ library(beepr)
 ```
 
 ```{r Functions}
-#setwd("..")
 getwd()
 source("helper_functions.R")
+
 ```
 
 Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we are only reviewing June - September data and flagging obvious air temperatures. Burials are a lot harder to confirm without a duplicate logger.
@@ -94,9 +94,7 @@ npsDanY.data.qc <- npsDanY.data %>%
   mutate(year = year(sampleDate),
          # Add NPS_ Prefix to site ids
          SiteID = paste0("NPS_", SiteID),
-         # Remove Hardenburg Bay and Six Mile Outlet from review as these data are from a lake
-         UseSite = case_when(SiteID %in% c("NPS_Hardenburg_Bay","NPS_Six_Mile_Outlet") ~ 0,
-                             TRUE~ 1 ),
+         UseSite =1,
          # Little Kijik have data from second logger recording ever 2 hours on 2 minutes past the hour - New Halen also have multiple loggers that need to be filtered out starting in July of 2009 with one recording on the hour and the second on the hour + 16 seconds past
          UseData = case_when( SiteID %in% "NPS_Little_Kijik_River_Dan" & year == 2003 & minute(dt) == 02 ~ 0,
                               SiteID %in% "NPS_Newhalen_River" & year == 2009 & second(dt) == 16 ~ 0,
@@ -155,14 +153,18 @@ Sites:
 "NPS_Newhalen_River"
 **DM Notes: Multiple loggers recording in 2009 so I have filtered out the duplicate series above - Loggers appear to have been shifted around so I have flagged them in the google sheet for removal where this seems apparent - may want to check with data provider** 
 
-**DM Notes: "NPS_Six_Mile_Outlet" & "NPS_Hardenburg_Bay" are lake data and should not be included.  Most of the older temp data are very "choppy", possibly due to different logger models?**
+**DM Notes: "NPS_Six_Mile_Outlet" & "NPS_Hardenburg_Bay" are lake data and should now be included.  Becky will use sensor placement information to seperate for Analysis. Most of the older temp data are very "choppy", possibly due to different logger models?**
+
+"NPS_Six_Mile_Outlet"
+
+"NPS_Hardenburg_Bay"
 
 ```{r Interactive Plot With Air Temp}
 # get site ids
 #dput(unique(npsDanY.data.qc$SiteID))
 
 p <- npsDanY.data.qc %>% 
-  filter(SiteID == "NPS_Chulitna_SiteB") #filtered by site
+  filter(SiteID == "NPS_Hardenburg_Bay") #filtered by site
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
