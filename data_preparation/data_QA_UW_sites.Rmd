@@ -52,9 +52,9 @@ getwd()
 noaaTok <- "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
 
 #Station Codes for area of interest
-uw.climStat <- c("USR0000AKIL", "USW00026562", "USW00025503")
+uw.climStat <- "USW00026562"
 
-uw.climDat <- tibble( name = c( "KILBUCK ALASKA, AK US", "Iliamna Airport", "King Salmon Airport"),
+uw.climDat <- tibble( name = "Iliamna Airport",
                  id = uw.climStat)
 
 # Pull Climate data from Kilbuck Station
@@ -72,20 +72,6 @@ uw.climDat1 <- uw.climDat %>%
   mutate(year = as.factor(year(date)),
          day = yday(date),
          DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
-
-# Temp records from King Salmon Airport
-uw.climDat2 <- uw.climDat %>% 
-  left_join( climDat[,c( "id", "date", "tmax", "tmin")], by = 'id') %>% 
-  filter( date >= "2017-05-01",
-          date <= "2020-12-30",
-          name == "King Salmon Airport") %>% 
-  # Temperature and Precipitation values are in tenths of degree/mm
-  mutate_if( is.numeric, ~ . * 0.1) %>% 
-  mutate(year = as.factor(year(date)),
-         day = yday(date),
-         DT = as.POSIXct(paste(date), format = "%Y-%m-%d"))
-
-uw.climDat2
 
 ```
 
@@ -150,13 +136,13 @@ sites <- UWsites.md.data %>%
            crs= "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") %>% 
   st_cast("POINT")
 
-
+tmap_mode("view")
 sitemap <- sites %>% 
   tm_shape() +
   tm_dots(id = "SiteID", size = 0.05) +
   tm_text("SiteID", size = 1.5, shadow = TRUE, auto.placement = TRUE,
-          just = "bottom", remove.overlap = TRUE, clustering = TRUE )+
-  tm_basemap(server = "Esri.WorldTopoMap")
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE )#+
+  #tm_basemap(server = "Esri.WorldTopoMap")
 
 sitemap
 
@@ -243,15 +229,15 @@ Sites:
 
 #Change to bb.data.qc to examine qc'd data
 p <- UWsites.data.qc %>% 
-  filter(SiteID == "UW_Aleknagik Happy Creek", UseData == 1) # Filtered by site and use data
+  filter(SiteID == "UW_Nerka Stovall Creek", UseData == 1) # Filtered by site and use data
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 
 p <- p %>% 
   ggplot() +
-  geom_line(data = uw.climDat2, aes(x = DT, y = tmin, color = "Air min")) +
-  geom_line(data = uw.climDat2, aes(x = DT, y = tmax, color = "Air max")) +
+  geom_line(data = uw.climDat1, aes(x = DT, y = tmin, color = "Air min")) +
+  geom_line(data = uw.climDat1, aes(x = DT, y = tmax, color = "Air max")) +
   geom_line(aes(x = dt, y = Temperature)) +
   scale_x_datetime(limits = c(xmin, xmax), labels = waiver()) +
   coord_cartesian(ylim = c(-5, 30)) + 
