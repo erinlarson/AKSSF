@@ -17,13 +17,9 @@ library(hms)
 library(tidyverse)
 library(plotly)
 library(DT)
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(ggrepel)
 library(tmap)
 library(tmaptools)
 library(sf)
-library(mapview)
 
 ```
 
