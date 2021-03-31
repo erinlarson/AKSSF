@@ -33,15 +33,16 @@ NOTE: need to update temperature model datasets to remove redundant CIK sites.
 * (in BB repo) NPS data from Krista collected by Dan Young. DM 
 * NPS data from Trey. Note that source/data folder is what was on the KNB archive and has been formatted. But need to bring in new data and combine. Becky formatted for QA. nps.data.rds on google drive AKSSF/data/formatted_data.
 * Native Village of Eyak - 2 sites. DM 
+* UW tc 16 sites data, streams are formatted, but need QA. Becky will format
+* ACCS temperature data from Little Susitna watershed - summer 2016 and 2019-2020. Dustin is doing data prep in a separate [Little_Susitna github repo](https://github.com/rsshaftel/Little_Susitna). Grabbed 2016 sites from akoats metadata and combined with 2019 sites from logger database, some might be the same, will need to check in GIS.
 
 Data need QA after formatting:
-* (in BB repo) UW data, streams are formatted, but need QA. Becky will format
+* UW 5 sites and historic data - DM will format and qc
 
 Data received, need to read in and format new data and create metadata (some may be done already):
 
 * FWS data for Kodiak Refuge, OSM sites on Kodiak (2) and Copper River (2), and WRB sites on Kodiak (2) -- from Meg Perdue, received Oct 2020. Check to see if FWS data archived on KNB is needed to supplement what Meg sent over -- those data are all through 2017.
 * USGS sites selected in GIS from akoats working. Get data from dataRetrieval library in R
-* ACCS temperature data from Little Susitna watershed - summer 2016 and 2019-2020. Dustin is doing data prep in a separate [Little_Susitna github repo](https://github.com/rsshaftel/Little_Susitna). Grabbed 2016 sites from akoats metadata and combined with 2019 sites from logger database, some might be the same, will need to check in GIS.
 
 Outstanding data requests:
 
