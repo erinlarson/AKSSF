@@ -1,0 +1,73 @@
+---
+title: "UWFWS data for Cook Inlet, Prince William Sound, Copper River and Kodiak"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, messages = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) #this sets the root.dir up one level back to the project so that paths are relative to the project directory.
+
+library(readxl)
+library(stringr)
+library(lubridate)
+library(googlesheets4)
+library(rnoaa)
+library(hms)
+library(tidyverse)
+```
+
+
+
+# Define Functions
+Define any functions that are used for data formatting or duplicate measurement identification
+
+
+
+```{r Functions}
+source("W:/Github/AKSSF/helper_functions.R")
+
+```
+
+# Read in data and format
+
+
+## Metadata
+
+Sites file. This is a longer list of names from akoats that we should probably keep. Some basic ones should be filled in for providers with data not entered into akoats.
+
+Notes on new names:
+
+* Agency_ID should equal the SiteID in the data table. So during left_join, use by = c("SiteID" = "Agency_ID"). If this is a problem because a data provided used stream names, concatenate the agency acronym to the Agency_ID. E.g. USFS_Cold Creek.
+* AKOATS_ID = seq_id.
+
+
+```{r}
+
+
+```
+
+
+
+## Data
+
+# Review data
+
+
+## Duplicate measurements
+
+?? Sufficient to just use distinct() on site/temp/dt or more robust method?
+
+## Save data 
+Save copies of metadata file and temp data formatted for QA to local drive
+Save copies of metadata file and temp data formatted for QA to google drive
+
+```{r Save Outputs}
+# Save copy of formatted data for qc (UseSite vs UseData?)
+# Save metadata - this will save a local copy and upload to google drive
+save_metadata_files(data.in, acronym = "NAME OF OUTPUT")
+
+
+```
+
+
+If data have been reviewed by the data provider, these should be .csv of the final data, metadata, and daily data (see data_QA_TEMPLATE). Otherwise, an .rds or .csv to be passed to the data QA script.

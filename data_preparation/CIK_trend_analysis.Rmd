@@ -29,7 +29,7 @@ library(tidyverse)
 Source the function that assigns the mode of the time difference for each day to a formatted dataset. Also a function that calculates the number of days in a month.
 
 ```{r}
-source("day_and_month_functions.R")
+# source("day_and_month_functions.R")
 ```
 
 Load data.
@@ -110,6 +110,12 @@ ltSites <- cik.monthly %>%
   count(SiteID) %>% 
   filter(n > 8) %>% 
   pull(SiteID)
+
+cik.daily %>% 
+  ungroup() %>% 
+  distinct(SiteID, year(sampleDate)) %>% 
+  count(SiteID) %>% 
+  filter(n > 9)
 
 cik.monthly %>% 
   filter(SiteID %in% ltSites) %>% 

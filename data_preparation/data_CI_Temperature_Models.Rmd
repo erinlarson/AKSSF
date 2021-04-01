@@ -137,11 +137,11 @@ save_daily_files(deshka_daily, "deshka")
 
 anchor_wd <- "W:/Github/Temperature_Data/output/data_catalog"
 
-anchor_temp <- read_csv(paste0(anchor_wd, "/anchor_temperature_data.csv", collapse = ""))
+# anchor_temp <- read_csv(paste0(anchor_wd, "/anchor_temperature_data.csv", collapse = ""))
 
 anchor_daily <- temp_msmt_freq(anchor_temp %>% mutate(UseData = 1)) %>% daily_screen(.) %>% ungroup()
 
-anchor_daily
+anchor_daily %>% distinct(SiteID)
 ```
 
 
@@ -201,9 +201,9 @@ Remove CIK14, which is the same as CIK_14 and we have in Sue's other dataset.
 ```{r anchor save }
 save_metadata_files(anchor_md %>% filter(!SiteID == "CIK14"), "anchor")
 
-save_aktemp_files(anchor_temp, "anchor")
+# save_aktemp_files(anchor_temp, "anchor")
 
-save_daily_files(anchor_daily, "anchor")
+save_daily_files(anchor_daily %>% filter(!SiteID == "CIK14"), "anchor")
 ```
 
 

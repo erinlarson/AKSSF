@@ -431,8 +431,11 @@ save_aktemp_files(cik.data, "cik")
 
 
 cik.daily <- temp_msmt_freq(cik.data) %>% daily_screen(.)
+summary(cik.daily)
+cik.daily %>% filter(!is.na(meanDT)) %>% summary()
 
-save_daily_files(cik.daily, "cik")
+
+save_daily_files(cik.daily %>% filter(!is.na(meanDT)), "cik")
 ```
 
 
