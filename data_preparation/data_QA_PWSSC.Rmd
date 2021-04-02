@@ -489,7 +489,7 @@ getwd()
 # Save copy of qa data with data flags
 pwssc.data.finalqc %>% 
   select(SiteID, Agency_ID , sampleDate, sampleTime, dt, year, Temperature, UseData, FlagReason) %>% 
-  saveRDS("./data_preparation/formatted_data/pwssc.data.finalqc")
+  saveRDS("./data_preparation/formatted_data/pwssc.data.finalqc.rds")
 
 ```
 

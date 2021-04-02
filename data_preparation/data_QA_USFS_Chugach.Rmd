@@ -392,7 +392,7 @@ acronym = "usfsChug"
 # Save copy of qa data with data flags
 usfsChug.data.finalqc %>% 
   select(SiteID, Agency_ID , sampleDate, sampleTime, dt, year, Temperature, UseData, FlagReason) %>% 
-  saveRDS("formatted_data/usfsChug.data.finalqc")
+  saveRDS("formatted_data/usfsChug.data.finalqc.rds")
 
 ```
 
