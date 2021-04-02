@@ -33,13 +33,10 @@ Data QA is done using dynamic plots and reviewing data by site. For AKSSF, we ar
 
 # QA data for air temperatures
 ## Pull in Airtemp for comparison from NOAA GHCN stations
-Kilbuck station seems like a good fit for these data
 
 Go to [GHCN Daily](https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND)
 website and locate stations - try to identify stations with mean/min/max
 air temps for period of interest.
-
-Note - have had trouble with lcd function recently
 
 ```{r NOAA data, message=FALSE, warning=FALSE}
 getwd()
@@ -53,7 +50,7 @@ uw.climStat <- "USW00026562"
 uw.climDat <- tibble( name = "Iliamna Airport",
                  id = uw.climStat)
 
-# Pull Climate data from Kilbuck Station
+# Pull Climate data from Illiamna Station
 climDat <- meteo_pull_monitors(uw.climStat)  
 str(climDat)
 
@@ -114,13 +111,13 @@ sites <- UWsites.md.data %>%
            crs= "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") %>% 
   st_cast("POINT")
 
-tmap_mode("view")
 sitemap <- sites %>% 
   tm_shape() +
-  tm_dots(id = "SiteID", size = 0.05) +
-  tm_text("SiteID", size = 1.5, shadow = TRUE, auto.placement = TRUE,
-          just = "bottom", remove.overlap = TRUE, clustering = TRUE )#+
-  #tm_basemap(server = "Esri.WorldTopoMap")
+  tm_dots(id = "SiteID", size = 0.05, group = "Sites", col = "red") +
+  tm_text("SiteID", size = 1.75, shadow = TRUE, auto.placement = TRUE,
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE , 
+          group = "Labels") +
+  tm_basemap(server = c(Topo = "Esri.WorldTopoMap", Imagery = "Esri.WorldImagery" ))
 
 sitemap
 
