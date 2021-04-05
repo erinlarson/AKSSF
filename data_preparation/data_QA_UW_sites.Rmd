@@ -111,6 +111,7 @@ sites <- UWsites.md.data %>%
            crs= "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") %>% 
   st_cast("POINT")
 
+tmap_mode("view")
 sitemap <- sites %>% 
   tm_shape() +
   tm_dots(id = "SiteID", size = 0.05, group = "Sites", col = "red") +
@@ -234,7 +235,7 @@ dput(unique(filter(UWsites.data.qc, UseSite ==1)$SiteID))
 
 #Change to bb.data.qc to examine qc'd data
 p <- UWsites.data.qc %>% 
-  filter(SiteID == "UW_Nerka Teal Creek", UseData == 1) # Filtered by site and use data
+  filter(SiteID == "UW_Nerka Chamee Creek", UseData == 1) # Filtered by site and use data
 
 xmin <- as.POSIXct(min(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
 xmax <- as.POSIXct(max(p$dt),format = "%Y-%m-%d %H:%M", tz = "GMT")
