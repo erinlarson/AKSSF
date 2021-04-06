@@ -14,41 +14,238 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+
+library(sf)
 ```
 
+Meg sent all of their data in 2020. For each workbook, I checked the sites and years in her metadata sheet (basically updated AKOATS metadata), and compared it to the worksheets in that book. Some sites are missing because they were captured in the KNB archive (i.e. ended before or by 2017). Bring in entire KNB archive and remove duplicates and double-check they match what I see in the metadata.
 
+* Kodiak refuge data
+* OSM - office of subsistence mgmt data
+* WRB - water resources branch data
+* KNB archive from 2017
+
+Lots of other datasets from refuges outside this study area: Izembek, Koyukuk, and Selawik. 
+
+In the Bristol Bay repo: SWSHP-Bristol-Bay-Thermal-Diversity, there are data specific to BB that can be brought into this repo and combined so we have a complete FWS dataset for the AKSSF study area. The combining of all datasets will be in another rmd: data_combine_all. That includes data from the Togiak Refuge, Newhalen River OSM site, and Egegik River WRB site.
 
 # Define Functions
 Define any functions that are used for data formatting or duplicate measurement identification
 
-
-
 ```{r Functions}
 source("W:/Github/AKSSF/helper_functions.R")
-
 ```
 
 # Read in data and format
 
+Start with metadata and filter on sites that actually fall within study area for OSM and WRB sites.
 
 ## Metadata
 
-Sites file. This is a longer list of names from akoats that we should probably keep. Some basic ones should be filled in for providers with data not entered into akoats.
+For Kodiak, Meg provided all of the AKOATS sites on the worksheet and added some new rows for additional sites. Filtered on Bill Pyle to get the sites we want. I copied over the list of minimum metadata fields that we are using for this project from the helper_functions.R script.
 
-Notes on new names:
+```{r kodiak metadata}
 
-* Agency_ID should equal the SiteID in the data table. So during left_join, use by = c("SiteID" = "Agency_ID"). If this is a problem because a data provided used stream names, concatenate the agency acronym to the Agency_ID. E.g. USFS_Cold Creek.
-* AKOATS_ID = seq_id.
+akoats_fields <- c ("SiteID", "seq_id", "Agency_ID", "SourceName", "Contact_person", 
+                     "Contact_email", "Contact_telephone", "Latitude", "Longitude", 
+                     "Sensor_Placement", "Waterbody_name", "Waterbody_type", "Sensor_accuracy", 
+                     "Sensor_QAQC")
 
+kod_wb <- "S:/Stream Temperature Data/USFWS Perdue - complete 2020/Kodiak_Oct2020.xlsx"
 
-```{r}
+kod_md <- read_excel(kod_wb, sheet = "AKOATS_metadata") %>% 
+  filter(Contact_person == "Bill Pyle", !(SiteID %in% c("kdk_redlk01","kdk_karlk01",'kdk_akalk02',"kdk_homlk02"))) %>%
+  rename(seq_id = AKOATS_ID) %>%
+  mutate(SiteID = case_when(grepl("akacr01", SiteID) ~ "kdk_akacr01",
+                            grepl("ayarv03", SiteID) ~ "kdk_ayarv03",
+                            grepl("concr01", SiteID) ~ "kdk_concr01",
+                            TRUE ~ SiteID)) %>% 
+  select(one_of(akoats_fields))
 
+kod_md
 
+```
+In the OSM metadata sheet, there are some empty rows that need to be filtered out. Also Meg added new lat/longs based on an ARRI report. I had checked these previously and the longitude for Tanada Creek is incorrect, use the original one.
+
+```{r OSM metadata}
+osm_wb <- "S:/Stream Temperature Data/USFWS Perdue - complete 2020/OSM_Oct2020.xlsx"
+
+osm_md <- read_excel(osm_wb, sheet = "OSM_Sites_AKOATS") %>% 
+  filter(!is.na(SourceName)) %>% 
+  rename(seq_id = OBJECTID) %>% 
+  mutate(SiteID = paste0("fws_", Agency_ID), 
+         Latitude = case_when(Lat_revised == "SAME"|is.na(Lat_revised) ~ Latitude,
+                              TRUE ~ as.numeric(Lat_revised)),
+         Longitude = case_when(Long_revised == "SAME"|is.na(Long_revised)|Agency_ID == "Tanada Creek" ~ Longitude,
+                              TRUE ~ as.numeric(Long_revised)),
+         Sensor_QAQC = as.numeric(substr(Sensor_QAQC, 1, 1))) %>% 
+  select(one_of(akoats_fields))
+
+osm_md
+
+```
+
+This metadata sheet looks fine. Some extra rows at the bottom to filter out where Meg put notes on fixed site names.
+
+```{r WRB metadata}
+
+wrb_wb <- "S:/Stream Temperature Data/USFWS Perdue - complete 2020/WRB_Oct2020.xlsx"
+
+wrb_md <- read_excel(wrb_wb, sheet = "AKOATS_metadata") %>% 
+  filter(Contact_person == "Meg Perdue") %>% 
+  rename(seq_id = AKOATS_ID)# %>% 
+  select(one_of(akoats_fields))
+
+wrb_md
+
+```
+
+Combine metadata into one table
+
+```{r combine metadata}
+
+fws_md <- bind_rows(kod_md, osm_md, wrb_md)
+
+```
+
+Create simple features objects for mapping and selecting sites that are in the study area.
+
+```{r fws sites map}
+
+fws_sf <- st_as_sf(fws_md, coords = c("Longitude", "Latitude"), crs = "wgs84")
+fws_akalb <- st_transform(fws_sf, crs = 3338)
+
+ak_bdy <- st_read("K:/GIS_data/boundaries/AK_Management/dnr_ak_coast_63360/ALASKA_63360_PY.shp")
+st_crs(ak_bdy)
+
+st_layers(dsn = "W:/GIS/AKSSF Southcentral/AKSSF_Hydrography.gdb")
+akssf_sa <- st_read(dsn = "W:/GIS/AKSSF Southcentral/AKSSF_Hydrography.gdb", layer = "AKSSF_studyarea_HUC8")
+
+ggplot() +
+  geom_sf(data = ak_bdy, fill = NA) +
+  geom_sf(data = akssf_sa, aes(fill = Name)) +
+  geom_sf(data = fws_akalb) +
+  theme(legend.position = "none")
+
+ggplot() +
+  geom_sf(data = fws_akalb %>% filter(grepl("Ayakulik", Waterbody_name)))
+```
+
+Intersect the site locations with the AKSSF study area and get a vector of SiteIDs to filter on for bringing in data.
+
+```{r fws sites in study area}
+fws_int <- st_intersection(fws_akalb, akssf_sa)
+
+ggplot() +
+  geom_sf(data = akssf_sa, aes(fill = Name)) +
+  geom_sf(data = fws_int) +
+  geom_sf_text(data = fws_int, aes(label = Waterbody_name)) +
+  theme(legend.position = "none")
+
+fws_akssf_sites <- fws_int %>% pull(SiteID)
 ```
 
 
 
 ## Data
+
+For Kodiak, there are also four lake sites that we don't need, but could import to AKTEMP next year. Meg also sent over a new data file for East Fork Thumb Creek. It had some data on the KNB archive, but not everything through 2019.
+
+```{r Kodiak refuge}
+kod_sheets <- excel_sheets(kod_wb)
+kod_sheets <- kod_sheets[!grepl("metadata|redlk01|karlk01|akalk02|homlk02", kod_sheets)]
+
+kodiak <- tibble()
+for(i in kod_sheets) {
+  dat <- read_excel(kod_wb, sheet = i, skip = 1, col_names = FALSE, col_types = c("date", "date", "numeric")) %>% 
+    mutate(sampleDate = as.Date(`...1`), sampleTime = as.hms(`...2`), Temperature = `...3`, SiteID = i) %>% 
+    select(SiteID, sampleDate, sampleTime, Temperature)
+  kodiak <- bind_rows(kodiak, dat)
+}
+
+eftrv <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/KDK_EFTRV.xlsx") %>% 
+    mutate(sampleDate = as.Date(Date), sampleTime = as_hms(Time), Temperature = `TW [°C]`, SiteID = "kdk_eftrv01") %>% 
+    select(SiteID, sampleDate, sampleTime, Temperature)
+
+kodiak <- bind_rows(kodiak, eftrv)
+
+summary(kodiak)
+kodiak %>% distinct(SiteID) %>% arrange(SiteID)
+
+kodiak %>% 
+  count(SiteID, year = year(sampleDate)) %>% 
+  pivot_wider(names_from = year, values_from = n)
+```
+
+OSM sites, bring in just the sites for our study area. These include two sites on kodiak ("kdk_" prefix), Long Lake Creek, and Tanada Creek. Newhalen River is in Bristol Bay and included in that dataset. Note that Tanada Creek was not exported correctly in the original OSM file so Meg resent that as a separate file on April 5, 2021.
+
+
+```{r OSM data}
+osm_sheets <- excel_sheets(osm_wb)
+osm_sheets <- osm_sheets[grepl("kdk_|LongLake", osm_sheets)]
+
+osm <- tibble()
+for(i in osm_sheets) {
+  dat <- read_excel(osm_wb, sheet = i, skip = 1, col_names = FALSE) %>% 
+    mutate(sampleDate = as.Date(`...1`), sampleTime = as_hms(`...2`), Temperature = as.numeric(`...3`), SiteID = i) %>%
+    select(SiteID, sampleDate, sampleTime, Temperature)
+  osm <- bind_rows(osm, dat)
+}
+
+tanada <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/TanadaCreek.xlsx", skip = 1, col_names = FALSE) %>% 
+    mutate(sampleDate = as.Date(`...1`), sampleTime = as_hms(`...2`), Temperature = as.numeric(`...3`), SiteID = "Tanada Creek") %>%
+    select(SiteID, sampleDate, sampleTime, Temperature)
+osm <- bind_rows(osm, tanada)
+
+
+summary(osm)
+osm %>% distinct(SiteID) %>% arrange(SiteID)
+osm %>% filter(is.na(Temperature)) %>% count(SiteID, year(sampleDate))
+
+```
+
+For Water Resources Branch, Meg provided data for two sites last fall: Egegik River, which I imported into the BB repo, and Koyukuk River, which doesn't apply to this project. There are other WRB sites on Kodiak that I'll import from the KNB archive next.
+
+I'm not going to bring in all of the KNB USFWS data because it is too much. Just filter on the sites that we need: 
+
+* kodiak pincr01 2015-2017
+* kodiak meacr01 2016-2016
+* kodiak omarv01 2015-2017
+* wrb akalura r  2004-2007
+* wrb dog salmon r 2004-2007
+* wrb ayakulik r 2004-2007
+* wrb karluk r   2004-2007
+
+Note that WRB monitored Akalura R and Kodiak Refuge monitored Akalura Creek, which is not named correctly in the KNB files. Also, both WRB and the Kodiak Refuge monitored Ayakulik River, but just need the WRB file.
+
+# stopped here, check these data, looks like some are bad missing time info.
+I just requested all 7 of these sites from Meg so I don't have to rely on KNB archive.
+
+```{r KNB data}
+
+fws_files <- list.files("S:/Stream Temperature Data/USFWS Perdue/data", pattern = ".csv", full.names = TRUE)
+
+fws_files <- fws_files[grepl("Pinnell|Meadow|OMalley|AkaluraRiver_1149|DogSalmon|AyakulikRiver_1151|KarlukRiver", fws_files)]
+
+fws_knb <- fws_files %>% 
+  map_df(function(x) read_csv(x) %>% 
+  mutate(file_name = gsub(".csv","",basename(x)))) 
+
+fws_knb %>% summary
+fws_knb %>% filter(is.na(sampleTime)) %>% count(file_name, year(sampleDate))
+```
+
+
+Combine all the data. There should be 16 sites on Kodiak, 4 sites from OSM (Newhalen R is in BB), and 4 sites from WRB (Egegik is in BB).
+
+```{r combine all fws data}
+fws_md %>% 
+  filter(SiteID %in% fws_akssf_sites)
+fws_md %>% 
+  select(seq_id, SiteID, Waterbody_name) %>% 
+  arrange(seq_id)
+```
+
 
 # Review data
 

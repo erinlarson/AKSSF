@@ -3,26 +3,63 @@ title: "data_combine_all"
 output: html_document
 ---
 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) 
+
+
+
+# load packages
+library(googledrive)
+library(lubridate)
+library(readr)
+library(hms)
+library(ggmap)
+library(sf)
+# library(leaflet)
+# library(osmdata)
+library(broom)
+library(caTools)
+library(tidyverse)
+
+# install.packages("devtools")
+devtools::install_github("yutannihilation/ggsflabel")
+library(ggsflabel)
+
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# Metadata
 
-```{r cars}
-summary(cars)
+Bring in the metadata for each dataset. Export a shapefile so that we can check site locations in ArcGIS and also intersect to get catchment IDs. They will be used later to merge DAYMET air temperatures (daily averages for each catchment) with the stream temperature data.
+
+```{r read in metadata}
+gd.akssf.files <- drive_ls(path = "https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
+
+gd.metadata.files <- gd.akssf.files %>% 
+  filter(grepl("Metadata", name) & grepl(".csv", name))
+
+folder <- "data_preparation/final_data/Metadata/"
+
+for (i in seq_along(gd.metadata.files$name)) {
+  drive_download(as_id(gd.metadata.files$id[i]),
+                 path = str_c(folder, gd.metadata.files$name[i]),
+                 overwrite = TRUE)
+}
+
+local.md.files <- list.files(folder, full.names = TRUE)
+
+local.md.files <- local.md.files[!grepl("Eyak", local.md.files)]
+
+md <- map_df(local.md.files, function(x) read_csv(x, col_types = "ccccccccccccccc") %>%
+                      mutate(file_name = basename(x))) %>% 
+  mutate(Latitude = as.numeric(Latitude),
+         Longitude = as.numeric(Longitude))
+
+md <- md %>% 
+  mutate(SiteID = case_when(is.na(SiteID) ~ Agency_ID,
+                            TRUE ~ SiteID))
+
 ```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

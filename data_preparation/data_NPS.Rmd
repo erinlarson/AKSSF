@@ -155,11 +155,12 @@ nps.data %>%
 Save metadata file in final data folder.
 
 ```{r}
-nps.data %>% 
+nps.md <- nps.data %>% 
   distinct(SiteID) %>% 
   left_join(nps_md) %>% 
-  rename(seq_id = "AKOATS_ID") %>% 
-  save_metadata_file(., "NPS")
+  rename(seq_id = "AKOATS_ID") 
+
+save_metadata_files(nps.md, "NPS_ts")
 
 ```
 

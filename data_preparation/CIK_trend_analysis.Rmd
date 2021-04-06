@@ -37,6 +37,10 @@ Load data.
 ```{r}
 # cik.data <- readRDS("data_preparation/formatted_data/cik.data.rds")
 # load cik.daily
+cik.daily <- read_csv("data_preparation/final_data/cikDaily_Data2021-03-12.csv")
+cik.md <- read_csv("data_preparation/final_data/cikMetadata2021-03-11.csv")
+
+cik.daily <- left_join(cik.daily, cik.md %>% select(SiteID, Waterbody_name))
 ```
 
 # Temperature Figures
@@ -49,7 +53,7 @@ cik.monthly <- cik.daily %>%
   mutate(daysMonth = days_in_month(sampleDate),
          month = month(sampleDate),
          year = year(sampleDate)) %>% 
-  group_by(SiteID, year, month, daysMonth) %>%
+  group_by(SiteID, Waterbody_name, year, month, daysMonth) %>%
   summarize(meanMon = mean(meanDT),
             monCt = n()) %>% 
   filter(monCt > (0.9 * daysMonth))
@@ -106,8 +110,8 @@ Plot of monthly temperatures for sites with data for at least 9 years. There is 
 ```{r fig.height=8}
 ltSites <- cik.monthly %>% 
   ungroup() %>% 
-  distinct(SiteID, year) %>% 
-  count(SiteID) %>% 
+  distinct(SiteID, Waterbody_name, year) %>% 
+  count(SiteID, Waterbody_name) %>% 
   filter(n > 8) %>% 
   pull(SiteID)
 
@@ -125,6 +129,17 @@ cik.monthly %>%
   # geom_smooth(method = "lm") +
   facet_wrap(~SiteID) +
   theme_minimal()
+
+cik.monthly %>% 
+  ungroup() %>% 
+  distinct(SiteID, Waterbody_name, year) %>%
+  group_by(SiteID, Waterbody_name) %>%
+  summarize(yrCt = n(),
+            minYr = min(year),
+            maxYr = max(year)) %>% 
+  filter(yrCt > 8) %>% 
+  arrange(desc(yrCt))
+  
 ```
 All Sites.
 
