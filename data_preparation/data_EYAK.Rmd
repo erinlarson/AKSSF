@@ -65,7 +65,11 @@ for ( i in files){
       mutate(data_filename = as.character(filename))
   }
 }
+```
 
+```{r Bind data}
+
+eyakmd <- tibble()
 eyakmd <- bind_rows(harmddat, henmddat) %>% 
   mutate( SiteID = paste0(acronym, Site),
           seq_id = NA,
@@ -75,6 +79,8 @@ eyakmd <- bind_rows(harmddat, henmddat) %>%
           Contact_person = "James Paley",
           Contact_telephone = NA,
           Contact_email = "james.paley@eyak-nsn.gov",
+          Latitude = as.numeric(gsub('.{1}$', '',Latitude)),
+          Longitude = as.numeric(gsub('.{1}$', '', Longitude)),
           Sensor_Placement = NA,
           Waterbody_name = Site,
           Waterbody_type = "S",
@@ -86,13 +92,13 @@ eyak.data <- bind_rows(hartdat, hentdat) %>%
           sampleTime = as_hms(dt),
           year = year(dt),
           UseData = 1,
-          UseSite = 1) %>% 
+          UseSite = 1,
+          Temperature = as.numeric(Temperature)) %>% 
   left_join(eyakmd, by = "data_filename") %>% 
   select(SiteID, sampleDate, sampleTime, dt, year, Temperature, UseData, UseSite) %>% 
   distinct()
 
 summary(eyak.data)
-  
 
 ```
 
