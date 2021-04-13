@@ -92,8 +92,7 @@ eyak.data <- bind_rows(hartdat, hentdat) %>%
           sampleTime = as_hms(dt),
           year = year(dt),
           UseData = 1,
-          UseSite = 1,
-          Temperature = as.numeric(Temperature)) %>% 
+          UseSite = 1) %>% 
   left_join(eyakmd, by = "data_filename") %>% 
   select(SiteID, sampleDate, sampleTime, dt, year, Temperature, UseData, UseSite) %>% 
   distinct()
