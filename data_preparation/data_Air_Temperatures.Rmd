@@ -1,0 +1,407 @@
+---
+title: "data_Air_Temperatures"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(sf)
+library(tidyverse)
+library(zonalDaymet)
+library(maptools)
+library(sp)
+library(rgdal)
+library(raster)
+library(ncdf4)
+library(FedData)
+
+# if(!require(devtools)){install.packages("devtools")}
+# devtools::install_github("bluegreen-labs/daymetr")
+library("daymetr")
+```
+
+
+This script is for processing DAYMET air temperatures for the DFA analysis. I have a number of questions regarding how we want to a) filter sites for the DFA and b) process the air temperature data.
+
+* What window are we including for the stream temperature data? (Tim used June 1 to September 1)
+* What is the minimum amount of missing data we can have for each year? Note that Tim said this could be higher than 20% as long as the data aren't all missing from the beginning or end of the time series.
+* Do we want a minimum number of years for each site? I'm not sure I see a good reason for this since all sites are opportunistic so years won't match anyways. (Tim used 3 years)
+* Should air temperatures be summarized by catchment or extracted for the site? 
+* Should we take a mean of the air temperatures by day or over a moving average (e.g. 2 days before and day of)? We could process both ways and explore strength of relationship for cook Inlet data only.
+
+
+Possible packages include zonalDaymet or spatialEco.
+
+
+
+# Get catchments
+
+6/14/21 note: daymet was down for three weeks so I moved forward with extracting temperatures at point locations only.
+
+5/14/21:
+WORK ON THIS TASK FOR NHDPLUS CATS FIRST: Cook Inlet and Copper River. Dustin is burning in named rivers to try and get Afognak on Kodiak to flow the right direction. If that works, he may also do this for other synthetic networks - Bristol Bay and Prince William Sound.
+
+Dustin is storing all geospatial data in a geodatabase on the T drive. Read in final point locations from two feature classes there: bb_md_verified_DM and sites_outside_bb_verified_DM. Catchments are also stored in two feature datasets in the same geodb. One has TauDEM stream networks and the other has NHDPlus networks. 
+
+Steps:
+
+* read in point files and combine for all sites that we are using (verified = 1).
+* read in catchment polygon files and extract the catchments that intersect with the points.
+* combine all catchments into one non-contiguous polygon dataset.
+
+Try this all for Cook Inlet first. Read in sites outside Bristol Bay that Priscilla already intersected with catchment IDs - get list of catchment IDs. Read in dissolved set of catchments for Cook Inlet that Dustin created and filter on catchment IDs for points. Plot together to make sure they overlap.
+
+```{r get catchments for Cook Inlet}
+
+sites_notbb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "sites_outside_bb_verified_DM_CI")
+cats_ci <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "NHDPlusCatchments_CookInlet_Merge")
+
+st_crs(sites_notbb)
+st_crs(cats_ci)
+
+sites_notbb_akalb <- st_transform(sites_notbb, crs = 3338)
+st_crs(sites_notbb_akalb) == st_crs(cats_ci)
+
+#NHDPlusIDs for sites in Cook Inlet.
+#note that the verified field in this version is not updated. Checked Dustin's copy and only one site in Cook Inlet that we aren't using, a USGS site on a stream that is not in the NHDPlus. I'm not going to remove it for now because it's just one catchment.
+sites_notbb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202, Verified == 0) 
+
+catIDS_ci <- sites_notbb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202) %>% st_drop_geometry() %>% select(NHDPlusID, Verified)
+catIDS_ci %>% filter(Verified == 0)
+
+
+#there are some duplicates because multiple sites in a catchment.
+options(digits = 13)
+catIDS_ci %>% count(NHDPlusID) %>% arrange(desc(n)) 
+cat_n5 <- catIDS_ci %>% count(NHDPlusID) %>% arrange(desc(n)) %>% slice(1) %>% pull(NHDPlusID) #verified this is a hws on the anchor with 5 sites
+unique(catIDS_ci) #241/278
+
+#final set of 241 catchments with data for Cook Inlet.
+cats_ci241 <- cats_ci %>% filter(NHDPlusID %in% catIDS_ci$NHDPlusID)
+
+
+zoom_window <- st_coordinates(cats_ci241)
+
+ggplot() +
+  geom_sf(data = cats_ci241, color = "red") +
+  geom_sf(data = sites_notbb_akalb, size = .1) +
+  coord_sf(xlim = range(zoom_window[,'X']), ylim = range(zoom_window[,'Y']))
+
+
+sites_ci <- sites_notbb_akalb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202) 
+
+sites_ci$int_ID <- apply(st_intersects(sites_ci, cats_ci, sparse = FALSE), 2,
+                         function(col) {
+                           sites_ci[which(col), ]$NHDPlusID
+                         })
+
+
+st_crs(sites_ci); st_crs(cats)
+st_is_valid(cats_ci)
+int <- st_intersection(sites_ci, cats_ci)
+
+```
+
+Try with a little test run catchments is too big. This works, there are self intersections in the catchments dataset that makes intersection with sf impossible. Move forward with Priscilla's IDs.
+
+```{r}
+cat_test <- cats_ci %>% filter(NHDPlusID > 75000100000000   , NHDPlusID < 75000100001200   )
+
+
+ggplot() +
+  geom_sf(data = cat_test) +
+  geom_sf(data = sites_ci, color = "red")
+
+st_intersects(cat_test, sites_ci, sparse = FALSE) %>% sum()
+
+int <- st_intersection(cat_test, sites_ci)
+
+st_is_valid(cat_test)
+cat_test <- st_make_valid(cat_test)
+
+
+ggplot() +
+  geom_sf(data = cat_test) +
+  geom_sf(data = int, color = "blue")
+```
+
+
+
+
+
+Old code, not using since Priscilla had already put the catchment ids on the sites.
+
+```{r get catchments, eval = FALSE}
+
+hydro_layers <- st_layers(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb") 
+catch_layers <- hydro_layers[["name"]][grepl("watershed", hydro_layers[["name"]])]
+
+
+ege_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Egegik", catch_layers)]) #%>% 
+ege_cats <- ege_cats[st_intersects(ege_cats, bb_sites_akalb) %>% lengths > 0,] #ugly but only method that worked from search on stack overflow
+
+nak_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Naknek", catch_layers)]) 
+nak_cats <- nak_cats[st_intersects(nak_cats, bb_sites_akalb) %>% lengths > 0,]
+
+bb_cats <- rbind(ege_cats, nak_cats)
+summary(bb_cats)
+
+
+ggplot() +
+  geom_sf(data = bb_cats)
+
+
+
+#below not working
+bb_cats <- st_sf(st_sfc())
+
+for (i in catch_layers) {
+  cat_temp <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = i)
+  cat_int <- st_intersection(bb_sites_akalb, cat_temp)
+  rbind(bb_cats, cat_int %>% select(SiteID, Agnc_ID))
+}
+bb_sites <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "bb_md_verified_DM")
+
+ggplot() +
+  geom_sf(data = cat_temp) +
+  geom_sf(data = cat_int, color = "red", fill = "red")
+
+```
+
+
+
+# Extract DAYMET
+
+daymetr library on github is using Daymet V4, which has 2020. Daymet download tool (thredds ncss) should be working now per email from Michele Thornton on 6/10/21. 
+
+Note that daymet is in Lambert Conformal Conic system. From old scripts for KFHP repo, retransformed daymet before averaging across catchments.
+We need 2020 data, which are available. There are 99 sites with complete 2020 summer data.
+
+We need additional daymet tiles or grids to cover bristol bay and kodiak to summarize by catchments.
+
+Great, daymet is now working for AK areas and 2020 (switched to development version of daymetr). (6/14/21)
+
+
+```{r}
+daymet_dir <- "W:/GIS/Daymet/raw"
+
+
+download_area_LJ <- c(64, -154, 58, -142)
+path_LJ <- "W:\\Leslie\\GIS\\Daymet\\daily"
+
+download_daymet_ncss(location = c(64, -154, 63.75, -153.75),
+                     start = 2020, end = 2020, param = c("tmin"), frequency = "daily",
+                     mosaic = "na", path = daymet_dir, silent = TRUE)
+
+tic("download one year of daymet")
+download_daymet_ncss(location = download_area_LJ,
+                     start = 2019, end = 2019, param = c("tmin","tmax", "swe", "prcp", "srad"), frequency = "daily",
+                     mosaic = "na", path = daymet_dir, silent = TRUE)
+toc(log = TRUE)
+tic.log()
+
+```
+
+Download all daymet again to include bristol bay and kodiak.
+
+NOT RUN.
+
+```{r}
+md
+
+long1 <- c(range(st_coordinates(bb_sites)[,'X']), range(st_coordinates(sites_notbb)[,'X']))
+lat1 <- c(range(st_coordinates(bb_sites)[,'Y']), range(st_coordinates(sites_notbb)[,'Y']))
+
+#top left and bottom right, lat, long
+download_area_new <- c(max(lat1) + 1, min(long1) - 1, min(lat1) - 1, max(long1) + 1)
+download_area2 <- c(60, -150, 59, -149)
+
+download_daymet_ncss(location = download_area2,
+                     start = 2020,
+                     end = 2020,
+                     param = c("tmin", "tmax"),
+                     frequency = "daily",
+                     path = "W:\\Leslie\\GIS\\Daymet\\daily_entire_study_area",
+                     silent = TRUE)
+
+
+
+download_daymet_ncss(location = c(62, -163, 61, -162),
+                      start = 1980,
+                      end = 1980,
+                      param = c("tmin"),
+                      path = daymet_dir)
+```
+
+Check that daymet covers all sites. From script below, two usfs sites are missing air temps.
+
+```{r download 2015 tmin grid}
+
+md <- readRDS(file = "final_data/md.rds")
+md
+
+long1 <- range(md$Longitude)
+lat1 <- range(md$Latitude)
+
+#top left and bottom right, lat, long
+download_area_new <- c(max(lat1) + .01, min(long1) - .01, min(lat1) - .01, max(long1) + .01)
+
+download_daymet_ncss(location = download_area_new,
+                     start = 2015,
+                     end = 2015,
+                     param = c("tmin"),
+                     frequency = "daily",
+                     path = "RAW/DAYMET/",
+                     silent = TRUE)
+
+```
+
+
+
+```{r}
+tmin2015 <- raster("RAW/DAYMET/tmin_daily_2015_ncss.nc") 
+tmin_aa <- projectRaster(tmin2015, crs = "+init=epsg:3338") #alaska albers
+
+plot(tmin_aa)
+md_sf <- st_as_sf(md, crs = "wgs84", coords = c("Longitude", "Latitude"))
+md_aa <- st_transform(md_sf, 3338)
+
+st_crs(md_aa) == st_crs(tmin_aa)
+
+plot(tmin_aa)
+plot(md_aa["SiteID"], add = TRUE)
+
+tmin_bbox <- st_as_sfc(st_bbox(tmin_aa))
+
+ggplot() +
+  geom_sf(data = tmin_bbox) +
+  geom_sf(data = st_geometry(md_aa %>% filter(SiteID %in% c("USFS_Middle Arm Eyak", "USFS_Solf Lake Fish Pass"))))
+
+
+plot(tmin_bbox)
+plot(st_geometry(md_aa %>% filter(SiteID %in% c("USFS_Middle Arm Eyak", "USFS_Solf Lake Fish Pass"))))
+
+```
+
+
+# Get air temperatures by sites
+
+Get data for points from final shapefile where sites have been shifted to correct location.
+
+Note: this was run off of the metadata lat/long and not the final shp where some sites were shifted, although nothing drastic, mostly just a few km off, which shouldn't make much of a difference.
+
+Note that there are duplicates for NPS lake outlets because I combined level and temp loggers into one site id since they are essentially the same site.
+
+```{r}
+md <- readRDS("final_data/Metadata/md.rds")
+
+test <- md %>% 
+  filter(!(Waterbody_type %in% "L")) %>% 
+  distinct(SiteID)
+
+#ok all sites in data have md
+ddat %>% distinct(SiteID) %>% left_join(test %>% mutate(md = 1))
+
+#still one site in md that doesn't have data, assume that this should have been dropped from md in qa and just got missed.
+test %>% left_join(ddat %>% distinct(SiteID) %>% mutate(dat = 1)) %>% 
+  filter(is.na(dat)) %>% 
+  arrange(SiteID)
+
+md %>% 
+  filter(!(Waterbody_type %in% "L")) %>% 
+  count(SiteID, Latitude, Longitude) %>% arrange(desc(n))
+
+write.csv(md %>%
+            filter(!(Waterbody_type %in% "L")) %>% 
+            distinct(SiteID, Latitude, Longitude), file = paste0("sites", Sys.Date(), ".csv"),
+          row.names = FALSE)
+
+dm_batch <- download_daymet_batch(file_location = "sites2021-06-14.csv",
+                      start = 1980,
+                      end = 2020,
+                      simplify = TRUE,
+                      silent = TRUE)
+
+```
+
+Two USFS sites flagged as lakes, but add them back in for now and check with Dustin and/or Luca. Middle Arm Eyak does look like it's in the lake. Solf Lake outlet is right at the lake outlet, but I think we have a lot of these sites elsewhere so inculde for now.
+
+```{r}
+
+write.csv(md %>%
+            filter(SiteID %in% c("USFS_Middle Arm Eyak", "USFS_Solf Lake Fish Pass")) %>% 
+            distinct(SiteID, Latitude, Longitude), file = paste0("two_usfs_lake_sites", Sys.Date(), ".csv"),
+          row.names = FALSE)
+
+dm_two_usfs_lake_sites <- download_daymet_batch(file_location = "two_usfs_lake_sites2021-06-16.csv",
+                      start = 1980,
+                      end = 2020,
+                      simplify = TRUE,
+                      silent = TRUE)
+
+dm_all <- bind_rows(dm_batch, dm_two_usfs_lake_sites)
+
+write_csv(dm_all, "daymet/site_daymet.csv")
+
+dm_batch %>% 
+  distinct(site, measurement)
+dm_batch %>% 
+  distinct(site)
+dm_batch %>% 
+  distinct(measurement)
+
+
+
+```
+
+# try feddata library
+
+This could also work, but NOT RUN. (tried this back when daymet ncss had error.)
+
+
+```{r}
+
+akssf_sa <- st_read(dsn = "W:/GIS/AKSSF Southcentral/AKSSF_Hydrography.gdb", layer = "AKSSF_studyarea_HUC8")
+akssf_bdy <- st_union(akssf_sa)
+
+mat <- akssf_sa %>% filter(Name == "Matanuska")
+
+ggplot() +
+  geom_sf(data = akssf_bdy)
+
+names(akssf_sa)
+
+akssf_bdy_sp <- as_Spatial(akssf_bdy)
+mat_sp <- as_Spatial(mat)
+
+ggplot() +
+  # geom_sf(data = akssf_bdy) 
+  geom_sf(data = mat)
+
+daymet_test <- get_daymet(template = mat_sp, label = "akssf", elements = c("tmin"), years = c(2019), region = "na",
+                          tempo = "day", force.redo = TRUE, extraction.dir = "daymet/")
+daymet_test <- get_daymet(akssf_bdy_sp, label = "akssf", elements = c("tmin"), years = 2019)
+
+
+ template_bbox <- mat_sp %>% sf::st_bbox() %>% sf::st_as_sfc() %>% 
+        sf::st_transform(4326) %>% sf::st_bbox()
+ 
+ template_bbox
+ 
+ 
+matPolygon <- polygon_from_extent(raster::extent(-149, -146, 61, 63),
+  proj4string = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+)
+ 
+plot(matPolygon)
+
+test20 <- get_daymet(
+  template = matPolygon,
+  label = "mat",
+  elements = c("prcp"),
+  years = 2019
+)
+```
+
+

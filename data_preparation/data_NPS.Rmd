@@ -106,8 +106,7 @@ Combine the KNB and new datasets. Note that there is overlap in data for Caribou
 ```{r all data}
 intersect(names(nps.data1), names(nps.data2))
 
-nps.data <- bind_rows(nps.data1, nps.data2 %>% mutate(year = year(sampleDate))) #%>% 
-  select(-file_name)
+nps.data <- bind_rows(nps.data1, nps.data2 %>% mutate(year = year(sampleDate))) 
 
 ```
 
@@ -144,7 +143,7 @@ nps.data %>%
 
 ## Save data files
 
-Save the data frame as an .rds and put on drive for Dustin or Priscilla to QA. For both the data file and the metadata file, modified the site names to include NPS in front since the SiteID is just stream names.
+Save the data frame as an .rds and put on drive for Dustin or Priscilla to QA. For both the data file and the metadata file, modified the site names to include NPS in front since the SiteID is just stream names. 
 
 ```{r}
 nps.data %>% 
@@ -158,9 +157,11 @@ Save metadata file in final data folder.
 nps.md <- nps.data %>% 
   distinct(SiteID) %>% 
   left_join(nps_md) %>% 
-  rename(seq_id = "AKOATS_ID") 
+  rename(seq_id = "AKOATS_ID",
+         Agency_ID = SiteID) %>% 
+  mutate(SiteID = paste0("NPS_", Agency_ID))
 
-save_metadata_files(nps.md, "NPS_ts")
+save_metadata_files(nps.md, "npsTreyS")
 
 ```
 

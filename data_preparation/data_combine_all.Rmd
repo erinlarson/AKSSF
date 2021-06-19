@@ -8,8 +8,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = normalizePath("..")) 
 
-
-
 # load packages
 library(googledrive)
 library(lubridate)
@@ -24,12 +22,12 @@ library(caTools)
 library(tidyverse)
 
 # install.packages("devtools")
-devtools::install_github("yutannihilation/ggsflabel")
+# devtools::install_github("yutannihilation/ggsflabel")
 library(ggsflabel)
 
 ```
 
-
+5/26/21 - updated nps data, make sure to bring in for downloading air temps.
 
 # Metadata
 
@@ -38,11 +36,15 @@ Bring in the metadata for each dataset. Export a shapefile so that we can check 
 ```{r read in metadata}
 gd.akssf.files <- drive_ls(path = "https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
 
+gd.akssf.files %>% 
+  arrange(name)
+
 gd.metadata.files <- gd.akssf.files %>% 
   filter(grepl("Metadata", name) & grepl(".csv", name))
 
 folder <- "data_preparation/final_data/Metadata/"
 
+#note may need to redirect to root dir to get this to run. Doesn't always work after just running line in setup chunk.
 for (i in seq_along(gd.metadata.files$name)) {
   drive_download(as_id(gd.metadata.files$id[i]),
                  path = str_c(folder, gd.metadata.files$name[i]),
@@ -50,8 +52,6 @@ for (i in seq_along(gd.metadata.files$name)) {
 }
 
 local.md.files <- list.files(folder, full.names = TRUE)
-
-local.md.files <- local.md.files[!grepl("Eyak", local.md.files)]
 
 md <- map_df(local.md.files, function(x) read_csv(x, col_types = "ccccccccccccccc") %>%
                       mutate(file_name = basename(x))) %>% 
@@ -63,3 +63,225 @@ md <- md %>%
                             TRUE ~ SiteID))
 
 ```
+
+
+
+Convert to sf object and save as a shapefile.
+NOT RUN, this was exported previously so we could shift sites to correct locations in ArcGIS.
+
+```{r}
+md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
+
+akssf_sa <- st_read(dsn = "W:/GIS/AKSSF Southcentral/AKSSF_Hydrography.gdb", layer = "AKSSF_studyarea_HUC8")
+akssf_sa_wgs84 <- st_transform(akssf_sa, crs = "wgs84")
+st_crs(akssf_sa_wgs84) == st_crs(md_sf)
+md_sf <- st_join(md_sf, akssf_sa_wgs84 %>% select(HUC8, Name))
+
+ggplot() +
+  geom_sf(data = akssf_sa) +
+  geom_sf(data = md_sf, aes(color = HUC8 > 1903)) 
+
+#remove sites in bb and kusko
+md_sf_nobb <- md_sf %>% filter(!grepl("1903", HUC8)) %>% filter(!is.na(HUC8)) 
+
+#check
+ggplot() +
+  geom_sf(data = akssf_sa, aes(color = HUC8 > 1903)) +
+  geom_sf(data = md_sf_nobb) 
+
+st_write(md_sf_nobb, "output/sites_outside_bb.shp", append = FALSE)
+```
+
+# Get regions and huc8 on metadata file
+
+```{r create metadata sf}
+md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "WGS84")
+```
+
+Read in HUC8s and reproject.
+
+```{r add huc8 names to md_sf}
+huc8 <- st_read(dsn = "S:/Leslie/GIS/NHD Harmonized/WBD_19_GDB.gdb", layer = "WBDHU8")
+st_crs(huc8)
+huc8_wgs84 <- st_transform(huc8, crs = "WGS84")
+
+st_crs(md_sf) == st_crs(huc8_wgs84)
+
+md_sf <- st_join(md_sf, huc8_wgs84)
+
+ggplot() +
+  geom_sf(data = md_sf, aes(color = Name))
+
+```
+
+Remove Kuskokwim Delta sites from md and md_sf.
+
+```{r remove kuskokwim sites}
+kusko <- md_sf %>% filter(Name == "Kuskokwim Delta") %>% pull(SiteID)
+
+md <- md %>% 
+  filter(!SiteID %in% kusko)
+
+md_sf <- md_sf %>% 
+  filter(!SiteID %in% kusko)
+
+```
+
+Add in a region - Bristol Bay, Cook Inlet, PWS, Kodiak, or Copper. 
+
+* Copper 19020101-19020104
+* PWS 19020201-19020203
+* CI 19020301-19020602
+* Kodiak 19020701 - just this one?
+* BB 19030202-19030306
+
+
+```{r add region to md}
+md_sf %>% 
+  st_drop_geometry() %>% 
+  distinct(Name, HUC8) %>% 
+  arrange(HUC8)
+
+md_sf <- md_sf %>% 
+  mutate(Region = case_when(HUC8 %in% 19020301:19020602 ~ "Cook Inlet",
+                            HUC8 == 19020701 ~ "Kodiak",
+                            HUC8 %in% 19020101:19020104 ~ "Copper",
+                            HUC8 %in% 19020201:19020203 ~ "Prince William Sound",
+                            TRUE ~ "Bristol Bay"))
+
+md <- left_join(md, st_drop_geometry(md_sf) %>% distinct(SiteID, HUC8, Name, Region))
+```
+Chunk above run and everything saved on 6/14/21.
+
+```{r save metadata}
+saveRDS(md, file = "data_preparation/final_data/md.rds")
+write_csv(md, path = "data_preparation/final_data/md.csv")
+saveRDS(md_sf, file = "data_preparation/final_data/md_sf.rds")
+
+```
+
+
+# Data
+
+```{r create daily data frame}
+#remove lake sites
+gd.daily.files <- gd.akssf.files %>% 
+  filter(grepl("Daily_Data", name) & grepl(".csv", name), !grepl("lakes", name))
+
+folder <- "data_preparation/final_data/Daily_Data/"
+
+for (i in seq_along(gd.daily.files$name)) {
+  drive_download(as_id(gd.daily.files$id[i]),
+                 path = str_c(folder, gd.daily.files$name[i]),
+                 overwrite = TRUE)
+}
+
+local.daily.files <- list.files(folder, full.names = TRUE)
+
+ddat <- map_df(local.daily.files, function(x) read_csv(x, col_types = "cccccc") %>%
+                      mutate(file_name = basename(x))) 
+
+ddat <- ddat %>% 
+  mutate(sampleDate = as.Date(sampleDate),
+         minDT = as.numeric(minDT),
+         maxDT = as.numeric(maxDT),
+         meanDT = case_when(is.na(meanDT) ~ (minDT + maxDT)/2,
+                            TRUE ~ as.numeric(meanDT)))
+
+summary(ddat)
+#missing meandt for usgs
+ddat %>% filter(is.na(meanDT)) %>% distinct(file_name)
+
+#missing mindt for usgs and tc data, which were downloaded dailies that he saved to zenodo
+ddat %>% filter(is.na(minDT)) %>% distinct(file_name)
+
+ddat <- ddat %>% 
+  filter(!is.na(meanDT))
+
+#remove kuskokwim delta sites
+ddat <- ddat %>% 
+  filter(!SiteID %in% kusko)
+
+write_csv(ddat, paste0("data_preparation/daily_data", Sys.Date()))
+```
+
+Merge with batched air temperatures.
+
+```{r merge with air temps}
+
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet %>% distinct(measurement)
+
+air <- daymet %>%
+  filter(measurement %in% c("tmax..deg.c.", "tmin..deg.c.")) %>% 
+  mutate(sampleDate = as.Date(yday, origin = paste0(year, "-01-01"))) %>% 
+  filter(month(sampleDate) %in% 6:9) %>% 
+  rename(SiteID = site) %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(airDT = mean(value))
+
+rm(daymet)
+
+ddat <- read_csv("data_preparation/daily_data2021-06-15")
+
+#half the data are outside summer window.
+ddat %>% 
+  count(summer = month(sampleDate) %in% 6:9,
+        SiteID) %>% 
+  arrange(SiteID)
+
+sumdat <- left_join(ddat %>% filter(month(sampleDate) %in% 6:9,
+                                    year(sampleDate) %in% 1980:2020), air)
+summary(sumdat)
+
+sumdat <- sumdat %>% 
+  filter(!SiteID %in% kusko)
+```
+
+Save summer data frame for report on github page -- summary_report.rmd
+
+```{r}
+saveRDS(sumdat, paste0("data_preparation/summer_data_wair", Sys.Date(), ".rds"))
+```
+
+
+# Catchment and site air temperatures
+
+Try this for the Anchor, the only saved csvs for the Deshka have tair3 as column name so I think they were averaged first. Anchor has separate folders with tair and tair3. 
+
+```{r get anchor catchment air temps}
+anchor_folder <- "W:\\Github\\KFHP-Analysis\\Data\\anchor\\tair"
+
+files <- list.files(anchor_folder, full.names = TRUE) 
+anchor_air <- map_df(files, function(x) read_csv(x))
+
+anchor_sites <- read_csv("W:\\Github\\Temperature_Data\\output\\data_catalog\\anchor_sites.csv")
+
+anchor <- left_join(anchor_sites %>% select(catchmentID, SiteID), anchor_air, by = c("catchmentID" = "rca_id")) %>% 
+  rename(sampleDate = date)
+```
+
+
+Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the anchor data frame has data from all days and years, merge together using sites from anchor first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
+
+```{r catchment versus site air temps}
+#pretty close (42/43)
+left_join(anchor %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
+  count(site_dat)
+
+intersect(names(anchor), names(sumdat))
+
+anchor_air_comp <- left_join(anchor, sumdat) %>% 
+  filter(!is.na(meanDT))
+
+anchor_air_comp %>% 
+  ggplot() +
+  geom_point(aes(x = tair, y = airDT))
+
+anchor_air_comp %>% summarize(cor(tair, airDT))  
+
+#save for summary report
+saveRDS(anchor_air_comp, "data_preparation/anchor_air_comp.rds")
+
+```
+

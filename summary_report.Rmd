@@ -40,94 +40,42 @@ library(leaflet)
 
 ```
 
+This is a summary of the stream temperature dataset that we will use for the DFA analysis.
 
+We had a team meeting on January 25, 2021 and there were several things we discussed.
 
-# USFS Data 
+* We have included several additional datasets, including those recommended by Luca for the Copper River watershed and additional data from Kodiak.
+* For daymet, I extracted air temperatures by site location. Daymet are on a 1 km grid. I have not processed them by catchment because the daymet netcdf subset service was down from mid-May until June 10 when I was working on this. I did compare daily daymet air temperatures for catchments and sites at ~40 locations where we had both in the Anchor River watershed, which is summarized below.
+* There was some discussion during our first meeting regarding whether or how much of September to include in the analysis. I have created some data summaries showing the sample size after filtering on end dates of Aug. 31, Sept. 15, and  Sept. 30 and completeness values of 70%, 80%, and 90% (number of days within the summer window).
+* Part of the September discussion included whether air temperatures were below zero towards the end of that month. I plotted the air-stream temperatures by month and region to visualize those ranges and patterns and also made a table looking at which days were below zero.
+* Since DFA will be run by year, I summarized the number of sites by each year to see if there is a start year we should use or some years where data are too limited to include in the analysis.
+* We also talked about an interest in exploring the response to 2019 in particular so I have created some plots showing data by region for that year.
 
-Data from Luca Adelfio for 38 sites with 2 to 11 years (median = 7) of data from 2009 to 2019. Luca indicated that 11 sites were probably not useful in a landscape analysis because of site conditions and hydrology (e.g. lake influence, tidal influence, influence from downstream confluence).
+Decisions that I think we should make to get the data final for the DFA.
 
-
-```{r USFS site summary}
-fsdat <- read_rds("output/fsdat.rds")
-
-fsdat %>% 
-  distinct(SiteID, year, useSite) %>%
-  group_by(SiteID, useSite) %>% 
-  summarize(start_year = min(year),
-            end_year = max(year),
-            count_yrs = n()) %>% 
-  arrange(useSite) %>% 
-  datatable()
-
-```
-
-This data summary table shows the mean, maximum, minimum, and sd of the mean daily temperatures for each site and year. These would be strongly influenced by the duration of the data. The number of daily observations within each year is also provided.
-
-
-```{r USFS data summary}
-
-fs.data.summary <- fsdat %>%
-  group_by(SiteID, useSite, year, sampleDate) %>% 
-  summarize(mndt = mean(Temperature)) %>% 
-  group_by(SiteID, useSite, year) %>%
-  summarize(meanTemp = mean(mndt, na.rm = T),
-            maxTemp = max(mndt, na.rm = T),
-            minTemp = min(mndt, na.rm = T),
-            sdTemp = sd(mndt, na.rm = T),
-            n_obs = n()) 
-
-fs.data.summary %>%
-  arrange(useSite) %>% 
-  datatable() %>%
-  formatRound(columns=c("meanTemp","maxTemp","minTemp","sdTemp"), digits=2)
-```
-
-This figures shows the mean daily temperatures for each site by year. There are some winter temps that we aren't interested in, but could be removed or flagged (e.g. < -1). Also, possibly some air temperatures in the open water season, check with Luca to see if these have been reviewed. (Note that raw subdaily temps show some pretty dramatic differences in daily ranges -- e.g. 25 mile, Bench Creek 2018, Chickaloon hws 2015 and 2016, Olsen Creek 2013.... maybe others?). 
-
-```{r  USFS figure, fig.height=10, fig.width=8}
-
-fsdat %>%
-  filter(useSite == 1) %>% 
-  group_by(SiteID, sampleDate) %>% 
-  summarize(meanT = mean(Temperature)) %>%
-  complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
-  mutate(year = year(sampleDate),
-         mo_day = format(sampleDate, "%m-%d")) %>% 
-  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(year))) +
-  geom_line() +
-  scale_x_date(date_breaks = "3 months", date_labels = "%b") +
-  facet_wrap(~ SiteID) +
-  labs(x = "Date", y = "Mean Daily Temperature", color = "Year",
-       title = "USFS Original Logger Data by Site and Year") +
-  theme_bw() +
-  theme(legend.position = "bottom")
-```
+1. Do we want the daymet air temperatures summarized over catchments or sites?
+2. What should be use for our end date in the summer window?
+3. How much missing data can DFA handle within a time series? Should we filter on 70%, 80%, or 90% completeness? 
+4. Are there a specific set of years we want to focus on?
+5. What am I missing? Are there other things we need to look at and/or decide before we can filter the data for the DFA?
 
 # Map of sites and years of data
 
-This leaflet map shows the location of all of the sites that we have data for. Selecting each marker will show the data provider, the site name, the start year, the end year, and the number of years of data. Currently, only streams and rivers sites have been included.
+This map shows the location of all of the sites that we have data for. Selecting each marker will show the data provider, the site name, the river name, the start year, the end year, and the number of years of data. 
 
-```{r usfs}
-usfs_md <- read_rds("output/usfs_md.rds")
+```{r read in data}
 
+sumdat <- readRDS("data_preparation/summer_data_wair2021-06-16.rds")
+md <- read_rds("data_preparation/final_data/md.rds")
 
-fs.map.dat <- fsdat %>% 
-  distinct(SiteID, year, useSite) %>%
-  group_by(SiteID, useSite) %>% 
+map.dat <- sumdat %>% 
+  distinct(SiteID, year = year(sampleDate)) %>%
+  group_by(SiteID) %>% 
   summarize(startYear = min(year),
             endYear = max(year),
             totYears = n()) %>% 
-  arrange(useSite) %>% 
-  right_join(usfs_md)
-
-
-fs.map.dat
-```
-
-
-```{r combine}
-# all.dat <- bind_rows(uw.dat, accs.dat, cik.dat, fws.dat, nps.dat)
-all.dat <- bind_rows(fs.map.dat)
+  arrange(SiteID) %>% 
+  right_join(md)
 ```
 
 
@@ -138,14 +86,105 @@ leaflet() %>%
   addTiles() %>%  # Add default OpenStreetMap map tiles
   #fitBounds(-150, 60.04,-149.0, 60.02) %>%
   #setView(-150.210169, 60.487694, zoom = 8) %>%
-  addMarkers(lng = all.dat$Longitude, lat = all.dat$Latitude,
-             popup = paste("SiteID = ", all.dat$SiteID, "<br>",
-                           "Data Source = ", all.dat$SourceName, "<br>",
-                           "Start Year = ", all.dat$startYear, "<br>",
-                           "End Year = ", all.dat$endYear, "<br>",
-                           "Total Years of Data = ", all.dat$totYears, "<br>"))
+  addMarkers(lng = map.dat$Longitude, lat = map.dat$Latitude,
+             popup = paste("SiteID = ", map.dat$SiteID, "<br>",
+                           "Waterbody = ", map.dat$Waterbody_name, "<br>",
+                           "Data Source = ", map.dat$SourceName, "<br>",
+                           "Start Year = ", map.dat$startYear, "<br>",
+                           "End Year = ", map.dat$endYear, "<br>",
+                           "Total Years of Data = ", map.dat$totYears, "<br>"))
+
+```
+
+# Compare site and catchment air temperatures
+
+For a previous project, we averaged daymet air temperatures over catchments in the Anchor River watershed at a daily time step. These can be used to evaluate differences between site and catchment air temperatures. This is for 42 sites.
+
+```{r}
+anchor_air_comp <- readRDS("data_preparation/anchor_air_comp.rds")
+
+aircor <- anchor_air_comp %>% summarize(cor(tair, airDT))  
+
+anchor_air_comp %>% 
+  ggplot() +
+  geom_point(aes(x = tair, y = airDT)) +
+  geom_text(aes(x = 5, y = 15, label = paste0("r = ", round(aircor, 2)))) +
+  geom_abline(intercept = 0, slope = 1) +
+  ylim(c(2,20)) +
+  xlim(c(2,20)) +
+  labs(x = "Mean Catchment Air Temperatures", y = "Site Air Temperatures", title = str_wrap("Correlation between air temperatures extracted by point versus averaged over the catchment for 42 sites in the Anchor River watershed", 60)) +
+  theme_bw()
+
+```
+
+
+# Summer window and completeness
+
+```{r}
+
+#get huc8, region, and waterbody name on the data.
+
+sumdat <- left_join(sumdat, md %>% select(SiteID, Waterbody_name, Name:Region))
+
+sumtbl <- sumdat %>% 
+  mutate(year = year(sampleDate),
+         jd = format(sampleDate, "%j"),
+         S30 = case_when(jd < 274 ~ 1,
+                         TRUE ~ 0),
+         S15 = case_when(jd < 259 ~ 1,
+                         TRUE ~ 0),
+         A31 = case_when(jd < 244 ~ 1,
+                         TRUE ~ 0)) %>% 
+  group_by(Region, SiteID, Waterbody_name, year) %>%
+  summarize("Sept. 30" = sum(S30 == 1)/122,
+            "Sept. 15" = sum(S15 == 1)/107,
+            "Aug. 31" = sum(A31 == 1)/92) %>% 
+  ungroup() %>% 
+  pivot_longer(cols = 'Sept. 30':'Aug. 31', names_to = "Window", values_to = "value")
+ 
+```
+
+Table showing the number of time series (site and year combinations) with data completeness in each of three windows, all starting June 1. Window indicates the end date and the columns indicate the percent of days with data within the summer window (e.g. June 1 - September 30).
+
+```{r}
+sumtbl %>% 
+  group_by(Window) %>% 
+  summarize("70%" = sum(value > 0.7),
+            "80%" = sum(value > 0.8),
+            "90%" = sum(value > 0.9)) 
+
 
 ```
 
 
 
+
+# Air-stream relationships by month
+
+These are plots of the daily air temperatures and stream temperatures by month and region. There is obviously a lot of sites that have very cold stream temperatures with little response to air temperatures. There are some air temperatures below zero, especially in the Copper River watershed and also in Cook Inlet.
+
+```{r}
+sumdat %>% 
+  mutate(month = month(sampleDate, label = TRUE)) %>% 
+  ggplot() +
+  geom_point(aes(y = meanDT, x = airDT)) +
+  facet_grid(cols = vars(Region), rows = vars(month)) +
+  theme_bw()
+```
+
+
+Table showing number of days with air temperatures below zero by month and day. Almost everything is after September 20, so cutting the data off at September 15 seems to make sense.
+
+```{r}
+sumdat %>% 
+  filter(airDT < 0) %>% 
+  mutate(day = format(sampleDate, "%m-%d")) %>% 
+  count(day) %>% 
+  arrange(day)
+```
+
+
+
+# Data summary by year
+
+# Patterns in 2019

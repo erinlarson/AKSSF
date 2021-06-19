@@ -315,7 +315,7 @@ for(i in 1:nrow(ltMonths)) {
 mk.list
 ```
 
-#Linear Trends in Seasonal Temperatures
+# Linear Trends in Seasonal Temperatures
 
 
 

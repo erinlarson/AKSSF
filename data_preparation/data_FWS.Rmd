@@ -14,11 +14,11 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
-
 library(sf)
+library(googledrive)
 ```
 
-Meg sent all of their data in 2020. For each workbook, I checked the sites and years in her metadata sheet (basically updated AKOATS metadata), and compared it to the worksheets in that book. Some sites are missing because they were captured in the KNB archive (i.e. ended before or by 2017). Bring in entire KNB archive and remove duplicates and double-check they match what I see in the metadata.
+Meg sent all of their data in 2020. For each workbook, I checked the sites and years in her metadata sheet (basically updated AKOATS metadata), and compared it to the worksheets in that book. Some sites are missing because they were captured in the KNB archive (i.e. ended before or by 2017). I've asked her to send data for those sites because the KNB data had some errors (for both FWS and CIK).
 
 * Kodiak refuge data
 * OSM - office of subsistence mgmt data
@@ -65,6 +65,7 @@ kod_md <- read_excel(kod_wb, sheet = "AKOATS_metadata") %>%
 kod_md
 
 ```
+
 In the OSM metadata sheet, there are some empty rows that need to be filtered out. Also Meg added new lat/longs based on an ARRI report. I had checked these previously and the longitude for Tanada Creek is incorrect, use the original one.
 
 ```{r OSM metadata}
@@ -145,6 +146,12 @@ ggplot() +
 fws_akssf_sites <- fws_int %>% pull(SiteID)
 ```
 
+Create final AKSSF metdata file for FWS data - but keeping out Bristol Bay sites (Egegik and Newhalen). All are sites on Kodiak from the refuge, OSM, and WRB, except for two OSM sites on Long Lake and Tanada creeks.
+
+```{r final metadata}
+fws_akssf_md <- fws_md %>% 
+  filter(SiteID %in% fws_akssf_sites, !(Waterbody_name %in% c("Newhalen River", "Egegik River")))
+```
 
 
 ## Data
@@ -157,13 +164,13 @@ kod_sheets <- kod_sheets[!grepl("metadata|redlk01|karlk01|akalk02|homlk02", kod_
 
 kodiak <- tibble()
 for(i in kod_sheets) {
-  dat <- read_excel(kod_wb, sheet = i, skip = 1, col_names = FALSE, col_types = c("date", "date", "numeric")) %>% 
+  dat <- read_excel(kod_wb, sheet = i, skip = 1, col_names = FALSE, col_types = c("date", "date", "numeric"), na = "---") %>% 
     mutate(sampleDate = as.Date(`...1`), sampleTime = as.hms(`...2`), Temperature = `...3`, SiteID = i) %>% 
     select(SiteID, sampleDate, sampleTime, Temperature)
   kodiak <- bind_rows(kodiak, dat)
 }
 
-eftrv <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/KDK_EFTRV.xlsx") %>% 
+eftrv <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/KDK_EFTRV.xlsx", na = "---") %>% 
     mutate(sampleDate = as.Date(Date), sampleTime = as_hms(Time), Temperature = `TW [°C]`, SiteID = "kdk_eftrv01") %>% 
     select(SiteID, sampleDate, sampleTime, Temperature)
 
@@ -175,10 +182,10 @@ kodiak %>% distinct(SiteID) %>% arrange(SiteID)
 kodiak %>% 
   count(SiteID, year = year(sampleDate)) %>% 
   pivot_wider(names_from = year, values_from = n)
+
 ```
 
 OSM sites, bring in just the sites for our study area. These include two sites on kodiak ("kdk_" prefix), Long Lake Creek, and Tanada Creek. Newhalen River is in Bristol Bay and included in that dataset. Note that Tanada Creek was not exported correctly in the original OSM file so Meg resent that as a separate file on April 5, 2021.
-
 
 ```{r OSM data}
 osm_sheets <- excel_sheets(osm_wb)
@@ -186,16 +193,19 @@ osm_sheets <- osm_sheets[grepl("kdk_|LongLake", osm_sheets)]
 
 osm <- tibble()
 for(i in osm_sheets) {
-  dat <- read_excel(osm_wb, sheet = i, skip = 1, col_names = FALSE) %>% 
+  dat <- read_excel(osm_wb, sheet = i, skip = 1, col_names = FALSE, na = "---") %>% 
     mutate(sampleDate = as.Date(`...1`), sampleTime = as_hms(`...2`), Temperature = as.numeric(`...3`), SiteID = i) %>%
     select(SiteID, sampleDate, sampleTime, Temperature)
   osm <- bind_rows(osm, dat)
 }
 
-tanada <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/TanadaCreek.xlsx", skip = 1, col_names = FALSE) %>% 
+tanada <- read_excel("S:/Stream Temperature Data/USFWS Perdue - complete 2020/TanadaCreek.xlsx", skip = 1, col_names = FALSE, na = "---") %>% 
     mutate(sampleDate = as.Date(`...1`), sampleTime = as_hms(`...2`), Temperature = as.numeric(`...3`), SiteID = "Tanada Creek") %>%
     select(SiteID, sampleDate, sampleTime, Temperature)
-osm <- bind_rows(osm, tanada)
+osm <- bind_rows(osm, tanada) %>% 
+  mutate(SiteID = case_when(SiteID == "LongLakeCreek" ~ "Long Lake Creek",
+                            TRUE ~ SiteID),
+         SiteID = paste0("fws_", SiteID))
 
 
 summary(osm)
@@ -204,9 +214,7 @@ osm %>% filter(is.na(Temperature)) %>% count(SiteID, year(sampleDate))
 
 ```
 
-For Water Resources Branch, Meg provided data for two sites last fall: Egegik River, which I imported into the BB repo, and Koyukuk River, which doesn't apply to this project. There are other WRB sites on Kodiak that I'll import from the KNB archive next.
-
-I'm not going to bring in all of the KNB USFWS data because it is too much. Just filter on the sites that we need: 
+For Water Resources Branch, Meg provided data for two sites last fall: Egegik River, which I imported into the BB repo, and Koyukuk River, which doesn't apply to this project. There are other WRB sites on Kodiak that I requested from Meg because some of the KNB datasets were missing time info. I requested all 7 of these sites from Meg so I don't have to rely on KNB archive.
 
 * kodiak pincr01 2015-2017
 * kodiak meacr01 2016-2016
@@ -218,10 +226,9 @@ I'm not going to bring in all of the KNB USFWS data because it is too much. Just
 
 Note that WRB monitored Akalura R and Kodiak Refuge monitored Akalura Creek, which is not named correctly in the KNB files. Also, both WRB and the Kodiak Refuge monitored Ayakulik River, but just need the WRB file.
 
-# stopped here, check these data, looks like some are bad missing time info.
-I just requested all 7 of these sites from Meg so I don't have to rely on KNB archive.
 
-```{r KNB data}
+```{r KNB data, eval = FALSE}
+#old code to read in from knb - but BAD DATA
 
 fws_files <- list.files("S:/Stream Temperature Data/USFWS Perdue/data", pattern = ".csv", full.names = TRUE)
 
@@ -236,14 +243,46 @@ fws_knb %>% filter(is.na(sampleTime)) %>% count(file_name, year(sampleDate))
 ```
 
 
+
+```{r seven sites}
+seven_wb <- "S:/Stream Temperature Data/USFWS Perdue - complete 2020/SevenRequestedTemperatureSites.xlsx"
+seven_sheets <- excel_sheets(seven_wb)
+
+seven <- tibble()
+for(i in seven_sheets) {
+  dat <- read_excel(seven_wb, sheet = i, skip = 1, col_names = FALSE, na = "---") %>% 
+    mutate(sampleDate = as.Date(`...1`), sampleTime = as_hms(`...2`), Temperature = as.numeric(`...3`), SiteID = i) %>%
+    select(SiteID, sampleDate, sampleTime, Temperature)
+  seven <- bind_rows(seven, dat)
+}
+
+seven <- seven %>% 
+  mutate(SiteID = case_when(SiteID == "AkaluraCreek" ~ "571005154134600",
+                             SiteID == "AyakulikRiver" ~ "571343154244900",
+                             SiteID == "DogSalmonCreek" ~ "571221154040300",
+                             SiteID == "KarlukRiver" ~ "572656154082400",
+                             TRUE ~ SiteID))
+
+summary(seven)
+seven %>% distinct(SiteID) %>% arrange(SiteID)
+seven %>% filter(is.na(Temperature)) %>% count(SiteID, year(sampleDate))
+
+```
+
 Combine all the data. There should be 16 sites on Kodiak, 4 sites from OSM (Newhalen R is in BB), and 4 sites from WRB (Egegik is in BB).
 
 ```{r combine all fws data}
-fws_md %>% 
-  filter(SiteID %in% fws_akssf_sites)
-fws_md %>% 
+fws_akssf_md %>% 
   select(seq_id, SiteID, Waterbody_name) %>% 
   arrange(seq_id)
+
+fws <- bind_rows(kodiak, osm, seven) %>% 
+  mutate(UseData = 1) %>% 
+  filter(!is.na(Temperature))
+
+fws %>% distinct(SiteID) %>% arrange(SiteID) %>% left_join(fws_akssf_md)
+
+fws_akssf_md
 ```
 
 
@@ -252,18 +291,39 @@ fws_md %>%
 
 ## Duplicate measurements
 
-?? Sufficient to just use distinct() on site/temp/dt or more robust method?
+No duplicates.
+
+```{r}
+fws %>% 
+  count(SiteID, sampleDate, sampleTime) %>% 
+  arrange(desc(n))
+```
+
 
 ## Save data 
+
 Save copies of metadata file and temp data formatted for QA to local drive
 Save copies of metadata file and temp data formatted for QA to google drive
 
 ```{r Save Outputs}
 # Save copy of formatted data for qc (UseSite vs UseData?)
 # Save metadata - this will save a local copy and upload to google drive
-save_metadata_files(data.in, acronym = "NAME OF OUTPUT")
+save_metadata_files(fws_akssf_md, acronym = "fws")
+
+fws.daily <- temp_msmt_freq(fws) %>% daily_screen(.)
+
+summary(fws.daily)
+fws.daily %>% filter(minDT > 20)
+
+save_daily_files(fws.daily, "fws")
 
 
+fws %>% 
+  filter(SiteID == "fws_Long Lake Creek") %>% 
+  mutate(dt = as.POSIXct(paste0(sampleDate, sampleTime), format = "%Y-%m-%d %H:%M:%S")) %>% 
+  filter(year(sampleDate) == 2018) %>% 
+  ggplot(aes(x = dt, y = Temperature)) +
+  geom_line()
 ```
 
 
