@@ -280,8 +280,47 @@ anchor_air_comp %>%
 
 anchor_air_comp %>% summarize(cor(tair, airDT))  
 
-#save for summary report
-saveRDS(anchor_air_comp, "data_preparation/anchor_air_comp.rds")
-
 ```
 
+Same for Kenai, I found an archived folder with saved tair files for Kenai sites with rca_ids.
+
+
+```{r get kenai catchment air temps}
+kenai_folder <- "B:\\W\\GitHub\\KFHP-Analysis\\Data\\kenai\\tair"
+
+files <- list.files(kenai_folder, full.names = TRUE) 
+kenai_air <- map_df(files, function(x) read_csv(x))
+
+kenai_sites <- read_csv("W:\\Github\\Kenai_temperature\\output\\data_catalog\\kenai_sites.csv")
+
+kenai <- left_join(kenai_sites %>% select(catchmentID, SiteID), kenai_air, by = c("catchmentID" = "rca_id")) %>% 
+  rename(sampleDate = date)
+```
+
+Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the Kenai data frame has data from all days and years, merge together using sites from Kenai first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
+
+```{r catchment versus site air temps}
+#pretty close (24/28) - problems with usgs site names
+left_join(kenai %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
+  count(site_dat)
+
+intersect(names(kenai), names(sumdat))
+
+kenai_air_comp <- left_join(kenai, sumdat) %>% 
+  filter(!is.na(meanDT))
+
+kenai_air_comp %>% 
+  ggplot() +
+  geom_point(aes(x = tair, y = airDT))
+
+kenai_air_comp %>% summarize(cor(tair, airDT))  
+```
+
+Save comparisons for summary report.
+
+```{r}
+air_comp <- bind_rows(anchor_air_comp, kenai_air_comp)
+
+saveRDS(air_comp, "data_preparation/air_comp.rds")
+
+```

@@ -36,28 +36,31 @@ library(hms)
 library(plotly)
 library(DT)
 library(leaflet)
+library(sf)
+library(tmap)
+library(tmaptools)
 
 
 ```
 
-This is a summary of the stream temperature dataset that we will use for the DFA analysis.
+This is a summary of the stream temperature dataset that we will are using the AKSSF Stream Thermal Sensitivity project.
 
 We had a team meeting on January 25, 2021 and there were several things we discussed.
 
 * We have included several additional datasets, including those recommended by Luca for the Copper River watershed and additional data from Kodiak.
-* For daymet, I extracted air temperatures by site location. Daymet are on a 1 km grid. I have not processed them by catchment because the daymet netcdf subset service was down from mid-May until June 10 when I was working on this. I did compare daily daymet air temperatures for catchments and sites at ~40 locations where we had both in the Anchor River watershed, which is summarized below.
+* For daymet, air temperatures were extracted by site location. Daymet are on a 1 km grid. They have not been processed by catchment because the daymet netcdf subset service was down from mid-May until June 10 when I was working on this. Daily daymet air temperatures for catchments and sites are compared at ~60 locations where we had both in the Anchor and Kenai River watersheds, which is summarized below.
 * There was some discussion during our first meeting regarding whether or how much of September to include in the analysis. I have created some data summaries showing the sample size after filtering on end dates of Aug. 31, Sept. 15, and  Sept. 30 and completeness values of 70%, 80%, and 90% (number of days within the summer window).
 * Part of the September discussion included whether air temperatures were below zero towards the end of that month. I plotted the air-stream temperatures by month and region to visualize those ranges and patterns and also made a table looking at which days were below zero.
 * Since DFA will be run by year, I summarized the number of sites by each year to see if there is a start year we should use or some years where data are too limited to include in the analysis.
 * We also talked about an interest in exploring the response to 2019 in particular so I have created some plots showing data by region for that year.
 
-Decisions that I think we should make to get the data final for the DFA.
+Decisions to prepare data for the DFA.
 
 1. Do we want the daymet air temperatures summarized over catchments or sites?
 2. What should be use for our end date in the summer window?
 3. How much missing data can DFA handle within a time series? Should we filter on 70%, 80%, or 90% completeness? 
 4. Are there a specific set of years we want to focus on?
-5. What am I missing? Are there other things we need to look at and/or decide before we can filter the data for the DFA?
+5. Anything else I am missing that should be considered before running the DFA?
 
 # Map of sites and years of data
 
@@ -68,18 +71,21 @@ This map shows the location of all of the sites that we have data for. Selecting
 sumdat <- readRDS("data_preparation/summer_data_wair2021-06-16.rds")
 md <- read_rds("data_preparation/final_data/md.rds")
 
+md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
+
 map.dat <- sumdat %>% 
   distinct(SiteID, year = year(sampleDate)) %>%
   group_by(SiteID) %>% 
-  summarize(startYear = min(year),
-            endYear = max(year),
-            totYears = n()) %>% 
-  arrange(SiteID) %>% 
-  right_join(md)
+  summarize(start_year = min(year),
+            end_year = max(year),
+            total_years = n()) %>% 
+  arrange(SiteID)
+
+md_sf <- merge(md_sf, map.dat)
 ```
 
 
-```{r leaflet map}
+```{r leaflet map, eval = FALSE}
 
 # create map
 leaflet() %>%
@@ -96,23 +102,39 @@ leaflet() %>%
 
 ```
 
+
+```{r tmap map}
+tmap_mode("view")
+
+sitemap <- md_sf %>%
+  tm_shape() +
+  tm_dots(id = "SiteID", size = 0.05, group = "Sites", col = "SourceName",
+          popup.vars = c("Waterbody_name", "start_year", "end_year", "total_years")) +
+  tm_text("SiteID", size = 1.5, shadow = TRUE, auto.placement = TRUE,
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE, group = "Labels" ) +
+  tm_basemap(server = c(Topo = "Esri.WorldTopoMap", Imagery = "Esri.WorldImagery" ))
+
+sitemap
+
+```
+
 # Compare site and catchment air temperatures
 
-For a previous project, we averaged daymet air temperatures over catchments in the Anchor River watershed at a daily time step. These can be used to evaluate differences between site and catchment air temperatures. This is for 42 sites.
+For a previous project, we averaged daymet air temperatures over catchments in the Anchor and Kenai River watersheds at a daily time step. These can be used to evaluate differences between site and catchment air temperatures. This is for 42 sites in the Anchor and 24 sites in the Kenai.
 
 ```{r}
-anchor_air_comp <- readRDS("data_preparation/anchor_air_comp.rds")
+air_comp <- readRDS("data_preparation/air_comp.rds")
 
-aircor <- anchor_air_comp %>% summarize(cor(tair, airDT))  
+aircor <- air_comp %>% summarize(cor(tair, airDT))  
 
-anchor_air_comp %>% 
+air_comp %>% 
   ggplot() +
   geom_point(aes(x = tair, y = airDT)) +
   geom_text(aes(x = 5, y = 15, label = paste0("r = ", round(aircor, 2)))) +
   geom_abline(intercept = 0, slope = 1) +
   ylim(c(2,20)) +
   xlim(c(2,20)) +
-  labs(x = "Mean Catchment Air Temperatures", y = "Site Air Temperatures", title = str_wrap("Correlation between air temperatures extracted by point versus averaged over the catchment for 42 sites in the Anchor River watershed", 60)) +
+  labs(x = "Mean Catchment Air Temperatures", y = "Site Air Temperatures", title = str_wrap("Correlation between air temperatures extracted by point versus averaged over the catchment for 66 sites in the Anchor and Kenai River watersheds", 60)) +
   theme_bw()
 
 ```
@@ -183,8 +205,56 @@ sumdat %>%
   arrange(day)
 ```
 
-
-
 # Data summary by year
 
+Function to filter data frame by different combinations of julian date and completeness. Note this assumes a lot about the input data frame.
+
+```{r}
+
+jd_completeness_filter <- function(inputDat, jd_filter, completeness_filter) {
+  dat <- inputDat %>% 
+    mutate(jd = as.numeric(format(sampleDate, "%j")),
+           year = year(sampleDate)) %>% 
+    filter(jd >= 152, jd <= jd_filter) #June 1st to end date
+  ndays <- max(dat$jd) - min(dat$jd)
+  dat2 <- dat %>%
+    group_by(SiteID, year) %>%
+    mutate(completeness = n()/ndays * 100) %>% 
+    filter(completeness > completeness_filter) %>% 
+    ungroup()
+  return(dat2)
+}
+
+```
+
+Filter on September 15 as an end date and 70% of days within summer window.
+
+```{r}
+sumdat2 <- jd_completeness_filter(sumdat, 258, 70)
+
+sumdat2 %>% 
+  distinct(SiteID, year) %>% 
+  count(year) %>% 
+  ggplot() +
+  geom_point(aes(x = year, y = n)) +
+  labs(x = "Year", y = "Number of Sites", title = "Sites with 70% of days in June 1 - September 15 window") +
+  theme_bw()
+```
+
 # Patterns in 2019
+
+Take the filtered data frame from last step and look at 2019.
+
+```{r}
+sumdat2 %>% 
+  filter(year == 2019) %>% 
+  complete(Region, SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
+  ggplot(aes(x = sampleDate, y = meanDT, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Region) +
+  labs(x = "Date", y = "Mean Stream Temperature (°C)", title = "2019 Stream Temperatures by Region") +
+  theme_bw()
+
+```
+
+
