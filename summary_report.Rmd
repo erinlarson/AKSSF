@@ -39,6 +39,7 @@ library(leaflet)
 library(sf)
 library(tmap)
 library(tmaptools)
+library(zoo)
 
 
 ```
@@ -68,7 +69,7 @@ This map shows the location of all of the sites that we have data for. Selecting
 
 ```{r read in data}
 
-sumdat <- readRDS("data_preparation/summer_data_wair2021-06-16.rds")
+sumdat <- readRDS("data_preparation/summer_data_wair2021-07-30.rds")
 md <- read_rds("data_preparation/final_data/md.rds")
 
 md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
@@ -138,6 +139,22 @@ air_comp %>%
   theme_bw()
 
 ```
+
+Alternatively, it may be more interesting to see if averaging over the catchment reduced variability in air temperatures from day to day.
+
+```{r}
+air_comp %>% distinct(SiteID) %>% arrange(SiteID)
+
+air_comp %>% 
+  filter(SiteID %in% grep("CIK", SiteID, value = TRUE), year(sampleDate) == 2006) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = tair), color = "red") +
+  geom_line(aes(x = sampleDate, y = airDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y = rollmean(airDT, 3, na.pad = TRUE))) +
+  facet_wrap(~SiteID, ncol = 1)
+  
+```
+
 
 
 # Summer window and completeness

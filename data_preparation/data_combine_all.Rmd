@@ -15,11 +15,13 @@ library(readr)
 library(hms)
 library(ggmap)
 library(sf)
+library(stars)
 # library(leaflet)
 # library(osmdata)
 library(broom)
 library(caTools)
 library(tidyverse)
+library(daymetr)
 
 # install.packages("devtools")
 # devtools::install_github("yutannihilation/ggsflabel")
@@ -27,7 +29,6 @@ library(ggsflabel)
 
 ```
 
-5/26/21 - updated nps data, make sure to bring in for downloading air temps.
 
 # Metadata
 
@@ -65,11 +66,10 @@ md <- md %>%
 ```
 
 
-
 Convert to sf object and save as a shapefile.
 NOT RUN, this was exported previously so we could shift sites to correct locations in ArcGIS.
 
-```{r}
+```{r eval = FALSE}
 md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
 
 akssf_sa <- st_read(dsn = "W:/GIS/AKSSF Southcentral/AKSSF_Hydrography.gdb", layer = "AKSSF_studyarea_HUC8")
@@ -130,10 +130,10 @@ md_sf <- md_sf %>%
 Add in a region - Bristol Bay, Cook Inlet, PWS, Kodiak, or Copper. 
 
 * Copper 19020101-19020104
-* PWS 19020201-19020203
-* CI 19020301-19020602
+* PWS    19020201-19020203
+* CI     19020301-19020602
 * Kodiak 19020701 - just this one?
-* BB 19030202-19030306
+* BB     19030202-19030306
 
 
 ```{r add region to md}
@@ -151,6 +151,7 @@ md_sf <- md_sf %>%
 
 md <- left_join(md, st_drop_geometry(md_sf) %>% distinct(SiteID, HUC8, Name, Region))
 ```
+
 Chunk above run and everything saved on 6/14/21.
 
 ```{r save metadata}
@@ -163,8 +164,10 @@ saveRDS(md_sf, file = "data_preparation/final_data/md_sf.rds")
 
 # Data
 
+Bring in the data files and exclude files associated with lakes.
+
 ```{r create daily data frame}
-#remove lake sites
+
 gd.daily.files <- gd.akssf.files %>% 
   filter(grepl("Daily_Data", name) & grepl(".csv", name), !grepl("lakes", name))
 
@@ -189,10 +192,14 @@ ddat <- ddat %>%
                             TRUE ~ as.numeric(meanDT)))
 
 summary(ddat)
-#missing meandt for usgs
+
+```
+
+Clean up daily file for analysis. Some USGS data is missing the mean daily temperatures or minimum daily temperatures. Tim Cline's data only have the mean daily temperatures -- they were downloaded as summary data from Zenodo.
+
+```{r}
 ddat %>% filter(is.na(meanDT)) %>% distinct(file_name)
 
-#missing mindt for usgs and tc data, which were downloaded dailies that he saved to zenodo
 ddat %>% filter(is.na(minDT)) %>% distinct(file_name)
 
 ddat <- ddat %>% 
@@ -202,7 +209,7 @@ ddat <- ddat %>%
 ddat <- ddat %>% 
   filter(!SiteID %in% kusko)
 
-write_csv(ddat, paste0("data_preparation/daily_data", Sys.Date()))
+write_csv(ddat, paste0("data_preparation/final_data/daily_data", Sys.Date()))
 ```
 
 Merge with batched air temperatures.
@@ -212,9 +219,16 @@ Merge with batched air temperatures.
 daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
 daymet %>% distinct(measurement)
 
+#correct conversion is date2 bc date example below has Jan 1 as day 0!
+daymet %>% 
+  filter(year == 2006, 
+         yday == 152) %>% 
+  mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
+         date2 = as.Date(paste(year, yday), format = "%Y %j"))
+
 air <- daymet %>%
   filter(measurement %in% c("tmax..deg.c.", "tmin..deg.c.")) %>% 
-  mutate(sampleDate = as.Date(yday, origin = paste0(year, "-01-01"))) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
   filter(month(sampleDate) %in% 6:9) %>% 
   rename(SiteID = site) %>% 
   group_by(SiteID, sampleDate) %>% 
@@ -222,7 +236,7 @@ air <- daymet %>%
 
 rm(daymet)
 
-ddat <- read_csv("data_preparation/daily_data2021-06-15")
+# ddat <- read_csv("data_preparation/final_data/daily_data2021-06-15")
 
 #half the data are outside summer window.
 ddat %>% 
@@ -231,96 +245,18 @@ ddat %>%
   arrange(SiteID)
 
 sumdat <- left_join(ddat %>% filter(month(sampleDate) %in% 6:9,
-                                    year(sampleDate) %in% 1980:2020), air)
+                                    year(sampleDate) %in% 1980:2020), 
+                    air)
+
 summary(sumdat)
 
-sumdat <- sumdat %>% 
-  filter(!SiteID %in% kusko)
 ```
 
 Save summer data frame for report on github page -- summary_report.rmd
 
 ```{r}
-saveRDS(sumdat, paste0("data_preparation/summer_data_wair", Sys.Date(), ".rds"))
+saveRDS(sumdat, paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".rds"))
+write_csv(sumdat, path = paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".csv"))
 ```
 
 
-# Catchment and site air temperatures
-
-Try this for the Anchor, the only saved csvs for the Deshka have tair3 as column name so I think they were averaged first. Anchor has separate folders with tair and tair3. 
-
-```{r get anchor catchment air temps}
-anchor_folder <- "W:\\Github\\KFHP-Analysis\\Data\\anchor\\tair"
-
-files <- list.files(anchor_folder, full.names = TRUE) 
-anchor_air <- map_df(files, function(x) read_csv(x))
-
-anchor_sites <- read_csv("W:\\Github\\Temperature_Data\\output\\data_catalog\\anchor_sites.csv")
-
-anchor <- left_join(anchor_sites %>% select(catchmentID, SiteID), anchor_air, by = c("catchmentID" = "rca_id")) %>% 
-  rename(sampleDate = date)
-```
-
-
-Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the anchor data frame has data from all days and years, merge together using sites from anchor first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
-
-```{r catchment versus site air temps}
-#pretty close (42/43)
-left_join(anchor %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
-  count(site_dat)
-
-intersect(names(anchor), names(sumdat))
-
-anchor_air_comp <- left_join(anchor, sumdat) %>% 
-  filter(!is.na(meanDT))
-
-anchor_air_comp %>% 
-  ggplot() +
-  geom_point(aes(x = tair, y = airDT))
-
-anchor_air_comp %>% summarize(cor(tair, airDT))  
-
-```
-
-Same for Kenai, I found an archived folder with saved tair files for Kenai sites with rca_ids.
-
-
-```{r get kenai catchment air temps}
-kenai_folder <- "B:\\W\\GitHub\\KFHP-Analysis\\Data\\kenai\\tair"
-
-files <- list.files(kenai_folder, full.names = TRUE) 
-kenai_air <- map_df(files, function(x) read_csv(x))
-
-kenai_sites <- read_csv("W:\\Github\\Kenai_temperature\\output\\data_catalog\\kenai_sites.csv")
-
-kenai <- left_join(kenai_sites %>% select(catchmentID, SiteID), kenai_air, by = c("catchmentID" = "rca_id")) %>% 
-  rename(sampleDate = date)
-```
-
-Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the Kenai data frame has data from all days and years, merge together using sites from Kenai first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
-
-```{r catchment versus site air temps}
-#pretty close (24/28) - problems with usgs site names
-left_join(kenai %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
-  count(site_dat)
-
-intersect(names(kenai), names(sumdat))
-
-kenai_air_comp <- left_join(kenai, sumdat) %>% 
-  filter(!is.na(meanDT))
-
-kenai_air_comp %>% 
-  ggplot() +
-  geom_point(aes(x = tair, y = airDT))
-
-kenai_air_comp %>% summarize(cor(tair, airDT))  
-```
-
-Save comparisons for summary report.
-
-```{r}
-air_comp <- bind_rows(anchor_air_comp, kenai_air_comp)
-
-saveRDS(air_comp, "data_preparation/air_comp.rds")
-
-```

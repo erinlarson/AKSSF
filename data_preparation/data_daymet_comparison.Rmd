@@ -1,0 +1,295 @@
+---
+title: "data_daymet"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = normalizePath("..")) 
+
+# load packages
+library(lubridate)
+library(sf)
+library(stars)
+library(tidyverse)
+library(daymetr)
+library(zoo)
+```
+
+# Catchment and site air temperatures
+
+## Historic daymet extractions
+
+Get summarized daymet air temperatures by catchments from old Anchor and Kenai temperature modeling projects and combine with the site air temperatures extracted for this project. Try first for the Anchor, the only saved csvs for the Deshka have tair3 as column name so I think they were averaged first. Anchor has separate folders with tair and tair3. 
+
+```{r get anchor catchment air temps}
+anchor_folder <- "W:\\Github\\KFHP-Analysis\\Data\\anchor\\tair"
+
+files <- list.files(anchor_folder, full.names = TRUE) 
+anchor_air <- map_df(files, function(x) read_csv(x))
+
+anchor_sites <- read_csv("W:\\Github\\Temperature_Data\\output\\data_catalog\\anchor_sites.csv")
+
+anchor <- left_join(anchor_sites %>% select(catchmentID, SiteID), anchor_air, by = c("catchmentID" = "rca_id")) %>% 
+  rename(sampleDate = date)
+```
+
+Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the anchor data frame has data from all days and years, merge together using sites from anchor first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
+
+```{r catchment versus site air temps}
+#pretty close (42/43)
+left_join(anchor %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
+  count(site_dat)
+
+intersect(names(anchor), names(sumdat))
+
+anchor_air_comp <- left_join(anchor, sumdat) %>% 
+  filter(!is.na(meanDT))
+
+anchor_air_comp %>% 
+  ggplot() +
+  geom_point(aes(x = tair, y = airDT))
+
+anchor_air_comp %>% summarize(cor(tair, airDT))
+
+rm(anchor, anchor_air, anchor_sites, anchor_folder)
+```
+
+Same for Kenai, I found an archived folder with saved tair files for Kenai sites with rca_ids.
+
+```{r get kenai catchment air temps}
+kenai_folder <- "B:\\W\\GitHub\\KFHP-Analysis\\Data\\kenai\\tair"
+
+files <- list.files(kenai_folder, full.names = TRUE) 
+kenai_air <- map_df(files, function(x) read_csv(x))
+
+kenai_sites <- read_csv("W:\\Github\\Kenai_temperature\\output\\data_catalog\\kenai_sites.csv")
+
+kenai <- left_join(kenai_sites %>% select(catchmentID, SiteID), kenai_air, by = c("catchmentID" = "rca_id")) %>% 
+  rename(sampleDate = date)
+```
+
+Merge this with the site daymet air temps. The sumdat has data from all 500 sites, but the Kenai data frame has data from all days and years, merge together using sites from Kenai first, but then just keep the records with air temps from both sites and days with stream temp data in sumdat.
+
+```{r catchment versus site air temps}
+#pretty close (24/28) - problems with usgs site names
+left_join(kenai %>% distinct(SiteID), sumdat %>% distinct(SiteID) %>% mutate(site_dat = 1)) %>% 
+  count(site_dat)
+
+intersect(names(kenai), names(sumdat))
+
+kenai_air_comp <- left_join(kenai, sumdat) %>% 
+  filter(!is.na(meanDT))
+
+kenai_air_comp %>% 
+  ggplot() +
+  geom_point(aes(x = tair, y = airDT))
+
+kenai_air_comp %>% summarize(cor(tair, airDT))  
+
+rm(kenai, kenai_air, kenai_sites, kenai_folder)
+```
+
+Save comparisons for summary report.
+
+```{r}
+air_comp <- bind_rows(anchor_air_comp, kenai_air_comp)
+
+saveRDS(air_comp, "data_preparation/air_comp.rds")
+
+```
+
+The catchment air temperatures are less variable than the site air temperatures, but I'm not sure why without viewing the daymet raster.
+
+```{r}
+air_comp %>% 
+  filter(SiteID %in% grep("CIK", SiteID, value = TRUE), year(sampleDate) == 2006) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = tair), color = "red") +
+  geom_line(aes(x = sampleDate, y = airDT), color = "blue") +
+  # geom_line(aes(x = sampleDate, y = rollmean(airDT, 3, na.pad = TRUE))) +
+  facet_wrap(~SiteID, ncol = 1)
+```
+
+The results above are really strange and indicate some serious smoothing on the tair file I was grabbing. Since I don't really know the origin of that data, I should just extract catchment means for one of the watersheds here and compare. Since daymet is 1 km grid and catchments are relatively small, it's really hard to imagine the site versus catchment air temperatures differing by much at all.
+
+```{r read in anchor catchments}
+anchor_cats <- st_read("W:/Github/Temperature_Data/output/data_catalog/anchor_catchments.shp")
+# anchor_wgs84 <- st_transform(anchor_cats, crs = 3338)
+
+st_area(anchor_cats) %>% 
+  as_tibble() %>% 
+  mutate(km2 = as.numeric(value)/1000000) %>% 
+  summary()
+
+```
+
+Anchor catchments range from < 0.1 to 7.8 km2, but 75% are less than 0.77 km2 so taking an average over a 1 km grid doesn't make any sense. These catchments were created by Dustin using STARS package, I believe. Check catchment sizes for NHDPlus Cook Inlet, which has been merged.
+
+```{r get catchments for Cook Inlet}
+
+cats_ci <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "NHDPlusCatchments_CookInlet_Merge")
+st_area(cats_ci) %>% 
+  as_tibble() %>% 
+  mutate(km2 = as.numeric(value)/1000000) %>% 
+  summary()
+
+st_area(cats_ci) %>% 
+  as_tibble() %>% 
+  mutate(km2 = as.numeric(value)/1000000) %>%
+  pull(km2) %>% 
+  quantile(., 0.95)
+```
+
+Cook Inlet NHDPlus catchments are even smaller, 75% are less than 0.25 km2, 95% < 1.5 km2
+
+# Extracting daymet by site and catchment for three Anchor River sites
+
+Get ~500 sites for akssf project.
+
+```{r combine all sites}
+
+sites_notbb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "sites_outside_bb_verified_DM")
+sites_bb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "bb_md_verified_DM")
+
+keep <- intersect(names(sites_notbb), names(sites_bb))
+
+sites <- rbind(sites_notbb %>% dplyr::select(all_of(keep)), sites_bb)
+```
+
+Download a 2006 tmin and tmax daymet grids for one Anchor site. This is all using raster package.
+
+```{r}
+cik1_loc <- sites %>% filter(SiteID %in% c("CIK1")) %>% st_coordinates()
+
+download_daymet_ncss(location = c(cik1_loc[2] + 1, cik1_loc[1] - 1, cik1_loc[2] - 1, cik1_loc[1] + 1),
+                     start = 2006,
+                     end = 2006,
+                     param = c("tmin", "tmax"),
+                     frequency = "daily",
+                     path = "W:\\GIS\\Daymet\\raw",
+                     silent = TRUE)
+
+list.files("W:/GIS/Daymet/raw")
+daymet_grid_tmean(path = "W:/GIS/Daymet/raw", product = "daily", year = 2006)
+
+tmean_2006 <- raster::stack("W:/GIS/Daymet/raw/tmean_daily_2006_ncss.tif")
+raster::projection(tmean_2006) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
+
+tmean_2006_185 <- raster("W:/GIS/Daymet/raw/tmean_daily_2006_ncss.tif", band = 185)
+raster::projection(tmean_2006_185) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
+
+plot(tmean_2006_185)
+
+tmean_2006_185wgs84 <- raster::projectRaster(tmean_2006_185, crs = "+init=epsg:4326")
+
+sites %>% filter(SiteID == "CIK1")
+
+plot(tmean_2006_185wgs84)
+plot(sites %>% filter(SiteID == "CIK1"), add = TRUE)
+
+```
+
+
+Try reading in daymet with new stars package so can overlay with sf objects.
+
+```{r}
+
+tmean_2006 <- read_stars("W:/GIS/Daymet/raw/tmean_daily_2006_ncss.tif")
+st_crs(tmean_2006) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
+tmean_2006_aa <- st_transform(tmean_2006, crs = 3338)
+
+plot(tmean_2006[,,,1])
+
+
+st_crs(tmean_2006_aa) == st_crs(anchor_cats)
+
+sites3 <- sites %>% filter(SiteID %in% c("CIK1", "CIK3", "CIK4")) %>% st_transform(crs = 3338)
+st_coordinates(sites3)
+
+ggplot() +
+  geom_stars(data = tmean_2006_aa[,,,152]) +
+  geom_sf(data = anchor_cats, fill = NA) +
+  geom_sf(data = sites3) +
+  coord_sf(xlim = c(124000, 129400), ylim = c(1081800, 1093400), expand = FALSE) +
+  theme(legend.position = "bottom")
+
+```
+
+
+Try taking means over catchments and at sites.
+Check out this book online http://132.72.155.230:3838/r/combining-rasters-and-vector-layers.html
+Section 10.7.5 for extracting multi-band raster using polygons, I was close with aggregate. 
+ 
+```{r extract catchments for 3 anchor sites}
+
+st_is_valid(anchor_cats) #not valid
+anchor_cats.2 <- st_make_valid(anchor_cats) #make valid
+
+cats3 <- st_intersects(sites3, anchor_cats.2)
+cats3 <- anchor_cats.2 %>% slice(cats3 %>% unlist)
+
+ggplot() +
+  geom_stars(data = tmean_2006_aa[,,,152]) +
+  geom_sf(data = cats3, fill = NA) +
+  geom_sf(data = sites3) +
+  coord_sf(xlim = c(124000, 129400), ylim = c(1081800, 1093400), expand = FALSE) +
+  theme(legend.position = "bottom")
+
+```
+
+To compare to other methods and the data I had from before, first extract to points for summer data - bands 152 to 273 (June 1 to September 30).
+
+```{r extract daymet for 3 anchor sites - points}
+
+tmean_2006_JJAS <- dplyr::slice(tmean_2006_aa, index = 152:273, along = "band")
+tmean_agg <- aggregate(tmean_2006_JJAS, st_geometry(sites3), mean)
+
+tmean_df <- tmean_agg %>% st_as_sf() %>% st_drop_geometry() %>% as.data.frame()
+colnames(tmean_df) <- 152:273
+tmean_df <- rownames_to_column(tmean_df, "SiteID") %>% 
+  mutate(SiteID = sites3$SiteID,
+         year = 2006)  
+tmean_df <- tmean_df %>% pivot_longer(names_to = "doy", values_to = "site_airT", cols = `152`:`273`)
+
+```
+
+Check that these site extractions match what I did with the daymetr package in the other script (data_Air_Temperature.rmd)
+
+```{r compare to daymetr site extractions}
+sumdat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+tmean_df <- tmean_df %>% 
+  mutate(sampleDate = as.Date(paste(year, doy), format = "%Y %j"))
+
+left_join(tmean_df, sumdat %>% select(SiteID, sampleDate, airDT)) %$% 
+  cor(site_airT, airDT)
+```
+
+They are exactly the same- great!
+
+```{r extract daymet for 3 anchor sites - catchments}
+
+tmean_2006_JJAS <- dplyr::slice(tmean_2006_aa, index = 152:273, along = "band")
+tmean_agg2 <- aggregate(tmean_2006_JJAS, st_geometry(cats3), mean)
+
+tmean_df2 <- tmean_agg %>% st_as_sf() %>% st_drop_geometry() %>% as.data.frame()
+colnames(tmean_df2) <- 152:273
+tmean_df2 <- rownames_to_column(tmean_df2, "ctchmID") %>% 
+  mutate(ctchmID = cats3$ctchmID,
+         year = 2006)  
+tmean_df2 <- tmean_df2 %>% pivot_longer(names_to = "doy", values_to = "cat_airT", cols = `152`:`273`)
+
+```
+
+Get catchment id on sites layer to merge two data frames and compare results.
+
+```{r}
+library(magrittr)
+sites3 <- st_intersection(sites3, cats3) 
+tmean_df <- left_join(tmean_df, sites3 %>% st_drop_geometry() %>% select(SiteID, ctchmID))
+left_join(tmean_df, tmean_df2) %$% 
+  cor(site_airT, cat_airT)
+
+```
+
+They are the same! That's probably because the catchments are only intersection one grid cell because they are so small.
