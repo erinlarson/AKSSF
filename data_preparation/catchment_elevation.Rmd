@@ -1,0 +1,267 @@
+---
+title: "catchment_elevation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Script to calculate elevation statistics over each catchment. Using 10 m elevation grids that Timm put on J drive. J:\GIS_data\topography\Terrestrial\Composite_10m_Beringia
+Dustin used these composites to create the synthetic networks and can create regional composities for Cook Inlet and Copper River so we have the same elevation data for all regions and elevation covariates.
+
+First testing for NHDPlus in Cook Inlet only.
+
+
+# Get catchments
+
+Dustin is storing all geospatial data in a geodatabase on the T drive. Read in final point locations from two feature classes there: bb_md_verified_DM and sites_outside_bb_verified_DM. Catchments are also stored in two feature datasets in the same geodb. One has TauDEM stream networks and the other has NHDPlus networks. 
+
+Steps:
+
+* read in point files and combine for all sites that we are using (verified = 1). Make sure to remove sites in kuskokwim drainage.
+* read in catchment polygon files.
+
+Note: Priscilla added NHDPlusIDs for Cook Inlet and Copper R where NHDPlus is available. There are 55 sites missing this information in PWS and Kodiak where Dustin created synthetic networks.
+
+```{r get catchments for Cook Inlet}
+
+sites_notbb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "sites_outside_bb_verified_DM_CI")
+
+sites_notbb %>% filter(is.na(NHDPlusID))
+
+cats_ci <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "NHDPlusCatchments_CookInlet_Merge")
+
+st_crs(sites_notbb)
+st_crs(cats_ci)
+
+sites_notbb_akalb <- st_transform(sites_notbb, crs = 3338)
+st_crs(sites_notbb_akalb) == st_crs(cats_ci)
+
+#NHDPlusIDs for sites in Cook Inlet.
+#note that the verified field in this version is not updated. Checked Dustin's copy and only one site in Cook Inlet that we aren't using, a USGS site on a stream that is not in the NHDPlus. I'm not going to remove it for now because it's just one catchment.
+sites_notbb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202, Verified == 0) 
+
+catIDS_ci <- sites_notbb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202) %>% st_drop_geometry() %>% select(NHDPlusID, Verified)
+catIDS_ci %>% filter(Verified == 0)
+
+
+#there are some duplicates because multiple sites in a catchment.
+options(digits = 13)
+catIDS_ci %>% count(NHDPlusID) %>% arrange(desc(n)) 
+cat_n5 <- catIDS_ci %>% count(NHDPlusID) %>% arrange(desc(n)) %>% slice(1) %>% pull(NHDPlusID) #verified this is a hws on the anchor with 5 sites
+unique(catIDS_ci) #241/278
+
+#final set of 241 catchments with data for Cook Inlet.
+cats_ci241 <- cats_ci %>% filter(NHDPlusID %in% catIDS_ci$NHDPlusID)
+
+
+zoom_window <- st_coordinates(cats_ci241)
+
+ggplot() +
+  geom_sf(data = cats_ci241, color = "red") +
+  geom_sf(data = sites_notbb_akalb, size = .1) +
+  coord_sf(xlim = range(zoom_window[,'X']), ylim = range(zoom_window[,'Y']))
+
+
+sites_ci <- sites_notbb_akalb %>% filter(HUC8 >= 19020301 & HUC8 <=19020602 | HUC8 == 19020202) 
+
+sites_ci$int_ID <- apply(st_intersects(sites_ci, cats_ci, sparse = FALSE), 2,
+                         function(col) {
+                           sites_ci[which(col), ]$NHDPlusID
+                         })
+
+
+st_crs(sites_ci); st_crs(cats)
+st_is_valid(cats_ci)
+int <- st_intersection(sites_ci, cats_ci)
+
+```
+
+Try with a little test run catchments is too big. This works, there are self intersections in the catchments dataset that makes intersection with sf impossible. Move forward with Priscilla's IDs.
+
+```{r}
+cat_test <- cats_ci %>% filter(NHDPlusID > 75000100000000   , NHDPlusID < 75000100001200   )
+
+
+ggplot() +
+  geom_sf(data = cat_test) +
+  geom_sf(data = sites_ci, color = "red")
+
+st_intersects(cat_test, sites_ci, sparse = FALSE) %>% sum()
+
+int <- st_intersection(cat_test, sites_ci)
+
+st_is_valid(cat_test)
+cat_test <- st_make_valid(cat_test)
+
+
+ggplot() +
+  geom_sf(data = cat_test) +
+  geom_sf(data = int, color = "blue")
+```
+
+
+
+
+
+Code to read in and combine sites, read in and combine catchments and intersect them with one another to get a complete set of catchments.
+
+```{r combine all sites}
+
+sites_notbb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "sites_outside_bb_verified_DM")
+sites_bb <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "bb_md_verified_DM")
+
+keep <- intersect(names(sites_notbb), names(sites_bb))
+
+sites <- rbind(sites_notbb %>% dplyr::select(all_of(keep)), sites_bb)
+```
+
+Combine with HUC8 layer to get names and HUC8 codes. Note that I also did this in the data_combine_all script for site locations using the metadata. BUT, we are using the shifted sites from the geodatabase in this script so that we can extract the correct catchments (sites had to be shifted to match the networks).
+
+Read in HUC8s and reproject.
+
+```{r add huc8 names to sites}
+huc8 <- st_read(dsn = "S:/Leslie/GIS/NHD Harmonized/WBD_19_GDB.gdb", layer = "WBDHU8")
+huc8_wgs84 <- st_transform(huc8, crs = "WGS84")
+
+st_crs(sites) == st_crs(huc8_wgs84)
+
+sites <- st_join(sites, huc8_wgs84)
+sites_akalb <- st_transform(sites, crs = 3338)
+
+ggplot() +
+  geom_sf(data = sites, aes(color = HUC8))
+
+ggplot() +
+  geom_sf(data = sites, aes(color = HUC8 > 19030000))
+
+```
+
+Note that there are no sites in the kuskokwim delta huc8, we already removed them in ArcGIS when reviewing site locations.
+
+Read in catchments for Bristol Bay. Note that these are from a synthetic network - created using subwatersheds of bristol bay so the gridcodes are not unique (unlike nhdplusids). Can make unique by combining with SiteIDs or maintain as spatial objects and only join to SiteIDs using a spatial join.
+
+```{r read in catchments for bb}
+
+hydro_layers <- st_layers(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb") 
+catch_layers <- hydro_layers[["name"]][grepl("Catchments", hydro_layers[["name"]])]
+
+ege_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Egegik", catch_layers)]) 
+nak_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Naknek", catch_layers)]) 
+nush_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Nushagak", catch_layers)]) 
+lake_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Lakes", catch_layers)]) 
+tog_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Togiak", catch_layers)]) 
+
+huc8 <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "AKSSF_studyarea_HUC8") 
+
+ege_cats %>% 
+  st_drop_geometry() %>% 
+  count(gridcode)
+
+ege_cats %>% 
+  st_drop_geometry() %>% 
+  filter(gridcode == 7) %>% 
+  arrange(desc(Shape_Area))
+
+ege_cats %>% 
+  st_drop_geometry() %>% 
+  distinct(gridcode)
+
+st_is_valid(ege_cats) %>% sum()/nrow(ege_cats)
+
+ege_cats %>% 
+  st_drop_geometry() %>%
+  group_by(gridcode) %>% 
+  mutate(count = n()) %>% 
+  filter(Shape_Area == 100) %>% 
+  group_by(gridcode, count) %>% 
+  summarize(count_small = n()) %>% 
+  # arrange(desc(count)) %>% 
+  filter(count == count_small)
+
+```
+
+Clean out small pieces and combine. For many catchments, there is one large catchment and lots of smaller pieces that we don't want to use for spatial summaries. Use Gridcode with max shape area. BUT note there are still some duplicate gridcodes because there are some weird catchments that are all little pieces of the same size. Not sure what to do here. Should those be removed? Ask Dustin about any cleanup in ArcGIS that might help. For air temperatures, not really a problem, just need to check we have one polygon per gridcode, but could be for the spatial predictive work.
+
+```{r function to get catchment with max area}
+get_max_catchment <- function(input_catchments) {
+  output <- input_catchments %>% 
+    group_by(gridcode) %>% 
+    mutate(max_cat_area = max(Shape_Area)) %>% 
+    filter(Shape_Area == max_cat_area) %>% 
+    arrange(gridcode)
+  return(output)
+}
+
+```
+
+```{r intersect sites with BB catchments}
+bb_cats <- rbind(ege_cats, nak_cats, nush_cats, lake_cats, tog_cats)
+nrow(bb_cats) == nrow(bb_cats %>% st_drop_geometry() %>% distinct(gridcode))
+#386,917 v 77493
+
+rm(ege_cats, nak_cats, nush_cats, lake_cats, tog_cats)
+
+bb_cats_mx <- get_max_catchment(bb_cats)
+nrow(bb_cats_mx) == nrow(bb_cats_mx %>% st_drop_geometry() %>% distinct(gridcode))
+#77993 v 77493, still 500 duplicates
+
+#add huc8 identifier to gridcode
+bb_cats_mx2 <- st_join(bb_cats_mx, huc8 %>% dplyr::select(HUC8), largest = TRUE) 
+bb_cats_mx2 <- bb_cats_mx2 %>% 
+  mutate(gridcode2 = paste0(HUC8, gridcode))
+nrow(bb_cats_mx2) == nrow(bb_cats_mx2 %>% st_drop_geometry() %>% distinct(gridcode2))
+#77993 v 77501, adding more unique gridcodes, not sure why.
+
+#gridcode with max area of 100 for lots of small pieces
+bb_cats_mx %>% filter(gridcode == 101023)
+
+bb_cats_int <- st_join(bb_cats, sites_akalb, left = FALSE)
+sites_akalb %>% filter(HUC8 > 19030000) %>% nrow() == nrow(bb_cats_int) #great, one catchment per site
+
+ggplot() +
+  geom_sf(data = bb_cats_int, aes(color = HUC8)) #+
+  geom_sf(data = sites_akalb, size = .1)
+
+```
+
+All other cats. Using "gridcode" as the name for the unique identifier for catchments across networks. Although this won't be unique if converted to a data frame. 
+
+```{r intersect sites with all other catchments}
+ci_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("CookInlet_Merge", catch_layers)]) 
+pws_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Pws", catch_layers)]) 
+kod_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Kodiak", catch_layers)]) 
+cop_cats <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = catch_layers[grepl("Copper", catch_layers)])
+
+cbind(names(ci_cats), names(pws_cats), names(kod_cats), names(cop_cats), names(bb_cats))
+
+other_cats <- rbind(ci_cats %>% dplyr::select(gridcode = NHDPlusID, Shape_Area), pws_cats %>% dplyr::select(gridcode, Shape_Area), 
+                    kod_cats %>% dplyr::select(gridcode, Shape_Area), 
+                    cop_cats %>% dplyr::select(gridcode = NHDPlusID, Shape_Area))
+summary(other_cats)
+
+rm(ci_cats, pws_cats, kod_cats, cop_cats)
+
+other_cats_mx <- get_max_catchment(other_cats)
+
+other_cats_int <- st_join(other_cats, sites_akalb, left = FALSE)
+```
+
+
+```{r combined set of catchments for all sites}
+cbind(names(bb_cats_int %>% dplyr::select(-Id, -Shape_Length)), names(other_cats_int))
+all_cats <- rbind(bb_cats_int %>% dplyr::select(-Id, -Shape_Length), other_cats_int)
+
+rm(bb_cats, other_cats, bb_cats_int, other_cats_int)
+
+ggplot() +
+  geom_sf(data = all_cats, color = "red") +
+  geom_sf(data = sites_akalb, size = .1)
+
+```
+
+# Catchment elevation statistics
+
+Read in 10 m DEM.

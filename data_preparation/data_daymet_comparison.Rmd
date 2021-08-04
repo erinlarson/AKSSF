@@ -292,4 +292,41 @@ left_join(tmean_df, tmean_df2) %$%
 
 ```
 
-They are the same! That's probably because the catchments are only intersection one grid cell because they are so small.
+They are the same! That's probably because the catchments are only intersecting one grid cell because they are so small.
+
+
+# Spatial and temporal variability in daymet
+
+Example of focal window filtering using a stars object from this [website](https://github.com/r-spatial/stars/issues/176). Modified to use sd as function (sum is default).
+
+```{r}
+library(stars)
+tif = system.file("tif/L7_ETMs.tif", package = "stars")
+x1 = read_stars(tif)
+foc = function(x, w) {
+	raster::as.matrix(raster::focal(raster::raster(x), w, function(x) {sd(x, na.rm = TRUE)}))
+}
+f = st_apply(x1, 3, foc, w = matrix(1, 3, 3))
+plot(f)
+```
+
+Calculate 3x3 moving window of sd of daymet mean average temperature for julian days 152 - 160 (early June)
+
+```{r}
+ggplot() +
+  geom_stars(data = tmean_2006_aa[,,,152])
+
+#try 8 bands in June
+tmean_june3x3 <- st_apply(tmean_2006_aa[,,,152:160], 3, foc, w = matrix(1, 3, 3))
+
+ggplot() +
+  geom_stars(data = tmean_june3x3)
+```
+
+After calculating focal window sd, can the sd be summarized for each band? This [website](https://r-spatial.github.io/stars/articles/stars6.html) has a summary of raster to stars functions - shoudl be st_apply, but I'm not sure how to do that over space by band.
+
+```{r}
+st_apply(tmean_june3x3, c("x", "y"), mean)
+
+```
+

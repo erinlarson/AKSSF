@@ -40,6 +40,7 @@ library(sf)
 library(tmap)
 library(tmaptools)
 library(zoo)
+library(knitr)
 
 
 ```
@@ -119,42 +120,22 @@ sitemap
 
 ```
 
-# Compare site and catchment air temperatures
+# Catchment air temperatures
 
-For a previous project, we averaged daymet air temperatures over catchments in the Anchor and Kenai River watersheds at a daily time step. These can be used to evaluate differences between site and catchment air temperatures. This is for 42 sites in the Anchor and 24 sites in the Kenai.
+Note: the previous comparison between catchment and site air temperatures was already smoothed over a moving window so it wasn't an accurate comparison. I re-extracted catchment temperatures for three catchments in the Anchor and they came out the same as site air temperatures because the catchments were smaller than 1 km2, the daymet cell size.
 
-```{r}
-air_comp <- readRDS("data_preparation/air_comp.rds")
+Catchments are quite small in both the NHDPlus and our synthetic networks so there isn't a good reason to take an average over the catchment.
 
-aircor <- air_comp %>% summarize(cor(tair, airDT))  
+```{r get catchments for Cook Inlet}
 
-air_comp %>% 
-  ggplot() +
-  geom_point(aes(x = tair, y = airDT)) +
-  geom_text(aes(x = 5, y = 15, label = paste0("r = ", round(aircor, 2)))) +
-  geom_abline(intercept = 0, slope = 1) +
-  ylim(c(2,20)) +
-  xlim(c(2,20)) +
-  labs(x = "Mean Catchment Air Temperatures", y = "Site Air Temperatures", title = str_wrap("Correlation between air temperatures extracted by point versus averaged over the catchment for 66 sites in the Anchor and Kenai River watersheds", 60)) +
-  theme_bw()
+cats_ci <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "NHDPlusCatchments_CookInlet_Merge")
 
+st_area(cats_ci) %>% 
+  as_tibble() %>% 
+  mutate(km2 = as.numeric(value)/1000000) %>% 
+  summary() %>% 
+  kable(caption = "Summary of catchment sizes for Cook Inlet NHDPlus")
 ```
-
-Alternatively, it may be more interesting to see if averaging over the catchment reduced variability in air temperatures from day to day.
-
-```{r}
-air_comp %>% distinct(SiteID) %>% arrange(SiteID)
-
-air_comp %>% 
-  filter(SiteID %in% grep("CIK", SiteID, value = TRUE), year(sampleDate) == 2006) %>% 
-  ggplot() +
-  geom_line(aes(x = sampleDate, y = tair), color = "red") +
-  geom_line(aes(x = sampleDate, y = airDT), color = "blue") +
-  geom_line(aes(x = sampleDate, y = rollmean(airDT, 3, na.pad = TRUE))) +
-  facet_wrap(~SiteID, ncol = 1)
-  
-```
-
 
 
 # Summer window and completeness
