@@ -70,7 +70,7 @@ This map shows the location of all of the sites that we have data for. Selecting
 
 ```{r read in data}
 
-sumdat <- readRDS("data_preparation/summer_data_wair2021-07-30.rds")
+sumdat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
 md <- read_rds("data_preparation/final_data/md.rds")
 
 md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
@@ -122,7 +122,7 @@ sitemap
 
 # Catchment air temperatures
 
-Note: the previous comparison between catchment and site air temperatures was already smoothed over a moving window so it wasn't an accurate comparison. I re-extracted catchment temperatures for three catchments in the Anchor and they came out the same as site air temperatures because the catchments were smaller than 1 km2, the daymet cell size.
+Note: the previous comparison between catchment and site air temperatures was already smoothed over a moving window so it wasn't an accurate comparison. I re-extracted catchment temperatures for three catchments in the Anchor and they came out the same as site air temperatures because the catchments were smaller than 1 km^2^, the daymet cell size.
 
 Catchments are quite small in both the NHDPlus and our synthetic networks so there isn't a good reason to take an average over the catchment.
 
@@ -137,6 +137,7 @@ st_area(cats_ci) %>%
   kable(caption = "Summary of catchment sizes for Cook Inlet NHDPlus")
 ```
 
+Other options would be to summarize by watershed, but I don't think there would a good explanatory power between air temperatures over large watersheds and stream temperatures. Or, a moving window (e.g. 3x3 cells). The downside to that approach would be extracting air temperatures from cells that don't drain to the site locations.
 
 # Summer window and completeness
 
