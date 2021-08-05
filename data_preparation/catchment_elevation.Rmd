@@ -5,16 +5,101 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(stars)
+library(sf)
+library(tidyverse)
+library(tictoc)
 ```
 
 
-Script to calculate elevation statistics over each catchment. Using 10 m elevation grids that Timm put on J drive. J:\GIS_data\topography\Terrestrial\Composite_10m_Beringia
-Dustin used these composites to create the synthetic networks and can create regional composities for Cook Inlet and Copper River so we have the same elevation data for all regions and elevation covariates.
+Script to calculate elevation statistics over each catchment. 
 
-First testing for NHDPlus in Cook Inlet only.
+10 m elevation grids that Timm put on J drive. J:\GIS_data\topography\Terrestrial\Composite_10m_Beringia
+Dustin used these composites to create the synthetic networks and also combined to make one for entire study area.
+
+First testing for NHDPlus using one HUC8 and the original elevation grids provided by USGS.
+
+# Mean catchment elevation 
+
+Run through reading in and running one huc8 on local drive.
+
+Local copy: 
+W:\GIS\NHDPlus_20201216\extracts
+HUC8 - 19020202
+
+Server copy:
+T:\Aquatic\AKSSF\NHDPlus\CookInlet_20201216
+(simple unzipping of tif files from folder takes MUCH longer on server)
+
+Note: 19020202 is wrong, the rasters are for 19020101 in the copper river region.
+
+```{r read in files using sf and stars}
+
+local_folder <- "W:\\GIS\\NHDPlus_20201216\\extracts"
+huc <- as.character("19020301")
+
+elev_file <- grep(paste0("(?i)(", huc, ".*elev_cm|elev_cm.*", huc,")"),
+                  list.files(local_folder, full.names = TRUE, recursive = TRUE),
+                  value = TRUE)[2]
+elev <- read_stars(elev_file)
+
+plot(elev)
+
+gdb <- paste0(local_folder, "\\NHDPLUS_H_", huc, "_HU8_GDB.gdb")
+cats <- st_read(gdb, "NHDPlusCatchment")
+
+plot(cats)
+ggplot() +
+  geom_sf(data = cats %>% slice(1:100))
+
+st_crs(elev)
+st_crs(cats)
+
+cats_4269 <- st_transform(cats, crs = st_crs(elev))
+st_crs(elev) == st_crs(cats_4269)
+```
+
+To run just 20 catchments (out of 7696), it takes 120 seconds. That would be about 153 minutes to do the whole huc8. To run the entire thing in arcgis using zonal statistics as table takes 57 seconds so this is orders of magnitude slower.
+
+```{r zonal summary using stars for 100 cats}
+tic("get mean catchment elevation for 100 cats")
+zonmean_19020301sf <- aggregate(elev, st_geometry(cats_4269 %>% slice(1:100)), mean)
+toc(log = TRUE)
+tic.log()
+```
+
+As a last option, explore the new terra package, which should work with rasters more quickly.
+
+```{r prepare catchment and elevation data using terra}
+library(raster)
+library(Rcpp)
+library(terra)
+
+elev2 <- rast(elev_file)
+
+#can't fine that terra reads fc so write first to shp using sf 
+st_write(cats_4269, paste0(local_folder, "/cats_4269.shp"))
+
+cats2 <- vect(paste0(local_folder, "/cats_4269.shp"))
+
+plot(cats2)
+cats2_r <- rasterize(cats2, elev2, "GridCod")
+```
+
+Using terra and the entire huc8, it took 1426 seconds, or ~23 minutes.
+
+```{r zonal summary using terra}
+tic("terra mean catchment elevation for entire huc8")
+zonmean_19020301te <- zonstatszonal(elev2, cats2_r, 'mean')
+toc(log = TRUE)
+tic.log()
+
+```
 
 
-# Get catchments
+
+## old code below to get catchments for air temp processing
 
 Dustin is storing all geospatial data in a geodatabase on the T drive. Read in final point locations from two feature classes there: bb_md_verified_DM and sites_outside_bb_verified_DM. Catchments are also stored in two feature datasets in the same geodb. One has TauDEM stream networks and the other has NHDPlus networks. 
 
@@ -262,6 +347,5 @@ ggplot() +
 
 ```
 
-# Catchment elevation statistics
 
-Read in 10 m DEM.
+
