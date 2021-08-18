@@ -1,0 +1,127 @@
+---
+title: "Virtual_Machine_Test"
+author: "dwmerrigan"
+date: "8/6/2021"
+output:
+  html_document:
+    df_print: paged
+    fig_width: 20
+    fig_height: 10
+    fig_caption: yes
+    code_folding: hide
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+geometry: margin = 0.1in
+editor_options:
+  chunk_output_type: inline
+---
+
+Document last updated `r Sys.time()` by Dustin Merrigan (dwmerrigan@alaska.edu)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, message=FALSE, warning=FALSE}
+
+#clear environments
+#add comment
+rm(list=ls())
+
+library(TMB)
+library(doParallel)
+library(foreach) 
+library(lubridate)
+library(readr)
+library(readxl)
+library(sf) # spatial operations
+library(tmap) # html mapping
+library(tmaptools) # html mapping
+library(ggplot2) # plotting
+library (plotly)
+library(tidyverse)
+
+```
+# Virtual Machine Test
+
+```{r Read in Data}
+getwd()
+
+# Read in Metadata 
+md <- readRDS("../data/md.rds") 
+sumdat <- read_csv("../data/summer_data_wair2021-07-30.csv") %>% 
+  mutate( year = year(sampleDate))
+
+summary(sumdat)
+
+
+```
+```{r Interactive Plot}
+
+p <- sumdat %>% 
+  filter(SiteID == "accs_AKBB-011")
+
+p <- p %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = maxDT, color = SiteID, linetype = SiteID)) +
+  theme(legend.title = element_blank()) +
+  labs(title = "Max Daily Air Temperature by Year",
+       y = "Temperature degrees C",
+       x = "Year")
+
+ggplotly(p)
+
+```
+
+## Map of sites
+Map of site locations
+
+```{r Map of sites}
+
+# Choose md file to plot sites (RS uploaded draft md file to googledrive)
+
+sites <- md %>% 
+  select(SiteID,SourceName, Latitude, Longitude) %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"),
+           crs= "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0") %>% 
+  st_cast("POINT")
+
+tmap_mode("view")
+sitemap <- sites %>% 
+  tm_shape() +
+  tm_dots(id = "SiteID", size = 0.05, group = "SourceName", col = "SourceName") +
+  tm_text("SiteID", size = 1.75, shadow = TRUE, auto.placement = TRUE,
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE , 
+          group = "Labels") +
+  tm_basemap(server = c(Topo = "Esri.WorldTopoMap", Imagery = "Esri.WorldImagery" ))
+
+sitemap
+
+```
+
+## Test Chunk
+
+```{r test chunk rss}
+
+left_join(md, sumdat %>% select(SiteID, year, meanDT)) %>% 
+  group_by(SiteID, year) %>% 
+  summarize(mnyr = mean(meanDT)) %>% 
+  pivot_wider(names_from = year, values_from = mnyr)
+
+```
+
+## Machine Info
+```{r physical cores}
+# physical cores
+parallel::detectCores(logical=FALSE)
+
+```
+```{r memory}
+as.numeric(system("awk '/MemFree/ {print $2}' /proc/meminfo", intern=TRUE))
+
+```
+
+
