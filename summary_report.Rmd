@@ -238,7 +238,30 @@ sumdat2 %>%
   geom_point(aes(x = year, y = n)) +
   labs(x = "Year", y = "Number of Sites", title = "Sites with 70% of days in June 1 - September 15 window") +
   theme_bw()
+
 ```
+
+Look at number of sites by region and year using 8/31 end date and 80% completeness as the data filter. (This was discussed during a meeting on 8/17/21.)
+
+```{r}
+sumdat3 <- jd_completeness_filter(sumdat, 243, 80)
+
+sumdat3 <- left_join(sumdat3, md %>% select(SiteID, Region))
+
+sumdat3 %>% 
+  distinct(Region, SiteID, year) %>% 
+  count(Region, year) %>% 
+  filter(year %in% c(2011:2020)) %>% 
+  ggplot() +
+  geom_col(aes(x = year, y = n, fill = Region), position = position_dodge()) +
+  labs(x = "Year", y = "Number of Sites", title = "Sites with 80% of days in June 1 - August 31 window") +
+  theme_bw() +
+  scale_x_continuous(breaks = c(2011, 2013, 2015, 2017, 2019), 
+                     labels = c("11", "13", "15", "17", "19"))
+
+```
+
+
 
 # Patterns in 2019
 
