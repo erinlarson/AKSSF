@@ -243,9 +243,10 @@ huc8 <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "AKSSF_s
 
 ege_cats %>% 
   st_drop_geometry() %>% 
-  count(gridcode)
+  count(gridcode) %>% 
+  arrange(desc(gridcode))
 
-ege_cats %>% 
+lake_cats %>% 
   st_drop_geometry() %>% 
   filter(gridcode == 7) %>% 
   arrange(desc(Shape_Area))
@@ -267,6 +268,26 @@ ege_cats %>%
   filter(count == count_small)
 
 ```
+Read in stream reaches and check counts of WSNO.  There are more stream reaches than catchments yet when a select by location is performed using the stream centerpoint and catchments, all catchmentes are selected.  Either duplicate stream reaches or reaches generated without having an associated catchment?
+
+```{r read in stream reaches for bb}
+
+stream_layers <- hydro_layers[["name"]][grepl("Stream_Network", hydro_layers[["name"]])]
+
+ege_strch <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = stream_layers[grepl("Egegik", catch_layers)]) 
+nak_strch <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = stream_layers[grepl("Naknek", catch_layers)]) 
+nush_strch <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = stream_layers[grepl("Nushagak", catch_layers)]) 
+lake_strch <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = stream_layers[grepl("Lakes", catch_layers)]) 
+tog_strch <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = stream_layers[grepl("Togiak", catch_layers)]) 
+
+ege_strch %>% 
+  st_drop_geometry() %>% 
+  count(WSNO) %>% 
+  arrange(desc(WSNO))
+
+
+```
+DM Notes: Dissolved Catchments on Gridcode because TauDEM output does not do this for all cells.  Still some small "catchments" are generated where stream confluences occur.  Not sure if we should keep these or set a limit and ignore all catchments smaller than xxx sqmeters.  
 
 Clean out small pieces and combine. For many catchments, there is one large catchment and lots of smaller pieces that we don't want to use for spatial summaries. Use Gridcode with max shape area. BUT note there are still some duplicate gridcodes because there are some weird catchments that are all little pieces of the same size. Not sure what to do here. Should those be removed? Ask Dustin about any cleanup in ArcGIS that might help. For air temperatures, not really a problem, just need to check we have one polygon per gridcode, but could be for the spatial predictive work.
 
