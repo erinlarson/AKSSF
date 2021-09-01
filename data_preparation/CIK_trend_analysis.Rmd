@@ -22,6 +22,7 @@ library(googlesheets4)
 library(rnoaa)
 library(hms)
 library(tidyverse)
+library(zoo)
 
 
 ```
@@ -37,15 +38,15 @@ Load data.
 ```{r}
 # cik.data <- readRDS("data_preparation/formatted_data/cik.data.rds")
 # load cik.daily
-cik.daily <- read_csv("data_preparation/final_data/cikDaily_Data2021-03-12.csv")
-cik.md <- read_csv("data_preparation/final_data/cikMetadata2021-03-11.csv")
+cik.daily <- read_csv("data_preparation/final_data/Daily_Data/cikDaily_Data2021-03-12.csv")
+cik.md <- read_csv("data_preparation/final_data/Metadata/cikMetadata2021-03-11.csv")
 
 cik.daily <- left_join(cik.daily, cik.md %>% select(SiteID, Waterbody_name))
 ```
 
 # Temperature Figures
 
-Create data frames of mean daily and mean monthly temperatures. Use functions that calculate the mode of the time difference for each day adn the number of days in a month. For screening 90% of measurements in a day and 90% of days in a month.
+Create data frames of mean daily and mean monthly temperatures. Use functions that calculate the mode of the time difference for each day and the number of days in a month. For screening 90% of measurements in a day and 90% of days in a month.
 Filter on UseData == 1, which was added to the KNB dataset.
 
 ```{r}
@@ -58,6 +59,7 @@ cik.monthly <- cik.daily %>%
             monCt = n()) %>% 
   filter(monCt > (0.9 * daysMonth))
 
+
 # rm(cik.data)
 ```
 
@@ -68,7 +70,7 @@ cik.daily %>%
   complete(SiteID, sampleDate = seq.Date(min(sampleDate), max(sampleDate), by = "day")) %>% 
   mutate(year = year(sampleDate),
          mo_day = format(sampleDate, "%m-%d")) %>% 
-  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanT, color = as.factor(year))) +
+  ggplot(aes(x = as.Date(mo_day, format = "%m-%d"), y = meanDT, color = as.factor(year))) +
   geom_line() +
   scale_x_date(date_breaks = "3 months", date_labels = "%b") +
   facet_wrap(~ SiteID) +
@@ -168,13 +170,13 @@ These are trends using any sites and months with more than 9 years of data.
 ```{r}
 ltMonths <- cik.monthly %>% 
   ungroup() %>% 
-  distinct(SiteID, year, month) %>% 
-  count(SiteID, month) %>% 
+  distinct(SiteID, Waterbody_name, year, month) %>% 
+  count(SiteID, Waterbody_name, month) %>% 
   filter(n > 8)
 
 monthlyLMs <- cik.monthly %>% 
   right_join(ltMonths) %>% 
-  nest(data = c(-SiteID, -month)) %>% 
+  nest(data = c(-SiteID, -Waterbody_name, -month)) %>% 
   mutate(
     fit = map(data, ~ lm(meanMon ~ year, data = .x)),
     tidied = map(fit, tidy)
@@ -187,7 +189,7 @@ sig_trends <- monthlyLMs %>%
 
 monthlyLMs %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  ggplot(aes(x = as.factor(month), y = estimate, color = SiteID)) +
+  ggplot(aes(x = as.factor(month), y = estimate, color = Waterbody_name)) +
   geom_point() +
   theme_minimal() +
   geom_abline(aes(intercept = 0, slope = 0)) 
@@ -225,7 +227,7 @@ How much do trends decrease if we didn't include 2019?
 monthlyLMs2 <- cik.monthly %>% 
   right_join(ltMonths) %>% 
   filter(year < 2019) %>% 
-  nest(data = c(-SiteID, -month)) %>% 
+  nest(data = c(-SiteID, -Waterbody_name, -month)) %>% 
   mutate(
     fit = map(data, ~ lm(meanMon ~ year, data = .x)),
     tidied = map(fit, tidy)
@@ -233,19 +235,34 @@ monthlyLMs2 <- cik.monthly %>%
   unnest(tidied)
 
 sig_trends2 <- monthlyLMs2 %>% 
-  filter(p.value < 0.05, term == "year") %>% 
+  filter(p.value < 0.1, term == "year") %>% 
   select(SiteID, month)
 
 nrow(sig_trends) - nrow(sig_trends2) 
 
 monthlyLMs2 %>% 
   filter(p.value < 0.05, term == "year") %>% 
-  ggplot(aes(x = as.factor(month), y = estimate * 10, color = SiteID)) +
+  ggplot(aes(x = as.factor(month), y = estimate * 10, color = Waterbody_name)) +
   geom_point(size = 2) +
   theme_minimal() +
   geom_abline(aes(intercept = 0, slope = 0)) +
   labs(x = "Month", y = "Decadal Trend in Mean Monthly Temperature", title = "Significant Trends (p-value < 0.05) in Mean Monthly Temperatures \n from 2002-2018 for Cook Inlet Streams", color = "Stream: ") +
   theme(legend.position = "bottom")
+
+monthlyLMs2 %>% 
+  filter(p.value < 0.1, term == "year") %>% 
+  ggplot(aes(x = as.factor(month), y = estimate * 10, color = Waterbody_name)) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  geom_abline(aes(intercept = 0, slope = 0)) +
+  labs(x = "Month", y = "Decadal Trend in Mean Monthly Temperature", title = "Significant Trends (p-value < 0.05) in Mean Monthly Temperatures \n from 2002-2018 for Cook Inlet Streams", color = "Stream: ") +
+  theme(legend.position = "bottom")
+
+monthlyLMs2 %>% 
+  filter(p.value < 0.1, term == "year")
+
+monthlyLMs2 %>% 
+  filter(Waterbody_name == "Deep Creek")
 ```
 
 Plot of significant trends without 2019.
@@ -253,13 +270,36 @@ Plot of significant trends without 2019.
 ```{r}
 cik.monthly %>% 
   right_join(sig_trends2) %>% 
-  # filter(month %in% 6:8) %>% 
+  filter(year < 2019) %>%
   ggplot(aes(x = year, y = meanMon, color = Waterbody_name)) + 
   geom_jitter() +
   geom_smooth(method = "lm") +
-  facet_wrap(~month) +
+  facet_wrap(~month, scales = "free_y") +
   theme_minimal()
 ```
+
+```{r}
+library(nlme)
+
+
+junelm <- left_join(ltMonths, cik.monthly) %>% filter(month == 6) %>% 
+  lme(meanMon ~ year, data = ., random = ~1|SiteID) 
+hist(resid(junelm))
+summary(junelm)
+
+julylm <- left_join(ltMonths, cik.monthly) %>% filter(month == 7) %>% 
+  lme(meanMon ~ year, data = ., random = ~1|SiteID) 
+hist(resid(julylm))
+summary(julylm)
+
+auglm <- left_join(ltMonths, cik.monthly) %>% filter(month == 8) %>% 
+  lme(meanMon ~ year, data = ., random = ~1|SiteID) 
+hist(resid(auglm))
+summary(auglm)
+
+
+```
+
 
 
 Why does Ninilchik River trend for September drop when 2019 isn't included?
@@ -315,7 +355,94 @@ for(i in 1:nrow(ltMonths)) {
 mk.list
 ```
 
-# Linear Trends in Seasonal Temperatures
+# Linear Trends in Summer Temperatures
+
+Compare to what we had for the Chinook manuscript and we only measured ~0.2 degrees per decade an order of magnitude lower.
+
+```{r}
+#334 total to 279
+
+sumTS <- cik.daily %>% 
+  group_by(SiteID, Waterbody_name, year = year(sampleDate)) %>% 
+  mutate(sumCt = sum(month(sampleDate) %in% 6:8)) %>% 
+  distinct(SiteID, Waterbody_name, year, sumCt) %>% 
+  filter(sumCt > 0.8*92)  
+```
+
+```{r}
+cik.summer <- left_join(sumTS, cik.daily) %>%
+  filter(month(sampleDate) %in% 6:8) %>% 
+  group_by(SiteID, Waterbody_name, year = year(sampleDate)) %>%
+  summarize(meanSum = mean(meanDT))
+
+
+```
+
+```{r}
+summerLMs <- cik.summer %>% 
+  filter(year < 2019) %>% 
+  mutate(yrct = n()) #%>% 
+  filter(yrct > 8) %>% 
+  nest(data = c(-SiteID, -Waterbody_name)) %>% 
+  mutate(
+    fit = map(data, ~ lm(meanSum ~ year, data = .x)),
+    tidied = map(fit, tidy)
+  ) %>% 
+  unnest(tidied)
+
+summerLMs %>% 
+  filter(p.value < 0.1, term == "year")
+  
+```
+
+
+# Linear trends 7DADM
+
+For Little Susitna site tour, look at rates of change for temperatures using same metric used to discuss thermal requirements. 
+7DADM = Annual maximum of 7-day rolling average of daily maximums.
+
+```{r}
+cik.7dayradm <- cik.daily %>% 
+  # filter(!year == 2019) %>% 
+  group_by(SiteID, Waterbody_name, year = year(sampleDate)) %>% 
+  mutate(count = sum(month(sampleDate) %in% 6:8)) %>% 
+  filter(count > 0.8*92) %>% 
+  arrange(SiteID, sampleDate) %>% 
+  mutate(max7d = rollmean(maxDT, k = 7, fill = NA, align = "center")) 
+```
+
+```{r}
+cik.7dadm <- cik.7dayradm %>% 
+  group_by(SiteID, Waterbody_name, year) %>% 
+  summarize(annmax = max(max7d, na.rm = TRUE))
+  
+
+cik.7dadm %>% 
+  filter(year < 2019) %>% 
+  mutate(yrct = n()) %>% 
+  filter(yrct > 8) %>% 
+  ggplot(aes(x = year, y = annmax)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~Waterbody_name)
+```
+
+```{r}
+sevendadmLMs <- cik.7dadm %>% 
+  filter(year < 2019) %>% 
+  mutate(yrct = n()) %>% 
+  filter(yrct > 8) %>% 
+  nest(data = c(-SiteID, -Waterbody_name)) %>% 
+  mutate(
+    fit = map(data, ~ lm(annmax ~ year, data = .x)),
+    tidied = map(fit, tidy)
+  ) %>% 
+  unnest(tidied)
+
+
+sevendadmLMs %>% 
+  filter(term == "year")
+```
 
 
 
