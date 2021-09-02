@@ -1,0 +1,71 @@
+---
+title: "AKSSF_watersheds"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(sf)
+library(tidyverse)
+```
+
+
+Create watersheds using NHDPlusFlowlineVAA Table. There is a field that indicates the NHDPlusID of the upstream flowline that we can use to iterate and select ALL upstream flowlines, intersect or select from the catchment fc and merge to create the watershed.
+
+
+Read in one hu8 catchment fc and flowline fc.
+
+```{r}
+fl <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDFlowline")
+
+cat <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusCatchment")
+
+vaa <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusFlowlineVAA")
+```
+
+
+```{r}
+test_id <- fl %>% 
+  filter(GNIS_Name == "Anchor River") %>% 
+  arrange(desc(LengthKM)) %>% 
+  slice(10) %>% 
+  pull(NHDPlusID)
+
+ggplot() +
+  geom_sf(data = fl) +
+  geom_sf(data = fl %>% filter(NHDPlusID == test_id), color = "red")
+
+ggplot() +
+  geom_sf(data = cat) +
+  geom_sf(data = cat %>% filter(NHDPlusID == test_id), fill = "red", color = "red")
+
+
+```
+
+```{r}
+nrow(fl)
+nrow(cat)
+nrow(vaa)
+
+fl_vaa <- left_join(fl, vaa) 
+up_ids <- ""
+
+rec = 75004300002207
+while(sum(rec, na.rm = TRUE) > 0) {
+  up_ids <- c(up_ids, rec)
+  fromnode <- fl_vaa %>% 
+    filter(NHDPlusID %in% rec) %>% 
+    pull(FromNode)
+  rec <- fl_vaa %>% 
+    filter(ToNode %in% fromnode) %>% 
+    pull(NHDPlusID)
+}
+
+
+ggplot() +
+  geom_sf(data = cat) +
+  geom_sf(data = cat %>% filter(NHDPlusID %in% up_ids), fill = "red", color = "red")
+```
+
+
