@@ -17,11 +17,11 @@ Create watersheds using NHDPlusFlowlineVAA Table. There is a field that indicate
 Read in one hu8 catchment fc and flowline fc.
 
 ```{r}
-fl <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDFlowline")
+fl <- read_sf(dsn = "W:/GIS/NHDPlus/CookInlet_20201216/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDFlowline")
 
-cat <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusCatchment")
+cat <- read_sf(dsn = "W:/GIS/NHDPlus/CookInlet_20201216/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusCatchment")
 
-vaa <- read_sf(dsn = "W:/GIS/NHDPlus_20201216/extracts/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusFlowlineVAA")
+vaa <- read_sf(dsn = "W:/GIS/NHDPlus/CookInlet_20201216/NHDPLUS_H_19020301_HU8_GDB.gdb", layer = "NHDPlusFlowlineVAA")
 ```
 
 
@@ -62,6 +62,8 @@ while(sum(rec, na.rm = TRUE) > 0) {
     pull(NHDPlusID)
 }
 
+length(up_ids)
+tail(up_ids)
 
 ggplot() +
   geom_sf(data = cat) +
