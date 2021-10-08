@@ -1,0 +1,148 @@
+---
+title: "raw_TS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(broom)
+library(lubridate)
+library(purrr)
+```
+
+
+# Thermal sensitivity 
+
+Raw thermal sensitivity from linear regressions and test of ADD to better predict daily stream temperatures affected by groundwater (Snyder et. al. 2015).
+
+```{r}
+dat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+
+dat <- dat %>% 
+  mutate(year = year(sampleDate))
+```
+
+Filter on time series with 80% of days from June 1 to August 31.
+
+```{r}
+jd_completeness_filter <- function(inputDat, jd_filter, completeness_filter) {
+  dat <- inputDat %>% 
+    mutate(jd = as.numeric(format(sampleDate, "%j")),
+           year = year(sampleDate)) %>% 
+    filter(jd >= 152, jd <= jd_filter) #June 1st to end date
+  ndays <- max(dat$jd) - min(dat$jd)
+  dat2 <- dat %>%
+    group_by(SiteID, year) %>%
+    mutate(completeness = n()/ndays * 100) %>% 
+    filter(completeness > completeness_filter) %>% 
+    ungroup()
+  return(dat2)
+}
+
+dat2 <- jd_completeness_filter(dat, 243, 80)
+
+dat %>% distinct(SiteID, year) %>% nrow()
+dat2 %>% distinct(SiteID, year) %>% nrow()
+```
+
+Add in a mean summer air temperature and the accumulated degree-days above mean summer air temperatures.
+
+```{r}
+dat2 <- dat2 %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  group_by(SiteID, year) %>% 
+  mutate(meanSumAT = mean(airDT),
+         st_gt_at = case_when(meanDT > meanSumAT ~ meanDT,
+                           meanDT < meanSumAT ~ 0),
+         cumST = cumsum(st_gt_at))
+  
+```
+
+Create lm fits using model with just air temperature and model with air temperature and accumulated degree days above mean summer air temperature.
+
+```{r}
+nested <- dat2 %>% 
+  nest(data = -SiteID, -year)
+
+lm.fits <- nested %>% 
+  mutate(fit1 = map(data, ~lm(meanDT ~ airDT, data = .x)),
+         fit2 = map(data, ~lm(meanDT ~ airDT + cumST, data = .x)),
+         tidied1 = map(fit1, tidy),
+         glanced1 = map(fit1, glance),
+         augmented1 = map(fit1, augment),
+         tidied2 = map(fit2, tidy),
+         glanced2 = map(fit2, glance),
+         augmented2 = map(fit2, augment)) 
+
+```
+
+
+1. Does model fit improve with the cumulative stream temperature term? Not much at all.
+
+
+```{r}
+glance1 <- lm.fits %>% 
+            unnest(glanced1)
+glance2 <- lm.fits %>% 
+            unnest(glanced2)
+
+left_join(glance1 %>% select(SiteID, year, fit1 = adj.r.squared),
+          glance2 %>% select(SiteID, year, fit2 = adj.r.squared)) %>%
+  pivot_longer(names_to = "fit", values_to = 'r2', cols = fit1:fit2) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = fit, y = r2))
+
+```
+
+2. Does change in adjusted r2 relate to slope?
+
+```{r}
+tidy1 <- lm.fits %>% 
+  unnest(tidied1)
+
+r2diff <- left_join(glance1 %>% select(SiteID, year, fit1 = adj.r.squared),
+          glance2 %>% select(SiteID, year, fit2 = adj.r.squared)) %>% 
+  mutate(diff = fit2-fit1)
+
+left_join(tidy1 %>% filter(term == "airDT") %>% select(SiteID, year, estimate),
+          r2diff) %>% 
+  ggplot() +
+  geom_point(aes(x = estimate, y = diff))
+```
+
+3. Is there a negative relationship between intercepts and slopes?
+
+```{r}
+tidy1 %>% 
+  select(term, estimate) %>% 
+  pivot_wider(names_from = term, values_from = estimate) %>%
+  rename(int = `(Intercept)`) %>% 
+  ggplot() +
+  geom_point(aes(y = int, x = airDT))
+```
+
+
+
+Check on some of these TS results, why are some greater than 1? I was hoping that was a relic issue related to air temperatures from airports along the coast and wouldn't happen again with gridded data. Looks like some lake sites.
+
+```{r}
+tidy1 %>% 
+  filter(term == "airDT", estimate > 1) %>% 
+  arrange(desc(estimate))
+
+tidy1 %>% 
+  filter(term == "(Intercept)") %>% 
+  arrange(estimate)
+```
+
+```{r}
+dat2 %>% 
+  filter(SiteID == "USFS_Cabin Lake Outlet", year == 2012) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = meanDT)) +
+  geom_line(aes(x = sampleDate, y= airDT), color = "blue")
+```
+
+
