@@ -16,5 +16,5 @@ data_preparation/source
 .httr-oauth-SUSPENDED
 Deshka_Attributes_02072020_Lakes_Wetlands_Working.ipynb
 *.pdf
-!/data_preparation/sensitivity_drivers/landcover/AKSSF_aspect_metrics.ipynb
-!/data_preparation/sensitivity_drivers/landcover/AKSSF_elev_metrics.ipynb
+/data_preparation/sensitivity_drivers/landcover/AKSSF_aspect_metrics.ipynb
+
