@@ -279,4 +279,27 @@ sumdat2 %>%
 
 ```
 
+# Differences in maximum water temperatures 
+
+```{r}
+sumdat3 %>% 
+  count(Region, SiteID, year) %>% 
+  nrow()
+
+sumdat3 %>% distinct(Region, SiteID) %>% count(Region)
+
+sumdat3 %>% 
+  group_by(Region, SiteID, year) %>% 
+  summarize(max_daily = max(meanDT)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = Region, y = max_daily)) +
+  geom_jitter(data = . %>% filter(!year == 2019), aes(x = Region, y = max_daily), color = "grey", size = 0.7) +
+  geom_jitter(data = . %>% filter(year == 2019), aes(x = Region, y = max_daily), color = "red", size = 0.7) +
+  # geom_jitter(data = . %>% filter(SiteID %in% c("CIK_28", "Deshka 6 Downstream", "Deshka 6 Upstream")), 
+  #             aes(x = Region, y = max_daily), shape = 2) +
+  theme_bw() +
+  labs(y = "Maximum Summer Mean Daily Temperature (°C)")
+
+ggsave("output/boxplot of max temps by region.jpeg")
+```
 
