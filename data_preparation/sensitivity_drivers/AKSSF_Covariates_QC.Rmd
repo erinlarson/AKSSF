@@ -33,7 +33,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
-
+##
+Replace all nan with 0
 
 ```{r Packages, message=FALSE, warning=FALSE}
 
@@ -61,16 +62,18 @@ descriptive statistics, plots,  and in maps where appropriate.
 ```{r AKSSF datasets}
 getwd()
 #read datasets
-cov.df <- read.csv(file = 'AKSSF_Covariates.csv', header = TRUE) #All catchment and watershed covariates
+cov.df.raw <- read.csv(file = 'AKSSF_Covariates.csv', header = TRUE) #All catchment and watershed covariates
 sites.df <- read.csv(file = 'AKSSF_sites_sj_maxfac.csv', header = TRUE)#Sites data with watershed area 
 
 #dput(colnames(sites.df))
 site_keep_cols <- c("SiteID","NHDPlusID","GridCode","region", "cat_ID",
                     "cat_ID_con", "site_max_acc", "site_acc_sqKm", "Area_km2",
-                    "area_diff", "lat", "lon")
+                    "area_diff","size_diff", "lat", "lon")
 
 sites.df <- sites.df %>% 
-  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con))) %>% 
+  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
+  size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
+                        TRUE~'No Change')) %>% 
   subset(select = site_keep_cols )
   
 #dput(colnames(cov.df))
@@ -82,9 +85,13 @@ wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope
   "wtd_wet_per","wtd_lake_per","wtd_glacier_per","wtd_area_sqKM")
 
 
-cov.df <- cov.df %>%
+cov.df <- cov.df.raw %>%
   mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
   subset(select = wtd_keep_cols )
+
+# Convert na to 0
+cov.df[is.na(cov.df)] <- 0
+
 ```
 
 ## Site Accumulation Area vs Wtd Area
@@ -122,7 +129,7 @@ areafig <- plot_ly(
   sites.df, y = ~Area_km2 ,x =~site_acc_sqKm,
   #Hover Text
   text = ~paste("SiteID:", SiteID,'<br>AreaDiff:', area_diff),
-  color = ~region, size = ~area_diff
+  color = ~region, size = ~area_diff, symbol = ~size_diff
 )
 
 areafig
