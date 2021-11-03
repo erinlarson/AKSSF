@@ -17,4 +17,9 @@ data_preparation/source
 Deshka_Attributes_02072020_Lakes_Wetlands_Working.ipynb
 *.pdf
 /data_preparation/sensitivity_drivers/landcover/AKSSF_aspect_metrics.ipynb
-
+.backups
+.idea
+.ipynb_checkpoints
+AKSSF_Working.aprx
+Index
+RasterFunctionsHistory
