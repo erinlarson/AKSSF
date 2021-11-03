@@ -1,0 +1,57 @@
+---
+title: "ACCS-UAA Covariate qc and data exploration"
+output:
+  html_document: 
+    df_print: paged
+    fig_width: 20
+    fig_height: 10
+    fig_caption: yes
+    code_folding: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+geometry: margin = 0.1in
+editor_options: 
+  chunk_output_type: inline
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+Document last updated `r Sys.time()` by Dustin Merrigan (dwmerrigan@alaska.edu)
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+
+```{r Packages, message=FALSE, warning=FALSE}
+
+# clear environment
+rm(list=ls())
+
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(readxl)
+library(hms)
+library(plotly)
+library(DT)
+library(stringr)
+library(janitor)
+library(googlesheets4)
+library(rnoaa)
+
+```
+
+<br> 
