@@ -39,7 +39,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # clear environment
 rm(list=ls())
-
+library(DataExplorer)
 library(tidyverse)
 library(lubridate)
 library(readr)
@@ -49,9 +49,240 @@ library(plotly)
 library(DT)
 library(stringr)
 library(janitor)
-library(googlesheets4)
-library(rnoaa)
-
+library(ggplot2)
 ```
 
 <br> 
+## 
+Examine datasets AKSSF_Covariates.csv and AKSSF_sites_sj_maxfac.csv using 
+descriptive statistics and in maps where appropriate.
+
+```{r AKSSF datasets}
+getwd()
+#read datasets
+cov.df <- read.csv(file = 'AKSSF_Covariates.csv', header = TRUE) #All catchment and watershed covariates
+sites.df <- read.csv(file = 'AKSSF_sites_sj_maxfac.csv', header = TRUE)#Sites data with watershed area 
+
+#dput(colnames(sites.df))
+site_keep_cols <- c("SiteID","NHDPlusID","GridCode", "AreaSqKm", "cat_ID",
+                    "cat_ID_con", "site_max_acc", "site_acc_sqKm", "Area_km2",
+                    "area_diff", "lat", "lon")
+
+sites.df <- sites.df %>% 
+  subset(select = site_keep_cols )
+  
+#dput(colnames(cov.df))
+wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope_MAX",
+  "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
+  "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
+  "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
+  "wtd_slope_MAX", "wtd_slope_MEAN", "wtd_slope_STD", "wtd_north_per", 
+  "wtd_wet_per","wtd_lake_per","wtd_glacier_per","wtd_area_sqKM")
+
+
+cov.df <- cov.df %>%
+  mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
+  subset(select = wtd_keep_cols )
+```
+## Site Accumulation Area vs Wtd Area
+Compare watershed area (area_km2) as calcuated from shape area in GIS to area
+calculated from the max flow accumulation () for a given site.  Flow accumulation
+was extracted using zonal statistics as table on a 30 meter site buffer 
+(clipped to catchment) on the appropriate flow accumulation grid, TauDEM derived
+or NHDPlus depending on region being analyzed.
+
+Definitely some outliers that need to be Identified and examined in GIS
+
+```{r Linear Regression onflow acc area and watershed area}
+
+#Function to plot data
+
+ggplotRegression <- function (fit) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+
+site_flow_regr <-ggplotRegression(lm(Area_km2 ~site_acc_sqKm, data = sites.df))
+site_flow_regr
+
+```
+## DataExplorer Report for dataset
+```{r Data Explore Covariates df}
+#use DataExplorer  package to examine data
+
+DataExplorer::create_report(cov.df)
+#Could also loop through regions and spit out regional reports
+
+```
+
+## Data by region
+```{r Data Explore QQ plots by region}
+dat_cols <- c("region", "cat_slope_MIN", "cat_slope_MAX",
+"cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
+"cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
+"wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
+"wtd_slope_MAX", "wtd_slope_MEAN", "wtd_slope_STD", "wtd_north_per", 
+"wtd_wet_per","wtd_lake_per","wtd_glacier_per","wtd_area_sqKM")
+
+cov.df.explore <- cov.df[,dat_cols]
+plot_qq(cov.df.explore, by = "region")
+```
+### Bristol Bay
+```{r Bbay Missing}
+reg = 'Bristol_Bay'
+bb_miss <- cov.df.explore %>% 
+  filter(region == reg) %>% 
+  plot_missing()
+
+```
+
+```{r Bbay Histo}
+bb_histo <- cov.df.explore %>% 
+  filter(region == reg) %>% 
+  plot_histogram()
+
+
+```
+
+```{r Bbay QQplot}
+bb_qq <- cov.df.explore %>% 
+  filter(region == reg) %>% 
+  plot_qq()
+
+```
+```{r Bbay correlation}
+bb_co <- cov.df.explore %>% 
+  filter(region == reg)
+plot_correlation(na.omit(bb_co))
+
+```
+### Kodiak
+```{r Kod Missing}
+reg1 = 'Kodiak'
+ko_miss <- cov.df.explore %>% 
+  filter(region == reg1) %>% 
+  plot_missing()
+
+```
+
+```{r Kod Histo}
+ko_histo <- cov.df.explore %>% 
+  filter(region == reg1) %>% 
+  plot_histogram()
+
+
+```
+
+```{r Kod QQplot}
+ko_qq <- cov.df.explore %>% 
+  filter(region == reg1) %>% 
+  plot_qq()
+
+```
+
+```{r Kod correlation}
+ko_co <- cov.df.explore %>% 
+  filter(region == reg1)
+
+plot_correlation(na.omit(ko_co))
+```
+
+### PWS
+```{r PWS Missing}
+reg2 = 'Prince_William_Sound'
+pws_miss <- cov.df.explore %>% 
+  filter(region == reg2) %>% 
+  plot_missing()
+
+```
+
+```{r PWS Histo}
+pws_histo <- cov.df.explore %>% 
+  filter(region == reg2) %>% 
+  plot_histogram()
+
+
+```
+
+```{r PWS QQplot}
+pws_qq <- cov.df.explore %>% 
+  filter(region == reg2) %>% 
+  plot_qq()
+
+```
+
+```{r PWS correlation}
+pws_co <- cov.df.explore %>% 
+  filter(region == reg2)
+
+plot_correlation(na.omit(pws_co))
+```
+### Cook Inlet
+```{r Cook Inlet Missing}
+reg3 = 'Cook_Inlet'
+ci_miss <- cov.df.explore %>% 
+  filter(region == reg3) %>% 
+  plot_missing()
+
+```
+
+```{r Cook Inlet Histo}
+ci_histo <- cov.df.explore %>% 
+  filter(region == reg3) %>% 
+  plot_histogram()
+
+
+```
+
+```{r Cook Inlet QQplot}
+ci_qq <- cov.df.explore %>% 
+  filter(region == reg3) %>% 
+  plot_qq()
+
+```
+
+```{r Cook Inlet correlation}
+ci_co <- cov.df.explore %>% 
+  filter(region == reg3)
+
+plot_correlation(na.omit(ci_co))
+```
+
+### Copper River
+```{r Copper River Missing}
+reg4 = 'Copper_River'
+co_miss <- cov.df.explore %>% 
+  filter(region == reg4) %>% 
+  plot_missing()
+
+```
+
+```{r Copper River Histo}
+co_histo <- cov.df.explore %>% 
+  filter(region == reg4) %>% 
+  plot_histogram()
+
+
+```
+
+```{r Copper River QQplot}
+co_qq <- cov.df.explore %>% 
+  filter(region == reg4) %>% 
+  plot_qq()
+
+```
+
+```{r Copper River correlation}
+co_co <- cov.df.explore %>% 
+  filter(region == reg4)
+
+plot_correlation(na.omit(co_co))
+```
