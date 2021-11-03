@@ -86,6 +86,7 @@ cov.df <- cov.df %>%
   mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
   subset(select = wtd_keep_cols )
 ```
+
 ## Site Accumulation Area vs Wtd Area
 Compare watershed area (area_km2) as calcuated from shape area in GIS to area
 calculated from the max flow accumulation () for a given site.  Flow accumulation
