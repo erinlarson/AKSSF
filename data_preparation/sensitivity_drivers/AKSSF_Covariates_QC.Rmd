@@ -66,9 +66,9 @@ cov.df.raw <- read.csv(file = 'AKSSF_Covariates.csv', header = TRUE) #All catchm
 sites.df <- read.csv(file = 'AKSSF_sites_sj_maxfac.csv', header = TRUE)#Sites data with watershed area 
 
 #dput(colnames(sites.df))
-site_keep_cols <- c("SiteID","NHDPlusID","GridCode","region", "cat_ID",
-                    "cat_ID_con", "site_max_acc", "site_acc_sqKm", "Area_km2",
-                    "area_diff","size_diff", "lat", "lon")
+site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+                    "Area_km2","area_diff","size_diff", "lat", "lon",
+                    'str_ord','str_slope')
 
 sites.df <- sites.df %>% 
   mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
@@ -137,12 +137,25 @@ areafig
 
 
 ## DataExplorer Report for dataset
-```{r Data Explore Covariates df}
+```{r Data Explore dfs}
+
+#use DataExplorer  package to examine data
+create_report(cov.df, output_format = html_document(),output_file = "AKSSF_Covariate_DataExplore.html")
+
+create_report(sites.df, output_format = html_document(),output_file = "AKSSF_Sites_DataExplore.html")
 #use DataExplorer  package to examine data
 
-DataExplorer::create_report(cov.df)
-#Could also loop through regions and spit out regional reports
-
+# Could also loop through regions and spit out regional reports
+regions <-  c("Kodiak", "Copper_River", "Prince_William_Sound", "Cook_Inlet", "Bristol_Bay")
+for (r in regions){
+  print(r)
+  df <-  cov.df %>%
+    filter(region == r)
+  name <- paste(r,'_DataExplore.html', sep = "", collapse = "")
+  create_report(df, output_format = html_document(),output_file = name)
+  print (name)
+}
+  
 ```
 
 ## Data by region
