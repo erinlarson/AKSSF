@@ -79,7 +79,7 @@ sites.df <- sites.df %>%
   subset(select = site_keep_cols )
   
 #dput(colnames(cov.df))
-wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope_MAX",
+wtd_keep_cols <- c("cat_ID_con", "cat_slope_MIN", "cat_slope_MAX",
   "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
   "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
   "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
@@ -93,6 +93,9 @@ cov.df <- cov.df.raw %>%
 
 # Convert na to 0
 cov.df[is.na(cov.df)] <- 0
+
+cov.df <- cov.df %>% 
+  mutate(region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)))
 
 ```
 
@@ -142,7 +145,7 @@ areafig
 ```{r Data Explore dfs}
 
 #use DataExplorer  package to examine data
-create_report(cov.df, output_format = html_document(),output_file = "AKSSF_Covariate_DataExplore.html")
+create_report(cov.df, output_file = "AKSSF_Covariate_DataExplore.html")
 
 create_report(sites.df, output_format = html_document(),output_file = "AKSSF_Sites_DataExplore.html")
 #use DataExplorer  package to examine data
