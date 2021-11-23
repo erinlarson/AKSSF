@@ -42,6 +42,10 @@ cik.daily <- read_csv("data_preparation/final_data/Daily_Data/cikDaily_Data2021-
 cik.md <- read_csv("data_preparation/final_data/Metadata/cikMetadata2021-03-11.csv")
 
 cik.daily <- left_join(cik.daily, cik.md %>% select(SiteID, Waterbody_name))
+
+#save Deshka for Little Su analysis
+# saveRDS(cik.daily %>% filter(SiteID == "CIK_28"), file = "W:/Github/Little_Susitna/data/deshka_2008-2018.rds")
+
 ```
 
 # Temperature Figures

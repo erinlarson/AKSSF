@@ -1,0 +1,231 @@
+---
+title: "2_ts_model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+
+Modeling thermal sensitivities for five regions in Southern AK.
+
+1. read in response data
+2. read in and combine covariates
+3. reduce covariate list: corrplot, VIF, etc.
+4. transform/model covariates as needed. e.g. logit transform for 0-1 percentages and/or lcld ~ wtd_slope model resid.
+4. model thermal sensitivities: mixed model or RF with random effects
+
+
+Tim provided DFA output on November 8, 2021. Here are comments on the files from his email:
+- GlobalModelEstimates_1trend_DUE.csv contains the estimated model coefficients. It has columns Region, SiteID, Year, TempSens_Z, TempSens, TrendLoad_Z, TrendLoad
+- TempSens_Z are the temperature sensitivity values in Z-score space, which come directly out of the model.
+- TempSens are the temperature sensitivity values that have been back-transformed to be in units of ºC water / ºC air.
+- TrendLoad_Z are the loadings on the common trend in Z-score space.
+- GlobalTrendEstimates_1trend_DUE.csv contains the estimated trends by year. This has columns Year, DOY, and Trend. DOY is just Julian day of year. Trend is the trend value for that DOY.
+
+
+```{r responses}
+
+ts_dat <- read_csv("DFA/output_8Nov21/GlobalModelEstimates_1trend_DUE.csv")
+trend_dat <- read_csv("DFA/output_8Nov21/GlobalTrends_1trend_DUE.csv")
+
+```
+
+```{r ts versus trend}
+
+ts_dat %>% 
+  ggplot(aes(TempSens, TrendLoad_Z)) +
+  geom_point(aes(color = Region)) +
+  facet_wrap(~Year)
+
+```
+
+Read in covariates.
+
+Copied over from Dustin's script, but modified so that lcld is combined with the other covariates.
+
+```{r AKSSF datasets}
+getwd()
+#Data from covariates script
+cov.df.raw <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_Covariates.csv', header = TRUE) 
+#Data from spatial join script
+sites.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_sites_sj_maxfac.csv', header = TRUE)
+#Data from Modis Script
+lcld.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_wtd_lcld_mn.csv', header = TRUE)
+lcld_cols <-  c("wtd_lcld_mn_2001","wtd_lcld_mn_2002", "wtd_lcld_mn_2003",
+                "wtd_lcld_mn_2004","wtd_lcld_mn_2005", "wtd_lcld_mn_2006",
+                "wtd_lcld_mn_2007", "wtd_lcld_mn_2008", "wtd_lcld_mn_2009",
+                "wtd_lcld_mn_2010", "wtd_lcld_mn_2011", "wtd_lcld_mn_2012",
+                "wtd_lcld_mn_2013","wtd_lcld_mn_2014", "wtd_lcld_mn_2015",
+                "wtd_lcld_mn_2016", "wtd_lcld_mn_2017", "wtd_lcld_mn_2018",
+                "wtd_lcld_mn_2019")
+
+lcld.long <- lcld.df %>% 
+  pivot_longer(cols = wtd_lcld_mn_2001:wtd_lcld_mn_2019, names_to = "metric", values_to = "wtd_lcld") %>% 
+  mutate(Year = as.numeric(substr(metric, 13, 17)),
+         wtd_lcld_jd = wtd_lcld - 365) %>% 
+  select(-metric)
+
+#dput(colnames(sites.df))
+site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+                    "Area_km2","area_diff","size_diff", "lat", "lon",
+                    'str_ord','str_slope',"cat_ID_con")
+
+sites.df <- sites.df %>% 
+  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
+  size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
+                        TRUE~'No Change')) %>% 
+  subset(select = site_keep_cols )
+  
+#dput(colnames(cov.df))
+wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope_MAX",
+  "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
+  "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
+  "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
+  "wtd_slope_MAX", "wtd_slope_MEAN", "wtd_slope_STD", "wtd_north_per", 
+  "wtd_wet_per","wtd_lake_per","wtd_glacier_per","wtd_area_sqKM")
+
+
+cov.df <- cov.df.raw %>%
+  mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
+  subset(select = wtd_keep_cols )
+
+# Convert na to 0
+cov.df[is.na(cov.df)] <- 0
+
+cov.all <- left_join(sites.df %>% select(SiteID, cat_ID_con, Region = region, str_ord, str_slope),
+                     cov.df)
+
+cov.all <- left_join(cov.all, lcld.long)
+summary(cov.all)
+```
+
+Comparing watershed slope and snow cover.
+- slope incorrect bc I converted the cm dems in the slope function for CI and PWS, which put the other dems in the wrong units. Dustin is fixing and also making all dems 10 m so slope estimates are the same.
+
+
+```{r}
+
+names(cov.all)
+
+#watershed slopes are wrong for synthetic networks and 10 m dem, need to figure out.
+cov.all %>% 
+  group_by(Region) %>% 
+  summarize(meanslope = mean(wtd_slope_MEAN))
+
+#look ok
+cov.all %>% 
+  group_by(Region) %>% 
+  summarize(meanslope = mean(wtd_elev_MEAN))
+
+#problem with 2011, need to use tif with "_c" at end.
+cov.all %>% 
+  filter(wtd_lcld_jd <0)
+
+cov.all %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd)) +
+  geom_point() +
+  facet_wrap(~Region)
+```
+
+
+Snow cover for 2011 was using the wrong grid, Dustin has fixed it.
+
+```{r}
+
+#these sort of match up to hillside snowtel (2006-2019) april 1st swe 
+# lowest years 2015, 2014, 2019
+# biggest years 2012 by a lot, then 2007-2010 all about the same
+cov.all %>% 
+  group_by(Region, Year) %>% 
+  summarize(meanlcld = mean(wtd_lcld_jd)) %>% 
+  pivot_wider(names_from = Year, values_from = meanlcld, names_sort = TRUE)
+
+#definite problem with 2011
+cov.all %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = wtd_lcld_jd, after_stat(density), color = Region)) +
+  facet_wrap(~Year)
+```
+
+Stream covariates. 
+- found one incorrect watershed.
+- some strange stream orders in big rivers in cook inlet, but can only wonder if they were changed with updates, not much we can do about it. wtd area probably a better predictor as both are highly correlated.
+- stream slope also affected by differences in cell sizes, should rerun when all dems on same resolution - 10 m.
+
+```{r}
+#one slope outlier here. Also, are these percentages? Should they be x 100? Then that outlier would probably be wrong.
+cov.all %>% 
+  ggplot(aes(str_ord, str_slope*100)) +
+  geom_point(aes(color = Region)) 
+
+cov.all %>% 
+  filter(str_slope*100 < 0.01) %>% 
+  distinct(Region, SiteID, str_slope)
+
+#some site on Kodiak - 15297475, maybe an fws site? Should be checked.
+cov.all %>% filter(str_slope > .3)
+
+cov.all %>% 
+  ggplot(aes(str_ord, wtd_area_sqKM)) +
+  geom_point() +
+  scale_y_log10() +
+  facet_wrap(~Region)
+
+# a few strange low order streams in copper river on log scale
+cov.all %>% 
+  filter(Region == "Copper_River", str_ord < 3) %>% 
+  distinct(SiteID, str_ord, wtd_area_sqKM)
+
+#cik_34 is wrong. it grabbed the entire susitna! I think we'll need to shift the point and rerun everything....rrrghhh.
+cov.all %>% 
+  filter(str_ord == 6, wtd_area_sqKM > 30000)
+
+#also strange, 4 usgs sites all 7th order but very different watersheds.
+#15291000 is the topmost site, but hard to believe it should really be 7th order, network very messy in this area.
+cov.all %>% 
+  filter(str_ord %in% c(7:8), Region == "Cook_Inlet") %>% 
+  distinct(SiteID, str_ord, wtd_area_sqKM) %>% 
+  arrange(wtd_area_sqKM)
+```
+
+Review the glacier, wetland, and lake covers.
+
+```{r}
+cov.all %>% 
+  distinct(Region, SiteID, wtd_glacier_per) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = wtd_glacier_per, after_stat(density))) +
+  facet_wrap(~ Region) 
+
+cov.all %>% 
+  distinct(Region, SiteID, cat_ID_con, wtd_glacier_per) %>% 
+  filter(wtd_glacier_per > 5) %>% 
+  arrange(desc(wtd_glacier_per))
+
+cov.all %>% 
+  distinct(Region, SiteID, cat_ID_con, wtd_lake_per) %>% 
+  filter(wtd_lake_per > 5) %>% 
+  arrange(desc(wtd_lake_per))
+```
+
+
+
+```{r}
+model.dat <- left_join(ts_dat %>% select(SiteID, Year, TempSens), cov.all)
+
+model.dat %>% 
+  ggplot(aes(y = TempSens, x = str_ord)) +
+  geom_jitter(aes(color = wtd_glacier_per))
+
+model.dat %>% 
+  filter(wtd_glacier_per > 10) %>% 
+  ggplot(aes(y = TempSens, x = str_ord)) +
+  geom_point(aes(color = wtd_glacier_per)) +
+  facet_wrap(~Year)
+
+```
+

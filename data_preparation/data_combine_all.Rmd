@@ -259,4 +259,4 @@ saveRDS(sumdat, paste0("data_preparation/final_data/summer_data_wair", Sys.Date(
 write_csv(sumdat, path = paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".csv"))
 ```
 
-
+# QA 2019 temperatures for Deshka

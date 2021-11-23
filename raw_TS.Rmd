@@ -64,6 +64,7 @@ Create lm fits using model with just air temperature and model with air temperat
 
 ```{r}
 nested <- dat2 %>% 
+  ungroup() %>% 
   nest(data = -SiteID, -year)
 
 lm.fits <- nested %>% 
@@ -137,6 +138,7 @@ tidy1 %>%
   arrange(estimate)
 ```
 
+
 ```{r}
 dat2 %>% 
   filter(SiteID == "USFS_Cabin Lake Outlet", year == 2012) %>% 
@@ -144,5 +146,21 @@ dat2 %>%
   geom_line(aes(x = sampleDate, y = meanDT)) +
   geom_line(aes(x = sampleDate, y= airDT), color = "blue")
 ```
+
+
+Very low thermal sensitivities in 2019 in Cook Inlet, seems to be associated with Deshka network because large shift to left in freq poly in 2017, what is going on? The lm fits do NOT show the same pattern as the thermal sensitivities from dfa, no deshka sites at all in this filter.
+
+```{r}
+tidy1 %>% 
+  filter(term == "airDT", estimate < 0.25, year == 2019) %>% 
+  arrange(desc(estimate))
+
+
+tidy1 %>% 
+  filter(grepl("Deshka|Moose|Kroto", SiteID), term == "airDT", year == 2019) %>% 
+  arrange(desc(estimate))
+
+```
+
 
 

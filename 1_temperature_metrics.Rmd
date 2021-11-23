@@ -1,0 +1,113 @@
+---
+title: "1_temperature_metrics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggfortify)
+library(lubridate)
+```
+
+1. Read in final dataset
+
+Note that we need to remove sites in Little Susitna watershed, begin "lsr".
+
+
+```{r read in final dataset}
+temp <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+md <- readRDS("data_preparation/final_data/md.rds")
+```
+
+Count sites by region.
+
+```{r}
+md %>% 
+  count(Region)
+```
+
+
+
+
+2. Calculate temperature metrics
+
+This takes a long time to run. Saved as an rds to the output folder. Currently, the metrics files is based off of daily means only because missing max and min for UW. Emailed Tim to see if he has the raw data handy and could provide daily max, min, and mean (11/15/21).
+
+```{r calculate metrics, eval = FALSE}
+
+source("temp_metrics_fcn_2021.R")
+
+names(temp)
+
+littlesu_sites <- temp %>% distinct(SiteID) %>% filter(grepl("lsr", SiteID))
+
+sites_complete_summers <- anti_join(temp, littlesu_sites) %>%
+  group_by(SiteID, year = year(sampleDate)) %>% 
+  mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
+  filter(percent_complete > 0.8)
+
+#lose 486 site years - which are all 2019 when we didn't have summer data!
+nrow(temp %>% distinct(SiteID, year = year(sampleDate))) - nrow(sites_complete_summers %>% count(SiteID, year))
+
+left_join(sites_complete_summers %>% ungroup() %>% distinct(SiteID), md %>% select(SiteID, Region)) %>% 
+  ungroup() %>% 
+  count(Region)
+
+metrics <- sites_complete_summers %>% 
+  tempmetrics(.)
+
+saveRDS(metrics, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
+
+```
+
+
+
+3. Explore thermal diversity across regions
+
+
+```{r read in saved metrics}
+metrics <- read_rds("output/metrics_2021-11-15.rds")
+
+```
+
+
+Pairwise correlations among metrics.
+
+```{r}
+
+```
+
+
+
+Note that to get information from md, need to use distinct. There are multiple entries for a few sites that were valid, but we combined into one time series.
+
+
+```{r}
+
+data.frame(mets = names(metrics))
+
+
+metrics_in <- metrics %>% 
+  filter(year > 2009) %>% 
+  select(-SiteID, -year, -SUM_20, -DUR_mx20, -SUM_18, -DUR_mx18, -Jul, -Aug, -Sep, -Jun) 
+
+metrics_env <- left_join(metrics %>% filter(year > 2009) %>% select(SiteID, year), 
+                         md %>% distinct(SiteID, SourceName, Waterbody_name, Waterbody_type, Name, HUC8, Region)) %>%
+  mutate(yearf = as.factor(year))
+
+
+pc1 <- prcomp(metrics_in, scale. = TRUE) 
+
+biplot(pc1)
+
+autoplot(pc1, data = metrics_env, colour = 'Region', labels = TRUE, loadings.label = TRUE,
+         frame = TRUE, frame.type = "t", frame.colour = 'Region')
+
+autoplot(pc1, data = metrics_env, colour = 'yearf', labels = TRUE, loadings.label = TRUE,
+         frame = TRUE, frame.type = "t", frame.colour = 'yearf')
+
+pc1.scores <- scores(pc1)
+```
+
