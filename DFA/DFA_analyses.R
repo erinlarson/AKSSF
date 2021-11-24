@@ -28,7 +28,7 @@ DOYseq<-seq(152,243)
 #create some new date/time columns
 #add region column
 #limit timeframe to chosen date range
-Tdat <- readRDS('../../data/summer_data_wair2021-07-30.rds') %>% 
+Tdat <- readRDS('../../data/summer_data_wair2021-11-23.rds') %>% 
   mutate(sampleDate = as.Date(sampleDate), DOY = format(sampleDate,'%j') %>% as.numeric(),Year=format(sampleDate,'%Y')%>% as.numeric()) %>%
   mutate(Region = MetaDat$Region[match(SiteID,MetaDat$SiteID)]) %>%
   filter(DOY %in% DOYseq)

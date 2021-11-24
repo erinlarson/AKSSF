@@ -51,8 +51,8 @@ library(tidyverse)
 getwd()
 
 # Read in Metadata 
-md <- readRDS("../data/md.rds") 
-sumdat <- read_csv("../data/summer_data_wair2021-07-30.csv") %>% 
+md <- read_csv("../data/md.csv") 
+sumdat <- read_csv("../data/summer_data_wair2021-11-23.csv") %>% 
   mutate( year = year(sampleDate))
 
 summary(sumdat)
@@ -123,5 +123,10 @@ parallel::detectCores(logical=FALSE)
 as.numeric(system("awk '/MemFree/ {print $2}' /proc/meminfo", intern=TRUE))
 
 ```
+```{r save as rds}
+getwd()
 
+saveRDS(md, file = '../data/md.rds')
+saveRDS(sumdat, file = '../data/summer_data_wair2021-11-23.rds')
+```
 
