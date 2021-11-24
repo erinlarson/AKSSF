@@ -67,10 +67,11 @@ lcld_cols <-  c("wtd_lcld_mn_2001","wtd_lcld_mn_2002", "wtd_lcld_mn_2003",
                 "wtd_lcld_mn_2016", "wtd_lcld_mn_2017", "wtd_lcld_mn_2018",
                 "wtd_lcld_mn_2019")
 
-#dput(colnames(sites.df))
+dput(colnames(sites.df))
+
 site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
                     "Area_km2","area_diff","size_diff", "lat", "lon",
-                    'str_ord','str_slope',"cat_ID_con")
+                    'str_ord','str_slope',"dist_coast_km")
 
 sites.df <- sites.df %>% 
   mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
@@ -78,8 +79,9 @@ sites.df <- sites.df %>%
                         TRUE~'No Change')) %>% 
   subset(select = site_keep_cols )
   
-#dput(colnames(cov.df))
-wtd_keep_cols <- c("cat_ID_con", "cat_slope_MIN", "cat_slope_MAX",
+dput(colnames(cov.df.raw))
+
+wtd_keep_cols <- c("cat_ID_con","cat_ID","region", "cat_slope_MIN", "cat_slope_MAX",
   "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
   "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
   "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
@@ -94,8 +96,6 @@ cov.df <- cov.df.raw %>%
 # Convert na to 0
 cov.df[is.na(cov.df)] <- 0
 
-cov.df <- cov.df %>% 
-  mutate(region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)))
 
 ```
 
@@ -142,7 +142,7 @@ areafig
 
 
 ## DataExplorer Report for dataset
-```{r Data Explore dfs}
+```{r Data Explore dfs, message=FALSE, warning=FALSE}
 
 #use DataExplorer  package to examine data
 create_report(cov.df, output_file = "AKSSF_Covariate_DataExplore.html")
