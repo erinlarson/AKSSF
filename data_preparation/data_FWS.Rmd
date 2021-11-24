@@ -60,7 +60,7 @@ kod_md <- read_excel(kod_wb, sheet = "AKOATS_metadata") %>%
                             grepl("ayarv03", SiteID) ~ "kdk_ayarv03",
                             grepl("concr01", SiteID) ~ "kdk_concr01",
                             TRUE ~ SiteID)) %>% 
-  select(one_of(akoats_fields))
+  dplyr::select(one_of(akoats_fields))
 
 kod_md
 
@@ -80,7 +80,7 @@ osm_md <- read_excel(osm_wb, sheet = "OSM_Sites_AKOATS") %>%
          Longitude = case_when(Long_revised == "SAME"|is.na(Long_revised)|Agency_ID == "Tanada Creek" ~ Longitude,
                               TRUE ~ as.numeric(Long_revised)),
          Sensor_QAQC = as.numeric(substr(Sensor_QAQC, 1, 1))) %>% 
-  select(one_of(akoats_fields))
+  dplyr::select(one_of(akoats_fields))
 
 osm_md
 
@@ -94,8 +94,8 @@ wrb_wb <- "S:/Stream Temperature Data/USFWS Perdue - complete 2020/WRB_Oct2020.x
 
 wrb_md <- read_excel(wrb_wb, sheet = "AKOATS_metadata") %>% 
   filter(Contact_person == "Meg Perdue") %>% 
-  rename(seq_id = AKOATS_ID)# %>% 
-  select(one_of(akoats_fields))
+  rename(seq_id = AKOATS_ID) %>% 
+  dplyr::select(one_of(akoats_fields))
 
 wrb_md
 
@@ -151,6 +151,8 @@ Create final AKSSF metdata file for FWS data - but keeping out Bristol Bay sites
 ```{r final metadata}
 fws_akssf_md <- fws_md %>% 
   filter(SiteID %in% fws_akssf_sites, !(Waterbody_name %in% c("Newhalen River", "Egegik River")))
+
+fws_akssf_md
 ```
 
 

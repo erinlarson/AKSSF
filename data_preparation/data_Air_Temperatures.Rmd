@@ -14,7 +14,6 @@ library(sp)
 library(rgdal)
 library(raster)
 library(ncdf4)
-library(FedData)
 library(tictoc)
 
 # if(!require(devtools)){install.packages("devtools")}
@@ -126,30 +125,11 @@ Get locations (lat/long) for sites from metadata file and save as csv for use wi
 
 Note: this was run off of the metadata lat/long and not the final shp where some sites were shifted, although nothing drastic, mostly just a few km off, which shouldn't make much of a difference. Shifting sites was to get them correctly on the stream networks for hydrologic attributes and not necessarily to correct locations (although in some cases they were off).
 
-Note that there are duplicates for NPS lake outlets because I combined level and temp loggers into one site id since they are essentially the same site.
 
 ```{r read in site locations and save csv}
-md <- readRDS("final_data/Metadata/md.rds")
+md <- readRDS("final_data/md.rds")
 
-test <- md %>% 
-  filter(!(Waterbody_type %in% "L")) %>% 
-  distinct(SiteID)
-
-#ok all sites in data have md
-ddat %>% distinct(SiteID) %>% left_join(test %>% mutate(md = 1))
-
-#still one site in md that doesn't have data, assume that this should have been dropped from md in qa and just got missed.
-test %>% left_join(ddat %>% distinct(SiteID) %>% mutate(dat = 1)) %>% 
-  filter(is.na(dat)) %>% 
-  arrange(SiteID)
-
-md %>% 
-  filter(!(Waterbody_type %in% "L")) %>% 
-  count(SiteID, Latitude, Longitude) %>% arrange(desc(n))
-
-write.csv(md %>%
-            filter(!(Waterbody_type %in% "L")) %>% 
-            distinct(SiteID, Latitude, Longitude), file = paste0("sites", Sys.Date(), ".csv"),
+write.csv(md %>% distinct(SiteID, Latitude, Longitude), file = paste0("sites", Sys.Date(), ".csv"),
           row.names = FALSE)
 ```
 
@@ -157,32 +137,14 @@ write.csv(md %>%
 Download daymet data for 40 years and all sites.
 
 ```{r daymet for all sites}
-dm_batch <- download_daymet_batch(file_location = "sites2021-06-14.csv",
+dm_batch <- download_daymet_batch(file_location = "sites2021-11-23.csv",
                       start = 1980,
                       end = 2020,
                       simplify = TRUE,
                       silent = TRUE)
 
-```
 
-Two USFS sites flagged as lakes, but add them back in for now and check with Dustin and/or Luca. Middle Arm Eyak does look like it's in the lake. Solf Lake outlet is right at the lake outlet, but I think we have a lot of these sites elsewhere so include for now.
-
-```{r daymet for 2 usfs lake outlets}
-
-write.csv(md %>%
-            filter(SiteID %in% c("USFS_Middle Arm Eyak", "USFS_Solf Lake Fish Pass")) %>% 
-            distinct(SiteID, Latitude, Longitude), file = paste0("two_usfs_lake_sites", Sys.Date(), ".csv"),
-          row.names = FALSE)
-
-dm_two_usfs_lake_sites <- download_daymet_batch(file_location = "two_usfs_lake_sites2021-06-16.csv",
-                      start = 1980,
-                      end = 2020,
-                      simplify = TRUE,
-                      silent = TRUE)
-
-dm_all <- bind_rows(dm_batch, dm_two_usfs_lake_sites)
-
-write_csv(dm_all, "daymet/site_daymet.csv")
+write_csv(dm_batch, "daymet/site_daymet.csv")
 
 dm_batch %>% 
   distinct(site, measurement)

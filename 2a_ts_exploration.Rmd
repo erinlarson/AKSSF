@@ -58,7 +58,7 @@ Somethings strange going on with sites in Deshka having very low thermal sensiti
 Filter on time series with 70% of days from June 1 to August 31.
 
 ```{r}
-dat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
 
 dat <- dat %>% 
   mutate(year = year(sampleDate))
@@ -97,6 +97,20 @@ dat2 %>%
 
 ggsave("output/desha_air-stream_2sites.jpeg", width = 9, units = "in")
 ```
+
+Plot a couple of little susitna sites. Looks much more reasonable, lower site pretty cold in June probably due to snowmelt, then tracking air temperatures pretty well later in year. Upper site very cold and not tracking air temps.
+
+```{r}
+dat %>% filter(grepl("ls", SiteID)) %>% distinct(SiteID)
+
+dat2 %>% 
+  filter(SiteID == c("lsr28.3", "lsr112"), year == 2020) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = meanDT)) +
+  geom_line(aes(x = sampleDate, y= airDT), color = "blue") +
+  facet_wrap(~SiteID)
+```
+
 
 
 Plots of common trends.

@@ -32,7 +32,7 @@ library(ggsflabel)
 
 # Metadata
 
-Bring in the metadata for each dataset. Export a shapefile so that we can check site locations in ArcGIS and also intersect to get catchment IDs. They will be used later to merge DAYMET air temperatures (daily averages for each catchment) with the stream temperature data.
+Bring in the metadata for each dataset. Export a shapefile so that we can check site locations in ArcGIS and also intersect to get catchment IDs. The site locations are used to extract DAYMET air temperatures in the air tempertures rmd.
 
 ```{r read in metadata}
 gd.akssf.files <- drive_ls(path = "https://drive.google.com/drive/u/0/folders/1_qtmORSAow1fIxvh116ZP7oKd_PC36L0")
@@ -42,6 +42,9 @@ gd.akssf.files %>%
 
 gd.metadata.files <- gd.akssf.files %>% 
   filter(grepl("Metadata", name) & grepl(".csv", name))
+
+gd.metadata.files %>% 
+  arrange(name)
 
 folder <- "data_preparation/final_data/Metadata/"
 
@@ -63,6 +66,7 @@ md <- md %>%
   mutate(SiteID = case_when(is.na(SiteID) ~ Agency_ID,
                             TRUE ~ SiteID))
 
+md %>% dplyr::select(SiteID, file_name)
 ```
 
 
@@ -152,14 +156,6 @@ md_sf <- md_sf %>%
 md <- left_join(md, st_drop_geometry(md_sf) %>% distinct(SiteID, HUC8, Name, Region))
 ```
 
-Chunk above run and everything saved on 6/14/21.
-
-```{r save metadata}
-saveRDS(md, file = "data_preparation/final_data/md.rds")
-write_csv(md, path = "data_preparation/final_data/md.csv")
-saveRDS(md_sf, file = "data_preparation/final_data/md_sf.rds")
-
-```
 
 
 # Data
@@ -170,6 +166,9 @@ Bring in the data files and exclude files associated with lakes.
 
 gd.daily.files <- gd.akssf.files %>% 
   filter(grepl("Daily_Data", name) & grepl(".csv", name), !grepl("lakes", name))
+
+gd.daily.files %>% 
+  arrange(name)
 
 folder <- "data_preparation/final_data/Daily_Data/"
 
@@ -212,6 +211,69 @@ ddat <- ddat %>%
 write_csv(ddat, paste0("data_preparation/final_data/daily_data", Sys.Date()))
 ```
 
+
+# Check SiteIDs and save metadata
+
+Check that all sites with data have entries in md files.
+
+All sites with data have entries in metadata, but two sites in data that are classified as lakes in metadata at Solf Lake. Include them in metadata for now because both are at streams. 
+
+Note one stream site in md without data that can be dropped. kdk_olgcr01b. This was an entry in akoats for a duplicate logger
+that never should have been there. Same lat/long and same site. Only provided one time series for this site
+and so site name in data matches kdk_olgcr01a. 
+
+These can be resolved by filtering to only select metadata entries for SiteIDs in the data. But, there are multiple entries for some sites in the metadata that should be fixed:
+
+* Asked Dustin to fix duplicate entries in Little Susitna network, some are actual duplicates and others are from sites that we are giving the same SiteID but have slightly different locations between 2016/2020.
+* Note that there are duplicates for NPS lake outlets because I combined level and temp loggers into one site id since they are essentially the same site. Filter to just select the temp sites: 
+
+
+
+```{r compare md and ddat}
+
+ddat %>% 
+  distinct(SiteID) %>% 
+  left_join(md %>% mutate(md = 1) %>% dplyr::select(SiteID, md, Waterbody_type)) %>% 
+  filter(Waterbody_type == "L")
+
+nrow(ddat %>% distinct(SiteID))
+
+#extra entries in md mostly at lakes except one which we don't need.
+md %>% left_join(ddat %>% distinct(SiteID) %>% mutate(dat = 1)) %>% 
+  filter(is.na(dat)) %>% 
+  arrange(SiteID) %>% 
+  dplyr::select(SiteID, Waterbody_type)
+
+#not working because we have duplicate entries for some siteids.
+left_join(ddat %>% distinct(SiteID), md) %>% 
+  count(SiteID) %>% 
+  arrange(desc(n))
+
+md %>% filter(SiteID == "nps_KATM_naknlo") # remove seq_id 1631, 1470
+md %>% filter(SiteID == "nps_LACL_lclaro") # remove seq_id 1633, 1476
+md %>% filter(SiteID == "nps_KATM_lbrooo") # remove seq_id 1441
+md %>% filter(SiteID == "nps_LACL_kijilo") # remove seq_id 1635
+md %>% filter(SiteID == "BM7") # remove seq_id 1841
+
+remove_seqids <- c(1631, 1470, 1633, 1476, 1441, 1635, 1841)
+
+#want 485 metadata entries to match unique SiteIDs in data.
+md_final <- left_join(ddat %>% distinct(SiteID), md %>% filter(!seq_id %in% remove_seqids))  
+
+```
+
+Chunk above run and everything saved on 6/14/21. Note, resaved on 11/23/21 because found error in Little Susitna site names. Also fixed all the duplicate md entries so now just 1 SiteID in the data to match 1 SiteID in the metadata.
+
+```{r save metadata}
+saveRDS(md_final, file = "data_preparation/final_data/md.rds")
+write_csv(md_final, path = "data_preparation/final_data/md.csv")
+saveRDS(md_sf %>% right_join(md_final %>% dplyr::select(SiteID)), file = "data_preparation/final_data/md_sf.rds")
+
+```
+
+# Merge with air temperaures
+
+
 Merge with batched air temperatures.
 
 ```{r merge with air temps}
@@ -237,6 +299,8 @@ air <- daymet %>%
 rm(daymet)
 
 # ddat <- read_csv("data_preparation/final_data/daily_data2021-06-15")
+
+left_join(ddat %>% distinct(SiteID), air %>% distinct(SiteID) %>% mutate(air = 1)) %>% count(air)
 
 #half the data are outside summer window.
 ddat %>% 
