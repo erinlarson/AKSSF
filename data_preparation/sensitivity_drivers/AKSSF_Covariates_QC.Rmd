@@ -71,7 +71,7 @@ dput(colnames(sites.df))
 
 site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
                     "Area_km2","area_diff","size_diff", "lat", "lon",
-                    'str_ord','str_slope',"dist_coast_km")
+                    'str_ord','str_slope',"dist_coast_km","ds_dist_outlet")
 
 sites.df <- sites.df %>% 
   mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
