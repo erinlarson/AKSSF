@@ -9,6 +9,15 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 ```
 
+# Original DFA
+
+Tim provided DFA output on November 8, 2021. Here are comments on the files from his email:
+- GlobalModelEstimates_1trend_DUE.csv contains the estimated model coefficients. It has columns Region, SiteID, Year, TempSens_Z, TempSens, TrendLoad_Z, TrendLoad
+- TempSens_Z are the temperature sensitivity values in Z-score space, which come directly out of the model.
+- TempSens are the temperature sensitivity values that have been back-transformed to be in units of ºC water / ºC air.
+- TrendLoad_Z are the loadings on the common trend in Z-score space.
+- GlobalTrendEstimates_1trend_DUE.csv contains the estimated trends by year. This has columns Year, DOY, and Trend. DOY is just Julian day of year. Trend is the trend value for that DOY.
+
 
 Read in final thermal sensitivities and trend loadings from global model. Tim found that regional models did not change the results.
 
@@ -123,4 +132,15 @@ trend_dat %>%
 ```
 
 
+# ARIMA results
+
+Tim reran using an AR1 model (time series model with lag of 1 day) because the Deshka sites were confounding the analysis in 2017-2019. The common trend was air temperatures and the TS were super low, which is not what we want.
+
+Read in new results.
+
+```{r}
+ts_dat2 <- readRDS("DFA/TempSens_Arima_Results2021.12.07.RDS")
+
+ts_dat2
+```
 

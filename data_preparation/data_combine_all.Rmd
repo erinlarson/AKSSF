@@ -264,6 +264,24 @@ md_final <- left_join(ddat %>% distinct(SiteID), md %>% filter(!seq_id %in% remo
 
 Chunk above run and everything saved on 6/14/21. Note, resaved on 11/23/21 because found error in Little Susitna site names. Also fixed all the duplicate md entries so now just 1 SiteID in the data to match 1 SiteID in the metadata.
 
+Add a column for deshka sites in case that helps Tim. We may want to randomly subsample them for 2017-2019 so they don't dominate the common trend in the DFA.
+
+```{r}
+md_final <- md_final %>% 
+  mutate(deshka = case_when(grepl("Beverley", SiteID) ~ 0,
+                            grepl("Moose|Deshka|Kroto|OCC|OMCT|OWL|PGC|PKC|PMC|PNC|PSM|PTC|PWM", SiteID) ~ 1,
+                            TRUE ~ 0))
+
+md_final %>% 
+  filter(deshka == 1) %>% 
+  select(SiteID, SourceName)
+
+md_final %>% 
+  filter(SourceName %in% c("CIK", "fwsAnchorage")) %>% 
+  select(SiteID, deshka)
+```
+
+
 ```{r save metadata}
 saveRDS(md_final, file = "data_preparation/final_data/md.rds")
 write_csv(md_final, path = "data_preparation/final_data/md.csv")
@@ -323,4 +341,45 @@ saveRDS(sumdat, paste0("data_preparation/final_data/summer_data_wair", Sys.Date(
 write_csv(sumdat, path = paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".csv"))
 ```
 
-# QA 2019 temperatures for Deshka
+# read and check saved data
+
+Note, Sue has a site in BB that doesn't have any summer data - Big Creek in Naknek. Seems like she started it in fall 2016, recovered a little bit of data and that was it - confirmed on her metadata sheet.
+
+```{r}
+md <- read_csv("data_preparation/final_data/md.csv")
+
+dat <- read_csv("data_preparation/final_data/summer_data_wair2021-11-23.csv")
+
+md
+dat %>% distinct(SiteID)
+
+#all there
+left_join(dat %>% distinct(SiteID), md %>% select(SiteID, Region) %>% mutate(md = 1)) %>% filter(is.na(md))
+
+sites485 <- md %>% distinct(SiteID) %>% arrange(SiteID) %>% pull(SiteID)
+
+pdf("data_preparation/final_data/air-stream_temps.pdf")
+
+for(i in sites485) {
+  plot.dat <- left_join(dat, md %>% select(SiteID, Region)) %>%
+    filter(SiteID %in% i) %>% 
+    mutate(jd = format(sampleDate, "%j"), year = year(sampleDate)) %>% 
+    filter(jd >151, jd < 244)   #june 1 to aug 31
+  if(nrow(plot.dat) > 0) {
+    p1 <- plot.dat %>% 
+      ggplot() +
+      geom_line(aes(x = sampleDate, y = meanDT)) +
+      geom_line(aes(x = sampleDate, y = airDT), color = "blue") +
+      facet_wrap(~year, scales = "free_x") +
+      labs(title = i)
+    plot(p1)
+  } else {
+    (print(paste("missing data for ", i)))
+  }
+}
+
+dev.off()
+
+```
+
+
