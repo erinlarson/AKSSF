@@ -18,7 +18,7 @@ library(purrr)
 Raw thermal sensitivity from linear regressions and test of ADD to better predict daily stream temperatures affected by groundwater (Snyder et. al. 2015).
 
 ```{r}
-dat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
 
 dat <- dat %>% 
   mutate(year = year(sampleDate))
@@ -111,6 +111,11 @@ left_join(tidy1 %>% filter(term == "airDT") %>% select(SiteID, year, estimate),
           r2diff) %>% 
   ggplot() +
   geom_point(aes(x = estimate, y = diff))
+
+#check for any sites with negative slopes (to compare to AR1 fits in report 2b)
+tidy1 %>% 
+  filter(term == "airDT", estimate < 0.1) %>% 
+  distinct(SiteID)
 ```
 
 3. Is there a negative relationship between intercepts and slopes?
