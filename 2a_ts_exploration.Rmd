@@ -23,22 +23,20 @@ Read in final thermal sensitivities and trend loadings from global model. Tim fo
 
 ```{r responses}
 
-ts_dat <- read_csv("DFA/output_8Nov21/GlobalModelEstimates_1trend_DUE.csv")
+dfa_dat <- read_csv("DFA/output_8Nov21/GlobalModelEstimates_1trend_DUE.csv")
 trend_dat <- read_csv("DFA/output_8Nov21/GlobalTrends_1trend_DUE.csv")
 
-remove_lssites <- ts_dat %>% distinct(SiteID) %>% filter(grepl("lsr", SiteID)) 
-ts_dat <- ts_dat %>% 
+remove_lssites <- dfa_dat %>% distinct(SiteID) %>% filter(grepl("lsr", SiteID)) 
+dfa_dat <- dfa_dat %>% 
   filter(!SiteID %in% remove_lssites)
 
 ```
-
-
 
 Plot of thermal sensitivity versus loading on common trend. Tim commented that sites with low thermal sensitivities often load strongly on the common trend, these might be groundwater sites, glacial sites, etc.
 
 ```{r ts versus trend}
 
-ts_dat %>% 
+dfa_dat %>% 
   ggplot(aes(TempSens, TrendLoad_Z)) +
   geom_point(aes(color = Region)) +
   facet_wrap(~Year)
@@ -48,7 +46,7 @@ ts_dat %>%
 Frequency plots of thermal sensitivities by year and region.
 
 ```{r}
-ts_dat %>% 
+dfa_dat %>% 
   ggplot(aes(TempSens)) +
   geom_freqpoly(aes(color = Region)) +
   facet_wrap(~Year)
@@ -59,7 +57,7 @@ ggsave("output/ts_region_year.jpeg", width = 9, units = "in")
 Something strange going on in Cook Inlet in 2019, lots of site in Deshka with very low thermal sensitivities which makes no sense, these are relatively warm sites. This result does not match raw air temperature coefficients from simple lm fits.
 
 ```{r}
-ts_dat %>% 
+dfa_dat %>% 
   filter(Region == "Cook Inlet", Year == 2019, TempSens < 0.25)
 ```
 
@@ -136,11 +134,110 @@ trend_dat %>%
 
 Tim reran using an AR1 model (time series model with lag of 1 day) because the Deshka sites were confounding the analysis in 2017-2019. The common trend was air temperatures and the TS were super low, which is not what we want.
 
-Read in new results.
+Read in new results, which has AR1 results linked to covariate data.
 
 ```{r}
-ts_dat2 <- readRDS("DFA/TempSens_Arima_Results2021.12.07.RDS")
 
-ts_dat2
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-14.rds")
+
+mod_dat %>% 
+  ggplot(aes(x = as.factor(Year), y = TempSens)) +
+  geom_boxplot() +
+  facet_wrap(~Region)
+
+```
+
+Pairplots for covariates versus TS.
+
+```{r pair plots against TS}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+mod_dat %>% 
+  select(TempSens, log_slope, cat_elev_MEAN, cat_slope_MEAN, 
+         wtd_slope_MEAN, snow_ind, ) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+mod_dat %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         wtd_wet_per, logit_glac, logit_lake) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+```
+
+
+Set up a leaflet mapper with a data summary that can be used as a popup.
+
+- spatial covariates
+- number of years of data
+- mean TS
+- range TS
+- TS for 2019
+- TS for a normal year
+
+
+Bring in metadata which has field for Deshka sites.
+
+```{r}
+md <- read_rds("data_preparation/final_data/md.rds")
+
+md %>% summary()
+
+mod_dat <- left_join(mod_dat, md %>% select(SiteID, deshka, HUC8, Name), by = c("Site" = "SiteID")) 
+
+mod_dat %>% 
+  filter(deshka == 1) %>% 
+  ggplot(aes(x = TempSens, y = fct_reorder(Site, TempSens), color = as.factor(Year))) +
+  geom_point()
+```
+
+Read in original data frame and calculate temperature metrics so we can see how those map to thermal sensitivities.
+
+```{r}
+temp_dat <- read_rds("data_preparation/final_data/summer_data_wair2021-11-23.rds")
+
+temp_dat %>% 
+  filter(is.na(maxDT)) %>% 
+  distinct(SiteID)
+```
+
+
+
+```{r}
+mod_dat %>% 
+  ggplot(aes(y = TempSens, x = logit_glac)) +
+  geom_point(aes(color = Region))
+```
+
+```{r}
+mod_dat %>% 
+  ggplot(aes(x = wtd_lcld_jd, y = TempSens, color = wtd_slope_MEAN)) +
+  geom_point() +
+  facet_wrap(~Year)
+
+mod_dat %>% 
+  ggplot(aes(x = snow_ind, y = TempSens, color = wtd_slope_MEAN)) +
+  geom_point()
+
+
 ```
 

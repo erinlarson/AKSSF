@@ -46,7 +46,7 @@ Modeling thermal sensitivities for five regions in Southern AK.
 New AR(1) model output from Tim.
 
 ```{r responses, include = FALSE}
-ts_dat <- readRDS("DFA/TempSens_Arima_Results2021.12.07.RDS") %>% as_tibble()
+ts_dat <- readRDS("output/TempSens_Arima_Results_from2000_2022-01-14.RDS") %>% as_tibble()
 
 # write_csv(ts_dat, "DFA/TempSens_Arima_Results2021.12.07.csv")
 
@@ -242,7 +242,7 @@ Use merge table to join on SiteIDs. One site in responses without spatial data -
 
 # nerka pike creek is only missing site now
 left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join, by = c("site_lower" = "ts_id")) %>% 
-  filter(!Year == 2020) %>% 
+  filter(Year %in% 2001:2019) %>% 
   left_join(cov.all %>% rename(cov_id = site_lower)) %>% 
   filter(is.na(str_ord))
 
@@ -430,7 +430,7 @@ d_slope = 10^c_slope
 
 mod_dat2 <- mod_dat2 %>% 
   mutate(log_area = log10(wtd_area_sqKM),
-         log_slope = log10(str_slope + d_slope) - c_slope,
+         log_slope = log10(str_slope + min_slope),
          logit_glac = logit(wtd_glacier_per),
          logit_lake = logit(wtd_lake_per))
 
@@ -472,6 +472,16 @@ lm2 <- lm(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per 
 
 vif(lm2)
 ```
+
+Save model data frame with snow index and covariate transformations.
+
+```{r}
+
+saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+
+```
+
+
 
 # Mixed effects model
 
@@ -646,11 +656,22 @@ summary(lme2)
 First option is to build a random forest using subsets of the data. In this case, I randomly selected one year from each site to create 10 different forests and combined them to generate one model of 10,000 trees for prediction (per JAWRA 2020 paper).
 
 ```{r random forest}
-sites <- mod_dat2 %>% distinct(Site) %>% pull(Site)
+
+#80% of the sample size for training the model
+smp_size <- floor(0.8 * nrow(mod_dat2))
+
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(mod_dat2)), size = smp_size)
+
+train <- mod_dat2[train_ind, ]
+test <- mod_dat2[-train_ind, ]
+
+sites <- train %>% distinct(Site) %>% pull(Site)
 random.df <- data.frame()
 
 for (i in sites) {
-  yrs <- mod_dat2 %>% filter(Site %in% i) %>% distinct(Year) %>% pull(Year) 
+  yrs <- train %>% filter(Site %in% i) %>% distinct(Year) %>% pull(Year) 
   yrs10 <- rep(yrs,10)[1:10] #creates vector of 10 years
   ran.yrs <- sample(yrs10,10,replace=FALSE) #reorders vector randomly
   newrow <- data.frame(Site = i, Year = ran.yrs, Forest = 1:10)
@@ -661,7 +682,7 @@ for (i in sites) {
 rf1 <- randomForest(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
                       wtd_slope_MEAN + log_area + dist_coast_km + 
                       wtd_wet_per + logit_glac + logit_lake + snow_ind + Region, 
-                    data = left_join(random.df %>% filter(Forest ==  1), mod_dat2),
+                    data = left_join(random.df %>% filter(Forest ==  1), train),
                     ntree=1000, importance=TRUE,proximity=TRUE,mtry=5)
 rf_stats <- data.frame(mse = rf1$mse, rsq = rf1$rsq)
 
@@ -670,7 +691,7 @@ for (i in 2:10){
   rfnew <- randomForest(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
                       wtd_slope_MEAN + log_area + dist_coast_km + 
                       wtd_wet_per + logit_glac + logit_lake + snow_ind + Region, 
-                      data = left_join(random.df %>% filter(Forest ==  i), mod_dat2),
+                      data = left_join(random.df %>% filter(Forest ==  i), train),
                     ntree=1000, importance=TRUE,proximity=TRUE,mtry=5)
   rf1 <- randomForest::combine(rf1, rfnew)
   rf_stats <- bind_rows(rf_stats, data.frame(mse = rfnew$mse, rsq = rfnew$rsq))
@@ -678,7 +699,15 @@ for (i in 2:10){
 
 varImpPlot(rf1)
 
-rf_stats
+#xval MSE
+rf_stats %>% 
+  summarize(mean(mse),
+            mean(rsq))
+
+#test MSE
+data.frame(preds = predict(rf1, newdata = test), test %>% select(TempSens)) %>% 
+  mutate(error.sq = (preds - TempSens)^2) %>% 
+  summarize(mean(error.sq))
 
 ```
 
