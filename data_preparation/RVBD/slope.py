@@ -1,6 +1,7 @@
 # Import system modules
 import arcpy
 from arcpy import env
+from arcpy.sa import *
 import os
 import datetime
 
@@ -24,20 +25,28 @@ def slope(riv_in, cat_in, ras_in, outp):
     env.snapRaster = ras
     env.mask = catch
     
-    # Calculating slope
-    slope = arcpy.sa.Slope (ras, "DEGREE", None, None, "METER"); 
+    # Calculating slope with surface parameters
+    # Use default neighborhood distance of 3x3 neighborhood
+    slope = arcpy.sa.SurfaceParameters(ras, "SLOPE", "", "", "", "METER", "DEGREE")
     slope.save(os.path.join(outp, "slope"))
-    print("Completed calculating slope at %s" % datetime.datetime.now())
+    print("Completed calculating slope using surface parameters tool at %s" % datetime.datetime.now())
     arcpy.AddMessage ("Completed calculating slope at %s" % datetime.datetime.now())
     arcpy.AddMessage ("\n")
-    
-    # Replacing 0 slope values with 0.0000000001
-    env.extent = "MAXOF"
-    con_slope = arcpy.sa.Con(slope, 0.0000000001, slope, "VALUE = 0"); 
-    con_slope.save(os.path.join(outp, "con_slope"))
-    print("Completed replacing zeros at %s" % datetime.datetime.now())
-    arcpy.AddMessage ("Completed replacing zeros at %s" % datetime.datetime.now())
-    arcpy.AddMessage ("\n")
+
+    # Calculating slope with slope tool
+    # slope = arcpy.sa.Slope (ras, "DEGREE", None, None, "METER");
+    # slope.save(os.path.join(outp, "slope"))
+    # print("Completed calculating slope using slope tool at %s" % datetime.datetime.now())
+    # arcpy.AddMessage("Completed calculating slope at %s" % datetime.datetime.now())
+    # arcpy.AddMessage("\n")
+    # # Surface Parameter already outputs a raster with non-zero values
+    # # Replacing 0 slope values with 0.0000000001
+    # env.extent = "MAXOF"
+    # con_slope = arcpy.sa.Con(slope, 0.0000000001, slope, "VALUE = 0");
+    # con_slope.save(os.path.join(outp, "con_slope"))
+    # print("Completed replacing zeros at %s" % datetime.datetime.now())
+    # arcpy.AddMessage ("Completed replacing zeros at %s" % datetime.datetime.now())
+    # arcpy.AddMessage ("\n")
     
     # End time
     end = datetime.datetime.now()
