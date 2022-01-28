@@ -9,17 +9,25 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggfortify)
 library(lubridate)
+library(readxl)
 ```
 
 1. Read in final dataset
 
-Note that we need to remove sites in Little Susitna watershed, begin "lsr".
-
+New data from 11-21 is good with ls sites fixed
 
 ```{r read in final dataset}
-temp <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
+temp <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
 md <- readRDS("data_preparation/final_data/md.rds")
 ```
+
+Bring in new UW dataset with min and max for Tim Cline's sites that were originally just daily means. Note that these data were QAed in the SWSHP repo and I had to remove lots of data - duplicate logger types, high maxes indicating air temps, and means off by > 1 degree from the means archived by Tim and used to calculate TS. So, we may end up with a shorter list of site years for UW data for the thermal regime analysis.
+
+```{r new uw daily data}
+
+```
+
+
 
 Count sites by region.
 

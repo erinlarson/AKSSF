@@ -13,7 +13,7 @@ library(purrr)
 ```
 
 
-# Thermal sensitivity 
+# Thermal sensitivity and Accumulated Degree Days predictor
 
 Raw thermal sensitivity from linear regressions and test of ADD to better predict daily stream temperatures affected by groundwater (Snyder et. al. 2015).
 
@@ -136,6 +136,148 @@ Check on some of these TS results, why are some greater than 1? I was hoping tha
 ```{r}
 tidy1 %>% 
   filter(term == "airDT", estimate > 1) %>% 
+  arrange(desc(estimate))
+
+tidy1 %>% 
+  filter(term == "(Intercept)") %>% 
+  arrange(estimate)
+```
+
+
+```{r}
+dat2 %>% 
+  filter(SiteID == "USFS_Cabin Lake Outlet", year == 2012) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = meanDT)) +
+  geom_line(aes(x = sampleDate, y= airDT), color = "blue")
+```
+
+
+Very low thermal sensitivities in 2019 in Cook Inlet, seems to be associated with Deshka network because large shift to left in freq poly in 2017, what is going on? The lm fits do NOT show the same pattern as the thermal sensitivities from dfa, no deshka sites at all in this filter.
+
+```{r}
+tidy1 %>% 
+  filter(term == "airDT", estimate < 0.25, year == 2019) %>% 
+  arrange(desc(estimate))
+
+
+tidy1 %>% 
+  filter(grepl("Deshka|Moose|Kroto", SiteID), term == "airDT", year == 2019) %>% 
+  arrange(desc(estimate))
+
+```
+
+
+
+
+
+# Weekly Thermal sensitivity 
+
+Weekly stream thermal sensitivity from linear regressions.
+
+```{r}
+dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
+
+dat <- dat %>% 
+  mutate(year = year(sampleDate))
+```
+
+Filter on time series with 80% of days from June 1 to August 31.
+
+```{r}
+jd_completeness_filter <- function(inputDat, jd_filter, completeness_filter) {
+  dat <- inputDat %>% 
+    mutate(jd = as.numeric(format(sampleDate, "%j")),
+           year = year(sampleDate)) %>% 
+    filter(jd >= 152, jd <= jd_filter) #June 1st to end date
+  ndays <- max(dat$jd) - min(dat$jd)
+  dat2 <- dat %>%
+    group_by(SiteID, year) %>%
+    mutate(completeness = n()/ndays * 100) %>% 
+    filter(completeness > completeness_filter) %>% 
+    ungroup()
+  return(dat2)
+}
+
+dat2 <- jd_completeness_filter(dat, 243, 80)
+
+dat %>% distinct(SiteID, year) %>% nrow()
+dat2 %>% distinct(SiteID, year) %>% nrow()
+```
+
+Create lm fits using model with just air temperature and model with air temperature squared. Possibility that there are non-linearities at warmest temps, but no temps near to 0 in summer.
+
+```{r}
+
+weekly_dat <- dat2 %>% 
+  mutate(week = format(sampleDate, "%W")) %>% 
+  group_by(SiteID, year, week) %>% 
+  mutate(week_ct = n()) %>% 
+  filter(week_ct >= 4) %>% 
+  summarize(meanDT_wk = mean(meanDT),
+            airDT_wk = mean(airDT))
+
+nested <- weekly_dat %>% 
+  select(SiteID, year, meanDT_wk, airDT_wk) %>% 
+  ungroup() %>% 
+  nest(data = c(meanDT_wk, airDT_wk))
+
+lm.fits <- nested %>% 
+  mutate(fit1 = map(data, ~lm(meanDT_wk ~ airDT_wk, data = .x)),
+         fit2 = map(data, ~lm(meanDT_wk ~ I(airDT_wk^2), data = .x)),
+         tidied1 = map(fit1, tidy),
+         glanced1 = map(fit1, glance),
+         augmented1 = map(fit1, augment),
+         tidied2 = map(fit2, tidy),
+         glanced2 = map(fit2, glance),
+         augmented2 = map(fit2, augment)) 
+
+```
+
+
+1. Does model fit improve with the squared stream temperature term? Not much at all.
+
+
+```{r}
+glance1 <- lm.fits %>% 
+            unnest(glanced1)
+glance2 <- lm.fits %>% 
+            unnest(glanced2)
+
+left_join(glance1 %>% select(SiteID, year, fit1 = adj.r.squared),
+          glance2 %>% select(SiteID, year, fit2 = adj.r.squared)) #%>%
+  mutate(diff = fit1 - fit2) %>% 
+  ggplot() +
+  geom_histogram(aes(x = diff))
+
+```
+
+3. Is there a negative relationship between intercepts and slopes?
+
+```{r}
+tidy1 <- lm.fits %>% 
+  unnest(tidied1)
+
+#check for any sites with negative slopes (to compare to AR1 fits in report 2b)
+tidy1 %>% 
+  filter(term == "airDT_wk", estimate < 0.1) %>% 
+  distinct(SiteID)
+
+tidy1 %>% 
+  select(SiteID, year, term, estimate) %>% 
+  pivot_wider(names_from = term, values_from = estimate) %>%
+  rename(int = `(Intercept)`) %>% 
+  ggplot() +
+  geom_point(aes(y = int, x = airDT_wk))
+```
+
+
+
+Check on some of these TS results, why are some greater than 1? I was hoping that was a relic issue related to air temperatures from airports along the coast and wouldn't happen again with gridded data. Looks like some lake sites.
+
+```{r}
+tidy1 %>% 
+  filter(term == "airDT_wk", estimate > 1) %>% 
   arrange(desc(estimate))
 
 tidy1 %>% 
