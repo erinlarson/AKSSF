@@ -19,7 +19,6 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-library(tidyverse)
 library(readxl)
 library(lubridate)
 library(GGally)
@@ -30,6 +29,10 @@ library(MuMIn)
 library(gpboost)
 library(randomForest)
 library(rfUtilities)
+library(MASS)
+library(tidyverse)
+library(glmmLasso)
+
 ```
 
 
@@ -216,19 +219,22 @@ Lots of sites in covariates not in response data frame -- check on how Tim filte
 
 ```{r sites dropped in arima analysis, eval = FALSE}
 
-temp_dat %>% distinct(SiteID)
-ts_dat %>% distinct(SiteID) #dropped 74 from data I provided
+temp_dat %>% 
+  # filter(year(sampleDate) %in% 2001:2019) %>% 
+  distinct(SiteID) %>% nrow()
+ts_dat %>% distinct(Site) %>% nrow() #dropped 50 overall, 27 when filter on year only, so other 23 presumably didn't have complete summers of data
 
 anti_join(temp_dat %>% distinct(SiteID), ts_dat %>% distinct(SiteID = Site))
 
-#Now showing 73 sites.
+# 49 sites
 temp_dat %>%
   mutate(Year = year(sampleDate), jd = as.numeric(format(sampleDate, "%j"))) %>% 
   filter(jd > 151, jd < 244) %>% 
   group_by(SiteID, Year) %>% 
   summarize(sum_percent = n()/92) %>%
-  mutate(keep = case_when(Year < 2011 ~ 0,
-                          sum_percent > 0.8 ~ 1,
+  mutate(keep = case_when(sum_percent >= 0.8 ~ 1,
+                          Year < 2011 ~ 0,
+                          Year > 2019 ~ 0,
                           TRUE ~ 0)) %>% 
   group_by(SiteID) %>% 
   summarize(sum_complete = sum(keep)) %>% 
@@ -243,7 +249,8 @@ Use merge table to join on SiteIDs. One site in responses without spatial data -
 # nerka pike creek is only missing site now
 left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join, by = c("site_lower" = "ts_id")) %>% 
   filter(Year %in% 2001:2019) %>% 
-  left_join(cov.all %>% rename(cov_id = site_lower)) %>% 
+  left_join(cov.all %>% rename(cov_id = site_lower)) %>%
+  distinct(Site)
   filter(is.na(str_ord))
 
 mod_dat <- left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join, by = c("site_lower" = "ts_id")) %>% 
@@ -252,6 +259,38 @@ mod_dat <- left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join,
   filter(!is.na(str_ord))
 
 ```
+
+
+## Add in daymet precipitation
+
+Tim C. included total summer precipitation as a predictor in his models so add from daymet here. Note that this is site specific precip, not from across the watershed.
+
+```{r merge with precip}
+
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet %>% distinct(measurement)
+
+#correct conversion is date2 bc date example below has Jan 1 as day 0!
+daymet %>% 
+  filter(year == 2006, 
+         yday == 152) %>% 
+  mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
+         date2 = as.Date(paste(year, yday), format = "%Y %j"))
+
+precip <- daymet %>%
+  filter(measurement %in% c("prcp..mm.day.")) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  rename(SiteID = site) %>% 
+  group_by(SiteID, Year = year(sampleDate)) %>% 
+  summarize(summer_precip = mean(value))
+
+rm(daymet)
+
+mod_dat <- left_join(mod_dat %>% select(-(site_lower:SiteID)), precip %>% rename(Site = SiteID))
+
+```
+
 
 
 # Data exploration
@@ -270,10 +309,10 @@ mod_dat %>%
   filter(TempSens < 0) %>%
   arrange(TempSens)
 
-drop_sites <- c("NPS_Hardenburg_Bay", "15258000", "15260001")
+drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001")
 
 mod_dat2 <- mod_dat %>% 
-  filter(!SiteID %in% drop_sites)
+  filter(!Site %in% drop_sites)
 
 ```
 
@@ -458,7 +497,7 @@ Set up a basic model to get VIF.
 ```{r vif for 12 cov}
 lm1 <- lm(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
          wtd_elev_MEAN + wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2)
+         wtd_wet_per + logit_glac + logit_lake + snow_ind + summer_precip, data = mod_dat2)
 
 vif(lm1)
 ```
@@ -468,7 +507,7 @@ Remove mean watershed elevation now all vif < 3.
 ```{r vif 11 cov}
 lm2 <- lm(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
           wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2)
+         wtd_wet_per + logit_glac + logit_lake + snow_ind + summer_precip, data = mod_dat2)
 
 vif(lm2)
 ```
@@ -485,22 +524,68 @@ saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".
 
 # Mixed effects model
 
-Simple mixed effects model for this dataset. Start by assessing need for random effect for site using AIC -- lme with REML.
+Simple mixed effects model for this dataset. 
+
+* split data into training and test sets (80/20).
+* assess need for random effect for region/site and site using AIC -- lme with REML.
+* generate global model with 
+
+```{r train and test sets}
+
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds")
+
+#80% of the sample size for training the model
+smp_size <- floor(0.8 * nrow(mod_dat))
+
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(mod_dat)), size = smp_size)
+
+train <- mod_dat[train_ind, ]
+test <- mod_dat[-train_ind, ]
+
+```
+
+
+Random effects on global model.
+
+1. should consider possible interactions - add 5 from Tim's results: north x snow, north x slope, north x precip, precip x slope, slope x snow.
+2. Better for prediction would be hu12 or hu10. But can still include site within region but predict with level 1 (level 0 is population, level 1 is region, level 2 is site).
+3a. use liklihood ratio test or step aic to get a simpler model and evaluate using 10 fold xval and test set.
+3b. alternatively try glmmlasso to use regularization to minimize model coefficients for unimportant predictors. (and other recommendations in Treddenick 2021). I could not get this to run!
+3c. or start with global model, use dredge and cross-validate all models with AIC < 6 (Tim's cutoff), which is ~300,
+4. for xval, could set up a temporal using years and a separate spatial using huc8 or other major grouping since plan will be to predict for normal year + 2019 and also across all catchments.
 
 ```{r random effects}
 lme1Ar <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
-          wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2, random = ~1 | Region/SiteID, method = "REML")
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+              data = train, random = ~1 | Region/Site, method = "REML")
 
 lme1Br <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
-          wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2, random = ~1 | SiteID, method = "REML")
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+              data = train, random = ~1 | Site, method = "REML")
 
-lme1Cr <- gls(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
-          wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2, method = "REML")
+lme1Cr <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+              data = train, random = ~1 | Region, method = "REML")
 
-AIC(lme1Ar, lme1Br, lme1Cr)
+lme1Dr <- gls(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+              data = train, method = "REML")
+
+AIC(lme1Ar, lme1Br, lme1Cr, lme1Dr)
 ```
 
 ```{r region intercepts}
@@ -511,14 +596,287 @@ Move forward with fixed effects, use AIC or liklihood ratio test to remove param
 
 ```{r include = FALSE}
 lme1m <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
-          wtd_slope_MEAN + log_area + dist_coast_km + 
-         wtd_wet_per + logit_glac + logit_lake + snow_ind, data = mod_dat2, random = ~1 | Region/SiteID, method = "ML")
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+             data = train, random = ~1 | Region/Site, method = "ML")
+
+
+lme1m_nosite <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+             data = train, random = ~1 | Region, method = "ML")
 
 plot(lme1m)
 hist(resid(lme1m))
 summary(lme1m)
 
+data.frame(preds = predict(lme1m, newdata = test, level = 1), test %>% select(TempSens, Site)) %>% 
+  mutate(error.sq = (preds - TempSens)^2,
+         error.abs = abs(preds - TempSens)) %>% 
+  summarize(rmse = sqrt(mean(error.sq)),
+            mae = mean(error.abs))
+
+#model with site grouping doesn't improve predictions at regional level.
+data.frame(preds = predict(lme1m_nosite, newdata = test, level = 1), test %>% select(TempSens, Site)) %>% 
+  mutate(error.sq = (preds - TempSens)^2,
+         error.abs = abs(preds - TempSens)) %>% 
+  summarize(rmse = sqrt(mean(error.sq)),
+            mae = mean(error.abs))
+
+
+r.squaredGLMM(lme1m_nosite)
+r.squaredGLMM(lme1m)
+
+
 ```
+
+## model selection
+
+
+Alternative is to dredge the global model for all subsets and examine most important predictors by summing the model weight for the models in which each covariate is included.
+
+
+```{r dredge global model}
+lme1m <- lme(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind, 
+             data = mod_dat, random = ~1 | Region/Site, method = "ML")
+
+
+lme1_dr <- dredge(lme1m, rank = "AIC")
+saveRDS(lme1_dr, "output/lme1m_dredge_results.rds")
+```
+
+Look at dredge results and use subset for model-selection. Test using cross validation. Set up groups by years (2 years at a time, n = 10) and regions (n = 5).
+
+
+```{r generate temporal xval groups}
+
+mod_dat %>% count(Year) #not much data in early years
+
+#generate balanced groups using quantile
+yr_breaks <- quantile(mod_dat$Year, probs = seq(0, 1, 0.2)) %>% unique()
+yr_breaks[1] <- 2000 #replace leftmost bound with 2000 so 2001 is included
+
+#add temporal xval groups
+mod_dat <- mod_dat %>% 
+  mutate(yeargr = cut(Year, yr_breaks))
+
+mod_dat %>% 
+  count(yeargr)
+mod_dat %>% 
+  count(Region)
+
+mod_dat %>% 
+  distinct(Region, Site) %>% 
+  count(Region)
+
+mod_dat %>% 
+  distinct(yeargr, Site) %>% 
+  count(yeargr)
+
+```
+
+
+I tried using region for a first go, but then I can't predict using that using the null model, so try other grouping based in HUCs that is a little larger (8 groups).
+
+```{r generate spatial xval groups}
+md <- read_rds("data_preparation/final_data/md.rds")
+mod_dat <- left_join(mod_dat, md %>% select(SiteID, deshka, HUC8, Name, Latitude, Longitude), by = c("Site" = "SiteID")) 
+
+mod_dat %>% 
+  distinct(Site, HUC8, Name) %>% 
+  count(HUC8, Name)
+
+#this results in 9 groups, but one with just 5, combine with closest HUC6 to west.
+mod_dat %>% 
+  mutate(HUC6 = substr(HUC8, 1, 6)) %>% 
+  distinct(Site, HUC6) %>% 
+  count(HUC6)
+
+mod_dat <- mod_dat %>% 
+  mutate(HU6 = substr(HUC8, 1, 6),
+         sp_xval = case_when(HU6 %in% c(190206, 190302) ~ "190206_302",
+                             TRUE ~ as.character(HU6))) %>% 
+  group_by(sp_xval) %>%
+  mutate(huc8_names = toString(unique(Name))) %>% 
+  ungroup()
+
+mod_dat %>% 
+  distinct(Site, sp_xval) %>% 
+  count(sp_xval)
+
+```
+
+
+```{r variable importance}
+
+lme1_dr <- readRDS("output/lme1m_dredge_results.rds")
+
+#variable importance
+lme1_dr %>% 
+  as_tibble() %>% 
+  mutate(across(cat_elev_MEAN:'wtd_north_per:wtd_slope_MEAN', ~ case_when(!is.na(.) ~ weight))) %>% 
+  select(cat_elev_MEAN:'wtd_north_per:wtd_slope_MEAN') %>% 
+  colSums(., na.rm = TRUE) %>% 
+  enframe() %>% 
+  arrange(desc(value)) %>% 
+  ggplot(aes(y = fct_reorder(name, value), x = value)) +
+  geom_point()
+
+```
+
+Compare spatial and temporal xvalidation metrics:
+
+* global model
+* drop covariates and interactions in group with lowest variable important - 7
+* drop next group - 7
+* drop final group of 2 only keeping top 4 predictors
+
+
+```{r setup xval model formulas}
+
+lme_all <- formula(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                wtd_north_per*snow_ind + wtd_north_per*wtd_slope_MEAN + wtd_north_per*summer_precip +
+                summer_precip*wtd_slope_MEAN + wtd_slope_MEAN*snow_ind)
+
+lme_dr7 <- formula(TempSens ~ cat_elev_MEAN + wtd_north_per +
+                wtd_slope_MEAN + log_area + dist_coast_km + 
+                logit_glac + logit_lake + snow_ind +summer_precip +
+                summer_precip*wtd_slope_MEAN)
+
+lme_dr11 <- formula(TempSens ~ wtd_slope_MEAN + logit_glac + logit_lake + snow_ind +summer_precip +
+                summer_precip*wtd_slope_MEAN)
+
+lme_dr13 <- formula(TempSens ~ wtd_slope_MEAN + logit_lake + summer_precip +
+                summer_precip*wtd_slope_MEAN)
+  
+```
+
+Temporal xvalidation. Want to create a data frame with the model, the set of years using for training, the set of years using for testing, the internal rmse, and the external rmse. 
+
+```{r temporal cross-validation}
+
+xval_results <- data.frame()
+
+for(i in 1:5) {
+  temp_xval <- mod_dat %>% distinct(yeargr) %>% slice(i) 
+  train <- mod_dat %>% 
+    anti_join(temp_xval)
+  test <- mod_dat %>% 
+    right_join(temp_xval)
+  
+  #global model
+  lmegl <- lme(lme_all, data = train, random = ~1 | Region/Site, method = "REML")    
+  lme2 <- lme(lme_dr7, data = train, random = ~1 | Region/Site, method = "REML")    
+  lme3 <- lme(lme_dr11, data = train, random = ~1 | Region/Site, method = "REML")    
+  lme4 <- lme(lme_dr13, data = train, random = ~1 | Region/Site, method = "REML")    
+  lme5 <- lme(TempSens~1, data = train, random = ~1 | Region/Site, method = "REML")    
+
+  xval_results <- bind_rows(xval_results,
+    bind_cols(test %>% select(Site, Year, TempSens), 
+            global = predict(lmegl, newdata = test, level = 1),
+            lme_10vars = predict(lme2, newdata = test, level = 1),
+            lme_6vars = predict(lme3, newdata = test, level = 1),
+            lme_4vars = predict(lme4, newdata = test, level = 1),
+            lme_null = predict(lme5, newdata = test, level = 1)) %>% 
+    pivot_longer(names_to = "model", values_to = "preds", cols = global:lme_null) %>% 
+    mutate(sqerror = (preds - TempSens)^2,
+           abserror = abs(preds - TempSens)) %>%
+    group_by(model) %>% 
+    summarize(rmse = sqrt(mean(sqerror)),
+              mae = mean(abserror),
+              obs_pred = cor(preds, TempSens),
+              obs_pred_rank = cor(preds, TempSens, method = "spearman")) %>%
+    mutate(xval_type = "temporal",
+           xval_group = temp_xval %>% pull(yeargr) %>% as.character())
+  )
+}
+
+
+```
+
+
+```{r spatial cross-validation}
+
+for(i in 1:8) {
+  sp_xval <- mod_dat %>% distinct(sp_xval) %>% slice(i) 
+  train <- mod_dat %>% 
+    anti_join(sp_xval)
+  test <- mod_dat %>% 
+    right_join(sp_xval)
+  
+  #global model
+  lmegl <- lme(lme_all, data = train, random = ~1 | Site, method = "REML")    
+  lme2 <- lme(lme_dr7, data = train, random = ~1 | Site, method = "REML")    
+  lme3 <- lme(lme_dr11, data = train, random = ~1 | Site, method = "REML")    
+  lme4 <- lme(lme_dr13, data = train, random = ~1 | Site, method = "REML")    
+  lme5 <- lme(TempSens~1, data = train, random = ~1 | Site, method = "REML")    
+
+  xval_results <- 
+    bind_rows(xval_results, 
+              bind_cols(test %>% select(Site, Year, TempSens), 
+                        global = predict(lmegl, newdata = test, level = 0),
+                        lme_10vars = predict(lme2, newdata = test, level = 0),
+                        lme_6vars = predict(lme3, newdata = test, level = 0),
+                        lme_4vars = predict(lme4, newdata = test, level = 0),
+                        lme_null = predict(lme5, newdata = test, level = 0)) %>% 
+                pivot_longer(names_to = "model", values_to = "preds", cols = global:lme_null) %>% 
+                mutate(sqerror = (preds - TempSens)^2,
+                       abserror = abs(preds - TempSens)) %>%
+                group_by(model) %>% 
+                summarize(rmse = sqrt(mean(sqerror)),
+                          mae = mean(abserror),
+                          obs_pred = cor(preds, TempSens),
+                          obs_pred_rank = cor(preds, TempSens, method = "spearman")) %>%
+                mutate(xval_type = "spatial",
+                       xval_group = sp_xval %>% pull(sp_xval))
+    )
+}
+
+```
+
+
+```{r plot xval results}
+xval_results %>% 
+  mutate(modelf = factor(model, levels = c("global", "lme_10vars", "lme_6vars", "lme_4vars", "lme_null"))) %>% 
+  ggplot(aes(x = modelf, y = rmse, color = xval_type)) +
+  stat_summary(fun = "mean", geom = "point") +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
+  labs(x = "RMSE on Validation Data", y = "Model", color = "Cross-validation Type") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+xval_results %>% 
+  mutate(modelf = factor(model, levels = c("global", "lme_10vars", "lme_6vars", "lme_4vars", "lme_null"))) %>% 
+  ggplot(aes(x = modelf, y = rmse, color = xval_type)) +
+  geom_point() +
+  labs(x = "RMSE on Validation Data", y = "Model", color = "Cross-validation Type") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+#copper river very hard to predict when held out - null model performs best!
+xval_results %>% 
+  arrange(desc(rmse))
+```
+
+Look at model with just four predictors.
+
+```{r}
+lme4 <- lme(lme_dr13, data = mod_dat, random = ~1 | Region/Site, method = "REML")
+summary(lme4)
+
+lme4$coefficients$random$Region
+```
+
 
 Drop percent of watershed with wetlands.
 
@@ -619,21 +977,6 @@ summary(lme7m_noEg)
 
 
 
-Alternative is to dredge the global model for all subsets and examine most important predictors by summing the model weight for the models in which each covariate is included.
-
-```{r dredge global model}
-
-lme1_dr <- dredge(lme1m, rank = "AIC")
-
-subset(lme1_dr, delta < 6) %>% as.data.frame() %>% 
-  select(cat_elev_MEAN:wtd_wet_per, weight) %>% 
-  pivot_longer(names_to = "variable", values_to = "coefficient", -weight) %>% 
-  mutate(weight_sum = case_when(!is.na(coefficient) ~ weight,
-                                TRUE ~ 0)) %>% 
-  group_by(variable) %>% 
-  summarize(var_imp = sum(weight_sum)) %>% 
-  arrange(desc(var_imp))
-```
 
 Scaling covariates would provide coefficients in terms of SD and is an alternative method for comparing the most important predictors in a model.
 
@@ -651,21 +994,208 @@ summary(lme2)
 ```
 
 
+
+
+
+# LASSO regularization 
+
+Try LASSO for predictive model.
+
+```{r glmmlasso demo}
+data("soccer")
+
+## generalized additive mixed model
+## grid for the smoothing parameter
+
+## center all metric variables so that also the starting values with glmmPQL are in the correct scaling
+
+soccer[,c(4,5,9:16)]<-scale(soccer[,c(4,5,9:16)],center=T,scale=T)
+
+soccer<-data.frame(soccer)
+
+lambda <- seq(500,0,by=-5)
+
+family = poisson(link = log)
+ 
+
+################## Second Simple Method ###########################
+## Using 5-fold CV to determine the optimal tuning parameter lambda
+ 
+### set seed
+set.seed(123)
+
+N<-dim(soccer)[1]
+
+ind<-sample(N,N)
+
+lambda <- seq(500,0,by=-5)
+
+kk<-5
+
+nk <- floor(N/kk)
+
+Devianz_ma<-matrix(Inf,ncol=kk,nrow=length(lambda))
+
+## first fit good starting model
+
+PQL<-glmmPQL(points~1,random = ~1|team,family=family,data=soccer)
+
+Delta.start<-c(as.numeric(PQL$coef$fixed),rep(0,6),as.numeric(t(PQL$coef$random$team)))
+
+Q.start<-as.numeric(VarCorr(PQL)[1,1])
+
+for(j in 1:length(lambda))
+{
+  print(paste("Iteration ", j,sep=""))
+  
+  for (i in 1:kk)
+  {
+    if (i < kk)
+    {
+      indi <- ind[(i-1)*nk+(1:nk)]
+    }else{
+      indi <- ind[((i-1)*nk+1):N]
+    }
+    
+    soccer.train<-soccer[-indi,]
+    soccer.test<-soccer[indi,]
+    
+    glm2 <- try(glmmLasso(points~transfer.spendings  
+                          + ave.unfair.score  + ball.possession
+                          + tackles + ave.attend + sold.out, rnd = list(team=~1),  
+                          family = family, data = soccer.train, lambda=lambda[j],switch.NR=F,final.re=TRUE,
+                          control=list(start=Delta.start,q_start=Q.start))
+                ,silent=TRUE) 
+    
+    if(class(glm2)!="try-error")
+    {  
+      y.hat<-predict(glm2,soccer.test)    
+      
+      Devianz_ma[j,i]<-sum(family$dev.resids(soccer.test$points,y.hat,wt=rep(1,length(y.hat))))
+    }
+  }
+  print(sum(Devianz_ma[j,]))
+}
+
+Devianz_vec<-apply(Devianz_ma,1,sum)
+
+ opt2<-which.min(Devianz_vec)
+
+ glm2_final <- glmmLasso(points~transfer.spendings  
+                         + ave.unfair.score + ball.possession
+                         + tackles + ave.attend + sold.out, rnd = list(team=~1),  
+                         family = family, data = soccer, lambda=lambda[opt2],switch.NR=F,final.re=TRUE,
+                         control=list(start=Delta.start,q_start=Q.start))
+
+ summary(glm2_final)
+```
+
+Try code above with our dataset, but with different cross-validation groups (10 sets of 2 years each and 5 regions).
+
+```{r glmmlasso xval}
+
+
+## center all metric variables so that also the starting values with glmmPQL are in the correct scaling
+
+mod_dat
+
+mod_dat_sc <- bind_cols(mod_dat %>% select(Region, TempSens) %>% mutate(Region = factor(Region)), 
+                        data.frame(scale(mod_dat %>% select(log_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                                                            wtd_north_per,wtd_slope_MEAN, log_area, 
+                                                            dist_coast_km, wtd_wet_per, logit_glac, 
+                                                            logit_lake, snow_ind, summer_precip), scale = TRUE, center = TRUE)))
+
+
+lambda <- seq(500,0,by=-5)
+
+family = gaussian()
+ 
+
+################## Second Simple Method ###########################
+## Using 5-fold CV to determine the optimal tuning parameter lambda
+ 
+### set seed
+set.seed(123)
+
+N<-dim(mod_dat_sc)[1]
+
+ind<-sample(N,N)
+
+lambda <- seq(500,0,by=-5)
+
+kk<-5 #first attempt with just 5 random xval
+
+nk <- floor(N/kk)
+
+Devianz_ma<-matrix(Inf,ncol=kk,nrow=length(lambda))
+
+## first fit good starting model
+
+PQL<-glmmPQL(TempSens~1,random = ~1|Region,family=family,data=mod_dat_sc)
+
+#note rep 0s by number of fixed effects
+Delta.start<-c(as.numeric(PQL$coef$fixed),rep(0,17),as.numeric(t(PQL$coef$random$Region)))
+
+Q.start<-as.numeric(VarCorr(PQL)[1,1])
+
+for(j in 1:length(lambda)) {
+  print(paste("Iteration ", j,sep=""))
+  
+  for (i in 1:kk)
+  {
+    if (i < kk)
+    {
+      indi <- ind[(i-1)*nk+(1:nk)]
+    }else{
+      indi <- ind[((i-1)*nk+1):N]
+    }
+    
+    ts.train<-mod_dat_sc[-indi,]
+    ts.test<-mod_dat_sc[indi,]
+    
+    glm2 <- try(glmmLasso(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                            wtd_slope_MEAN + log_area + dist_coast_km + 
+                            wtd_wet_per + logit_glac + logit_lake + snow_ind +summer_precip +
+                            wtd_north_per:snow_ind + wtd_north_per:wtd_slope_MEAN + wtd_north_per:summer_precip +
+                            summer_precip:wtd_slope_MEAN + wtd_slope_MEAN:snow_ind, 
+                          rnd = list(Region=~1),  
+                          family = family, data = ts.train, lambda=lambda[j], switch.NR=F, final.re=TRUE,
+                          control=list(start=Delta.start,q_start=Q.start))
+                ,silent=TRUE) 
+    
+    print(class(glm2))
+    
+    if(class(glm2)!="try-error")
+    {  
+      y.hat<-predict(glm2,ts.test)    
+      
+      Devianz_ma[j,i]<-sum(family$dev.resids(ts.test$points,y.hat,wt=rep(1,length(y.hat))))
+    }
+  }
+  print(sum(Devianz_ma[j,]))
+}
+
+Devianz_vec<-apply(Devianz_ma,1,sum)
+
+opt2<-which.min(Devianz_vec)
+
+glm2_final <- glmmLasso(points~transfer.spendings  
+                         + ave.unfair.score + ball.possession
+                         + tackles + ave.attend + sold.out, rnd = list(team=~1),  
+                         family = family, data = soccer, lambda=lambda[opt2],switch.NR=F,final.re=TRUE,
+                         control=list(start=Delta.start,q_start=Q.start))
+
+ summary(glm2_final)
+```
+
+
+
+
 # Machine learning methods
 
 First option is to build a random forest using subsets of the data. In this case, I randomly selected one year from each site to create 10 different forests and combined them to generate one model of 10,000 trees for prediction (per JAWRA 2020 paper).
 
 ```{r random forest}
-
-#80% of the sample size for training the model
-smp_size <- floor(0.8 * nrow(mod_dat2))
-
-## set the seed to make your partition reproducible
-set.seed(123)
-train_ind <- sample(seq_len(nrow(mod_dat2)), size = smp_size)
-
-train <- mod_dat2[train_ind, ]
-test <- mod_dat2[-train_ind, ]
 
 sites <- train %>% distinct(Site) %>% pull(Site)
 random.df <- data.frame()
@@ -706,8 +1236,13 @@ rf_stats %>%
 
 #test MSE
 data.frame(preds = predict(rf1, newdata = test), test %>% select(TempSens)) %>% 
-  mutate(error.sq = (preds - TempSens)^2) %>% 
-  summarize(mean(error.sq))
+  mutate(error.sq = (preds - TempSens)^2,
+         error.abs = abs(preds - TempSens)) %>% 
+  summarize(rmse = sqrt(mean(error.sq)),
+            mae = mean(error.abs))
 
 ```
 
+
+Other alternatives that allow for extrapolation:
+lightgbm: https://papers.nips.cc/paper/2017/file/6449f44a102fde848669bdd9eb6b76fa-Paper.pdf

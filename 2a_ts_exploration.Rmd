@@ -1,12 +1,28 @@
 ---
 title: "TS exploration"
-output: html_document
+output:
+  html_document: 
+    df_print: paged
+    fig_width: 10
+    fig_height: 6
+    fig_caption: yes
+    code_folding: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(sf)
+library(tmap)
+library(lubridate)
 ```
 
 # Original DFA
@@ -17,7 +33,6 @@ Tim provided DFA output on November 8, 2021. Here are comments on the files from
 - TempSens are the temperature sensitivity values that have been back-transformed to be in units of ºC water / ºC air.
 - TrendLoad_Z are the loadings on the common trend in Z-score space.
 - GlobalTrendEstimates_1trend_DUE.csv contains the estimated trends by year. This has columns Year, DOY, and Trend. DOY is just Julian day of year. Trend is the trend value for that DOY.
-
 
 Read in final thermal sensitivities and trend loadings from global model. Tim found that regional models did not change the results.
 
@@ -51,7 +66,7 @@ dfa_dat %>%
   geom_freqpoly(aes(color = Region)) +
   facet_wrap(~Year)
 
-ggsave("output/ts_region_year.jpeg", width = 9, units = "in")
+# ggsave("output/ts_region_year.jpeg", width = 9, units = "in")
 ```
 
 Something strange going on in Cook Inlet in 2019, lots of site in Deshka with very low thermal sensitivities which makes no sense, these are relatively warm sites. This result does not match raw air temperature coefficients from simple lm fits.
@@ -102,7 +117,7 @@ dat2 %>%
   geom_line(aes(x = sampleDate, y= airDT), color = "blue") +
   facet_wrap(~SiteID)
 
-ggsave("output/desha_air-stream_2sites.jpeg", width = 9, units = "in")
+# ggsave("output/desha_air-stream_2sites.jpeg", width = 9, units = "in")
 ```
 
 Plot a couple of little susitna sites. Looks much more reasonable, lower site pretty cold in June probably due to snowmelt, then tracking air temperatures pretty well later in year. Upper site very cold and not tracking air temps.
@@ -120,7 +135,7 @@ dat2 %>%
 
 
 
-Plots of common trends.
+Plots of common trends: 2017-2019 are very strange and don't match general pattern of gw warming over season found in Cline et al. paper.
 
 ```{r}
 trend_dat %>% 
@@ -132,20 +147,61 @@ trend_dat %>%
 
 # ARIMA results
 
-Tim reran using an AR1 model (time series model with lag of 1 day) because the Deshka sites were confounding the analysis in 2017-2019. The common trend was air temperatures and the TS were super low, which is not what we want.
+Tim reran using an AR1 model (time series model with lag of 1 day) because the Deshka sites were confounding the analysis in 2017-2019. The common trend was air temperatures and the TS were super low, which is not what we want. Read in new results, which has AR1 results linked to covariate data. This was rerun to include all sites and years from 2001-2019, which are the years covered by the MODIS snow metrics. 
 
-Read in new results, which has AR1 results linked to covariate data.
+
+
+Boxplots of TS by region and year. Note that 2019 does not appear to be an outlier for TS.
 
 ```{r}
-
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-14.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds") #added in precip
 
 mod_dat %>% 
   ggplot(aes(x = as.factor(Year), y = TempSens)) +
   geom_boxplot() +
-  facet_wrap(~Region)
-
+  facet_wrap(~Region) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = "Year")
 ```
+
+Boxplots of all streams by year. Pick two years in the 2011-2019 time period (most sites in these years) to map TS.
+
+* 2019 still a good year with 2nd highest median TS.
+* 2013 was a high snow year in both BB and CI, unfortunately, this is before the Kodiak network started.
+
+```{r}
+mod_dat %>% 
+  ggplot(aes(y = fct_reorder(as.factor(Year), TempSens), x = TempSens)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = "Thermal sensitivity")
+```
+
+Which sites have negative TS and why?
+
+```{r}
+mod_dat %>% 
+  filter(TempSens < 0) %>% 
+  select(Site, TempSens, wtd_glacier_per, wtd_lake_per, wtd_north_per, wtd_lcld_jd)
+
+summary(mod_dat)
+```
+
+
+Plot comparing SD of TS to mean of TS for sites with at least 5 years of data.
+
+```{r}
+mod_dat %>% 
+  group_by(Region, Site) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 4) %>% 
+  summarize(meants = mean(TempSens),
+            sdts = sd(TempSens)) %>% 
+  ggplot(aes(x = meants, y = sdts, color = Region)) +
+  geom_point()
+```
+
+## Pairwise correlations between TS and covariates
 
 Pairplots for covariates versus TS.
 
@@ -174,35 +230,146 @@ panel.hist <- function(x, ...)
 
 mod_dat %>% 
   select(TempSens, log_slope, cat_elev_MEAN, cat_slope_MEAN, 
-         wtd_slope_MEAN, snow_ind, ) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+         wtd_slope_MEAN, snow_ind, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
 
 mod_dat %>% 
   select(TempSens, log_area, dist_coast_km, wtd_north_per,
          wtd_wet_per, logit_glac, logit_lake) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+```
+
+## Exploring interactions 
+
+
+Tim's results: north x snow, north x slope, north x precip, precip x slope, slope x snow.
+
+Facets are snow index and x is north aspect, no obvious relationship to TS.
+
+```{r north and snow}
+ggplot(transform(mod_dat, fct = cut(snow_ind, seq(from = min(snow_ind)-1, to = max(snow_ind) +1, length.out = 6))), 
+       aes(y = TempSens, x = wtd_north_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by north aspect and snow index", subtitle = "Facets are bins of snow index")
+
+```
+
+Facets are snow index and x is watershed slope, can still see negative relationship between slope and TS, but no interaction with snow.
+
+```{r slope and snow}
+ggplot(transform(mod_dat, fct = cut(snow_ind, seq(from = min(snow_ind)-1, to = max(snow_ind) +1, length.out = 6))), 
+       aes(y = TempSens, x = wtd_slope_MEAN)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by slope and snow index", subtitle = "Facets are bins of snow index")
+
+```
+
+Interesting! Can start to see negative relationship of aspect with TS, but only at highest slope watersheds, which makes sense.
+
+```{r ts by north and wtd slope}
+
+ggplot(transform(mod_dat, fct = cut(wtd_slope_MEAN, seq(from = 0, to = 32, length.out = 6))), 
+       aes(y = TempSens, x = wtd_north_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and north aspect", subtitle = "Facets are bins of mean watershed slope")
+```
+
+No interaction.
+
+```{r ts by north and precip}
+
+ggplot(transform(mod_dat, fct = cut(summer_precip, seq(from = min(summer_precip), to = max(summer_precip), length.out = 6))), 
+       aes(y = TempSens, x = wtd_north_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by summer precip and north aspect", subtitle = "Facets are bins of summer precip")
+```
+
+
+No real evidence of an interaction between precip and slope.
+
+```{r ts by precip and wtd slope}
+
+ggplot(transform(mod_dat, fct = cut(wtd_slope_MEAN, seq(from = 0, to = 32, length.out = 6))), 
+       aes(y = TempSens, x = summer_precip)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and precip", subtitle = "Facets are bins of mean watershed slope")
+```
+
+
+TS by glacier cover and mean watershed slope. Low slope watersheds generally have no or very low glacier cover. In watersheds in bins 3 and 4, can see expected negative relationship between glacier cover and TS. 
+
+```{r ts by glacier and wtd slope}
+
+ggplot(transform(mod_dat, fct = cut(wtd_slope_MEAN, seq(from = 0, to = 32, length.out = 6))), 
+       aes(y = TempSens, x = wtd_glacier_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and glacier cover", subtitle = "Facets are bins of mean watershed slope")
+```
+
+TS by glacier cover and watershed area. Glacier cover decreases TS over all sizes of watersheds.
+
+```{r ts by glacier and wtd area}
+
+ggplot(transform(mod_dat, fct = cut(wtd_area_sqKM, breaks = quantile(wtd_area_sqKM))), 
+       aes(y = TempSens, x = wtd_glacier_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed area and glacier cover", subtitle = "Facets are quantiles of mean watershed area")
+
+```
+
+TS by lake cover and mean watershed slope. No obvious relationship between TS and lake cover. 
+
+```{r ts by lakes and wtd slope}
+
+ggplot(transform(mod_dat, fct = cut(wtd_slope_MEAN, seq(from = 0, to = 32, length.out = 6))), 
+       aes(y = TempSens, x = wtd_lake_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and lake cover", subtitle = "Facets are bins of mean watershed slope")
+```
+
+TS by lake cover and watershed area. 
+
+```{r ts by lake and wtd area}
+
+ggplot(transform(mod_dat, fct = cut(wtd_area_sqKM, breaks = quantile(wtd_area_sqKM))), 
+       aes(y = TempSens, x = wtd_lake_per)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed area and lake cover", subtitle = "Facets are quantiles of mean watershed area")
+
+```
+
+TS by precip and watershed area. 
+
+```{r ts by precip and wtd area}
+
+ggplot(transform(mod_dat, fct = cut(wtd_area_sqKM, breaks = quantile(wtd_area_sqKM))), 
+       aes(y = TempSens, x = summer_precip)) +
+  geom_point() +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed area and precipitation", subtitle = "Facets are quantiles of mean watershed area")
 
 ```
 
 
-Set up a leaflet mapper with a data summary that can be used as a popup.
 
-- spatial covariates
-- number of years of data
-- mean TS
-- range TS
-- TS for 2019
-- TS for a normal year
+Bring in metadata which has field for Deshka sites and also lat/longs.
 
-
-Bring in metadata which has field for Deshka sites.
-
-```{r}
+```{r include = FALSE}
 md <- read_rds("data_preparation/final_data/md.rds")
 
 md %>% summary()
 
-mod_dat <- left_join(mod_dat, md %>% select(SiteID, deshka, HUC8, Name), by = c("Site" = "SiteID")) 
+mod_dat <- left_join(mod_dat, md %>% select(SiteID, deshka, HUC8, Name, Latitude, Longitude), by = c("Site" = "SiteID")) 
 
 mod_dat %>% 
   filter(deshka == 1) %>% 
@@ -210,34 +377,91 @@ mod_dat %>%
   geom_point()
 ```
 
-Read in original data frame and calculate temperature metrics so we can see how those map to thermal sensitivities.
 
-```{r}
-temp_dat <- read_rds("data_preparation/final_data/summer_data_wair2021-11-23.rds")
 
-temp_dat %>% 
-  filter(is.na(maxDT)) %>% 
-  distinct(SiteID)
+```{r, spatial data, include = FALSE}
+mod_sf <- st_as_sf(mod_dat, coords = c("Longitude", "Latitude"), crs = "WGS84")
+huc8 <- st_read(dsn = "S:/Leslie/GIS/NHD Harmonized/WBD_19_GDB.gdb", layer = "WBDHU8")  
+huc8_wgs84 <- st_transform(huc8, crs = "WGS84")
+
+huc8_sa <- st_filter(huc8_wgs84, mod_sf)
+
+regions <- huc8_sa %>% 
+  mutate(Region = case_when(HUC8 %in% 19020301:19020602 ~ "Cook Inlet",
+                            HUC8 == 19020701 ~ "Kodiak",
+                            HUC8 %in% 19020101:19020104 ~ "Copper",
+                            HUC8 %in% 19020201:19020203 ~ "Prince William Sound",
+                            TRUE ~ "Bristol Bay")) %>% 
+  group_by(Region) %>% 
+  summarize()
+```
+
+Plot the TS for 2019 (high) and 2013 (low) years.
+
+```{r static map of TS, fig.width=16, fig.height=14}
+
+ggplot() +
+  geom_sf(data = regions, aes(fill = Region), alpha = 0.1) +
+  # geom_sf(data = huc8_sa) +
+  geom_sf(data = mod_sf %>% filter(Year %in% c(2019, 2013)), aes(color = TempSens), size = 3) +
+  facet_wrap(~Year, ncol =1) +
+  scale_color_viridis_c() +
+  theme_bw() +
+  theme(legend.position = "bottom", text = element_text(size = 14)) +
+  guides(fill = guide_legend(nrow = 2))
+
 ```
 
 
+Set up an interactive mapper with a data summary that can be used as a popup.
+
+- spatial covariates (just wtd slope right now)
+- TS for 2019 and 2013 as high and low years
 
 ```{r}
-mod_dat %>% 
-  ggplot(aes(y = TempSens, x = logit_glac)) +
-  geom_point(aes(color = Region))
+map.dat <- mod_dat %>% 
+  select(Site, Year, TempSens, Region:dist_coast_km, wtd_elev_MEAN, wtd_slope_MEAN, wtd_north_per:wtd_area_sqKM) %>% 
+  filter(Year %in% c(2013, 2019)) %>% 
+  pivot_wider(names_from = Year, values_from = TempSens) %>% 
+  left_join(md %>% select(SiteID, deshka, HUC8, Name, Latitude, Longitude, Waterbody_name, SourceName), by = c("Site" = "SiteID")) %>% 
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = "WGS84")
+
 ```
 
+Save version for arcgis online mapper that Dustin can link to points. Add spatial ID to this output so he only has to do one join.
+
 ```{r}
-mod_dat %>% 
-  ggplot(aes(x = wtd_lcld_jd, y = TempSens, color = wtd_slope_MEAN)) +
-  geom_point() +
-  facet_wrap(~Year)
+spatial_join <- read_csv("data_preparation/SiteID_join_spatial_to_temperature.csv") %>% select(-X1)
 
 mod_dat %>% 
-  ggplot(aes(x = snow_ind, y = TempSens, color = wtd_slope_MEAN)) +
-  geom_point()
+  select(Site, Year, TempSens, Region:dist_coast_km, wtd_elev_MEAN, cat_elev_MEAN, wtd_slope_MEAN, cat_slope_MEAN, wtd_north_per:wtd_area_sqKM) %>% 
+  filter(Year %in% 2001:2019) %>% 
+  pivot_wider(names_from = Year, values_from = TempSens) %>% 
+  mutate(site_lower = tolower(Site)) %>% 
+  left_join(spatial_join, by = c("site_lower" = "ts_id")) %>% 
+  write_csv("output/sites_wTScovars.csv")
 
+```
+
+Check why the file created above is not linking to Dustin's point file. We should have spatial locations for all 408 sites with data.
+
+
+
+
+
+```{r tmap map}
+tmap_mode("view")
+
+sitemap <- tm_shape(regions) +
+  tm_borders("black") +
+  tm_shape(map.dat) +
+  tm_dots(id = "Site", size = 0.05, group = "Region", col = "2019",
+          popup.vars = c("Waterbody_name", "2019", "2013", "wtd_slope_MEAN", "wtd_glacier_per", "wtd_lake_per")) +
+  tm_text("Site", size = 1.5, shadow = TRUE, auto.placement = TRUE,
+          just = "bottom", remove.overlap = TRUE, clustering = TRUE, group = "Labels" ) +
+  tm_basemap(server = c(Topo = "Esri.WorldTopoMap", Imagery = "Esri.WorldImagery" ))
+
+sitemap
 
 ```
 
