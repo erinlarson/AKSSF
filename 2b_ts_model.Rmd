@@ -1041,6 +1041,10 @@ sploo_results <- sploo_preds %>%
             mae = mean(abserror, na.rm = TRUE),
             obs_pred = cor(preds, TempSens, use = "pairwise.complete.obs"),
             obs_pred_rank = cor(preds, TempSens, method = "spearman", use = "pairwise.complete.obs")) 
+
+
+
+
 ```
 
 
@@ -1087,6 +1091,54 @@ left_join(sploo_preds, mod_dat %>% distinct(Site, Region))  %>%
 summary(xval_preds)
 xval_preds %>% filter(is.na(preds))
 ```
+
+Predictions using full models and all data.
+
+```{r internal predictions and results}
+lmegl <- lme(lme_all, data = mod_dat, random = ~1 | HUC8/Site, method = "REML")    
+lme2 <- lme(lme_11vars, data = mod_dat, random = ~1 | HUC8/Site, method = "REML")    
+lme3 <- lme(lme_8vars, data = mod_dat, random = ~1 | HUC8/Site, method = "REML")    
+lme4 <- lme(lme_3vars, data = mod_dat, random = ~1 | HUC8/Site, method = "REML")    
+lme5 <- lme(TempSens~1, data = mod_dat, random = ~1 | HUC8/Site, method = "REML")
+#for rf, make sure just one year from each site
+rf1 <- randomForest(TempSens ~ log_slope + cat_elev_MEAN + cat_slope_MEAN + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + wtd_wet_per + 
+                      logit_glac + logit_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% group_by(Site) %>% sample_n(1),
+                    ntree=1000, importance=TRUE,proximity=TRUE,mtry=5)
+
+preds <- bind_cols(mod_dat %>% select(Site, Year, TempSens), 
+                      global = predict(lmegl, level = 1),
+                      lme_11vars = predict(lme2, level = 1),
+                      lme_8vars = predict(lme3, level = 1),
+                      lme_3vars = predict(lme4, level = 1),
+                      lme_null = predict(lme5, level = 1),
+                      rf = predict(rf1, newdata = mod_dat)) %>% 
+              pivot_longer(names_to = "model", values_to = "preds", cols = global:rf) 
+
+internal_results <- preds %>% 
+  mutate(sqerror = (preds - TempSens)^2,
+         abserror = abs(preds - TempSens)) %>%
+  group_by(model) %>% 
+  summarize(rmse = sqrt(mean(sqerror, na.rm = TRUE)),
+            mae = mean(abserror, na.rm = TRUE),
+            obs_pred = cor(preds, TempSens, use = "pairwise.complete.obs"),
+            obs_pred_rank = cor(preds, TempSens, method = "spearman", use = "pairwise.complete.obs")) 
+
+
+left_join(preds, mod_dat %>% distinct(Site, Region))  %>% 
+  mutate(modelf = factor(model, levels = c("global", "lme_11vars", "lme_8vars", "lme_3vars", "lme_null", "rf"),
+                         labels = c("global", "11 vars.", "8 vars.", "3 vars.", "null", "RF"))) %>% 
+  ggplot(aes(x = TempSens, y = preds)) +
+  geom_point() +
+  geom_abline(aes(intercept = 0, slope = 1)) +
+  facet_grid(cols = vars(Region), rows = vars(modelf)) +
+  coord_cartesian(xlim = c(-0.2, 1), ylim = c(-0.2,1)) +
+  stat_cor(label.x.npc = 0, label.y = c(seq(0.6, 1, 0.1)))
+```
+
+
+
 
 # Regional models
 

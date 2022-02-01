@@ -26,7 +26,7 @@ Document last updated `r Sys.time()` by Rebecca Shaftel (rsshaftel@alaska.edu).
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 library(ggpubr)
 library(kableExtra)
@@ -37,6 +37,7 @@ This report summarizes the  thermal sensitivity results and draft predictive mod
 Goals of the meeting are to discuss model inputs and methods and prediction scenarios.
 
 Objectives: 
+
 1. Build a predictive model for stream thermal sensitivity (TS). 
 2. Develop scenarios to understand effects of warming stream temperatures on subsistence salmon populations.
 
@@ -97,6 +98,7 @@ Final list of covariates, which are also listed with data sources on google driv
 
 Removed covariates with pairwise correlations r > 0.7 and VIF > 3. 
 Final list of 12 covariates:
+
 * log stream gradient
 * mean catchment elevation
 * watershed percent north aspect
@@ -147,7 +149,9 @@ lme1_dr %>%
   enframe() %>% 
   arrange(desc(value)) %>% 
   ggplot(aes(y = fct_reorder(name, value), x = value)) +
-  geom_point()
+  geom_point() +
+  theme_bw() +
+  labs(x = "Variable Importance Value", y = "Covariates and Interactions")
 
 ```
 
@@ -168,27 +172,34 @@ Model selection via cross-validation. Constructing appropriate cross-validation 
 * Spatial cross-validation was done by constructing 21 groups with 6 HUC10 each that were not adjacent. Predictions were made using the population intercept since these groups overlapped with the HUC8 groupings used for the random intercept.
 * Leave-one-out cross validation withholds one site at a time, builds the model, and predicts for the years of data for that site. I removed any sites that were the only site in a HUC8 in order to predict with the HUC8 random intercepts.
 
-For all cross-validations, the predictions on the testing data were saved and used to calculate RMSE, MAE, and observed versus predicted correlations.
+For all cross-validations, the predictions on the testing data were saved and used to calculate RMSE, MAE, and observed versus predicted correlations. 
 
+The figure shows the mean RMSE +/- 1SE across cross-validation groups. SE for LOO is missing because groups are only a single site so the RMSE was calculated for all predictions and not by group.
 
 ```{r fig.width = 12, fig.height = 12}
 
 xval_results <- read_rds("output/xval_results.rds") 
 
 xval_results %>% 
+  # filter(!xval_type == "LOO") %>% 
   mutate(modelf = factor(model, levels = c("global", "lme_11vars", "lme_8vars", "lme_3vars", "lme_null", "rf"),
                          labels = c("global", "11 vars.", "8 vars.", "3 vars.", "null", "RF"))) %>% 
   ggplot(aes(x = modelf, y = rmse, color = xval_type)) +
   stat_summary(fun = "mean", geom = "point", size = 3) +
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2, size = 1) +
+  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
   labs(y = "RMSE on Validation Data", x = "Model", color = "Cross-validation Type") +
   theme_bw() +
   theme(legend.position = "bottom", text = element_text(size = 16))
+```
 
+Table summarizing average RMSE, MAE, and correlations for observed versus predicted TS by model.
+
+```{r }
 xval_results %>% 
   group_by(model, xval_type) %>% 
-  summarize(mean(rmse), mean(mae), mean(obs_pred), mean(obs_pred_rank)) %>% 
-  kable(digits = 2)
+  summarize(mean_rmse = mean(rmse), mean_mae = mean(mae), mean_cor = mean(obs_pred)) %>% 
+  kable(digits = 2, col.names = c("Model", "Xval Type", "RMSE", "MAE", "Cor. (r)")) %>% 
+  kable_styling()
 
 ```
 
