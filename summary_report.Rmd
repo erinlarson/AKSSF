@@ -30,6 +30,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 library(ggpubr)
 library(kableExtra)
+library(rpart)
 library(tidyverse)
 ```
 
@@ -367,6 +368,181 @@ xval_preds %>%
 
 ```
 
+# CART analysis
+
+Using rpart to create a regression tree with all of the data.
+
+```{r}
+ct_all <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat, method = "anova")
+```
+
+Print the cross validation results to select a complexity parameter for tree-pruning. From plotcp:
+"A good choice of cp for pruning is often the leftmost value for which the mean lies below the horizontal line." Select cp for 12 splits.
+
+```{r}
+plotcp(ct_all) 
+printcp(ct_all) 
+cp_parm <- 0.011197
+
+```
+
+Prune the tree and print the results.
+
+```{r}
+ct_pr <- prune(ct_all, cp = cp_parm)
+
+# print(ct_pr)
+
+par(xpd = TRUE)
+plot(ct_pr, compress = TRUE)
+text(ct_pr, use.n = TRUE)
+
+
+```
+
+
+
+# Post-hoc exploration of regional TS
+
+For each region, the number of sites is listed along with a table showing the years for each site, and pairplots of TS against each of the covariates (separated into two plots since there are so many).
+
+Copper River
+
+```{r Copper}
+region_in <- "Copper_River"
+
+print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  group_by(Site) %>% 
+  summarize(years = paste(Year, collapse = ", ")) %>% 
+  kable() %>%
+  kable_styling()
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+```
+
+Kodiak
+
+```{r Kodiak}
+region_in <- "Kodiak"
+
+print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  group_by(Site) %>% 
+  summarize(years = paste(Year, collapse = ", ")) %>% 
+  kable() %>%
+  kable_styling()
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+```
+
+Prince William Sound
+
+```{r PWS}
+region_in <- "Prince_William_Sound"
+
+print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  group_by(Site) %>% 
+  summarize(years = paste(Year, collapse = ", ")) %>% 
+  kable() %>%
+  kable_styling()
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+```
+
+Cook Inlet
+
+```{r Cook Inlet}
+region_in <- "Cook_Inlet"
+
+print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  group_by(Site) %>% 
+  summarize(years = paste(Year, collapse = ", ")) %>% 
+  kable() %>%
+  kable_styling()
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+```
+
+Bristol Bay
+
+```{r Bristol Bay}
+region_in <- "Bristol_Bay"
+
+print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  group_by(Site) %>% 
+  summarize(years = paste(Year, collapse = ", ")) %>% 
+  kable() %>%
+  kable_styling()
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  filter(Region == region_in) %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+```
 
 
 # Prediction scenarios
@@ -381,7 +557,7 @@ Comparison of standardized (subtract mean and divide by sd) temperature and prec
 
 * 2019 warm and low precipitation
 * 2016 warm and high precipitation
-* 2004 cold and high precipitation
+* 2006 cold and high precipitation
 * 2017 and 2009 about normal years for both
 
 ```{r}
