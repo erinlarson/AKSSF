@@ -403,6 +403,11 @@ text(ct_pr, use.n = TRUE)
 
 ```
 
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_pr)
+```
 
 
 # Post-hoc exploration of regional TS
@@ -420,7 +425,7 @@ mod_dat %>%
   filter(Region == region_in) %>% 
   group_by(Site) %>% 
   summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable() %>%
+  kable(longtable = TRUE) %>%
   kable_styling()
 
 mod_dat %>% 
@@ -447,7 +452,7 @@ mod_dat %>%
   filter(Region == region_in) %>% 
   group_by(Site) %>% 
   summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable() %>%
+  kable(longtable = TRUE) %>%
   kable_styling()
 
 mod_dat %>% 
@@ -474,7 +479,7 @@ mod_dat %>%
   filter(Region == region_in) %>% 
   group_by(Site) %>% 
   summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable() %>%
+  kable(longtable = TRUE) %>%
   kable_styling()
 
 mod_dat %>% 
@@ -501,7 +506,7 @@ mod_dat %>%
   filter(Region == region_in) %>% 
   group_by(Site) %>% 
   summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable() %>%
+  kable(longtable = TRUE) %>%
   kable_styling()
 
 mod_dat %>% 
@@ -528,7 +533,7 @@ mod_dat %>%
   filter(Region == region_in) %>% 
   group_by(Site) %>% 
   summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable() %>%
+  kable(longtable = TRUE) %>%
   kable_styling()
 
 mod_dat %>% 
