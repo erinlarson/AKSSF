@@ -9,7 +9,7 @@ output:
   html_document: 
     df_print: paged
     fig_width: 10
-    fig_height: 6
+    fig_height: 10
     fig_caption: yes
     code_folding: hide
     toc: true
@@ -65,7 +65,7 @@ trend_dat %>%
 As an alternative modeling method to estimate stream thermal sensitivity, Tim used the air temperature coefficient in a time series model for each site and summer using an auto-regressive lag of 1 day on the residuals (AR1 model). These results better matched the patterns between air-stream temperatures at the different sites.
 
 ```{r ar1 TS}
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-02.rds")
 
 mod_dat %>% 
   ggplot(aes(TempSens)) +
@@ -76,9 +76,153 @@ mod_dat %>%
 
 
 
+
+# Relationships between TS and covariates
+
+
+```{r pair plots against TS}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+mod_dat %>% 
+  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat %>% 
+  select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+```
+
+Exploring interactions between covariates and TS. Starting with different variables and mean watershed slope.
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = wtd_north_per, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = wtd_north_per), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and north aspect", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = asrt_glac, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = asrt_glac), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and glacier cover", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = asrt_lake, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = asrt_lake), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and lake cover", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = asrt_wet, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = asrt_wet), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and wetland cover", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = summer_precip, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = summer_precip), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and summer precipitation", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_slope_MEAN"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = snow_ind, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = snow_ind), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by mean watershed slope and snow index", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
+```{r}
+facet_var <- "wtd_north_per"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = snow_ind, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = snow_ind), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by watershed north percent and snow index", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+```{r}
+facet_var <- "wtd_north_per"
+
+mod_dat %>% 
+  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
+  ggplot() +
+  geom_point(aes(y = TempSens, x = summer_precip, color = Region)) +
+  geom_smooth(aes(y = TempSens, x = summer_precip), method = "lm") +
+  facet_wrap(~fct) +
+  labs(title = "TS by watershed north percent and summer precipitation", subtitle = paste0("Facets are bins of ", facet_var))
+```
+
+
 # Reduce covariates
 
-Reduced the list of covariates based on pairwise correlations and VIF. Also transformed covariates that were heavily right skewed. Logit for percent cover and log10 for continuous.
+Reduced the list of covariates based on pairwise correlations and VIF. Also transformed covariates that were heavily right skewed. Arcsine square-root for proportions and log10 for continuous. Glacier cover still heavily right-skewed so added a binary presence-absence for glacier cover as well and checked VIF.
 Final list of covariates, which are also listed with data sources on google drive [sheet](https://docs.google.com/spreadsheets/d/1Ir1HyvhHqfbUSaGjiI-ygeQwJkh2QsihtWueJfDQ4cA/edit#gid=0):
 
 * stream order
@@ -97,23 +241,25 @@ Final list of covariates, which are also listed with data sources on google driv
 * total summer precipitation at site by year
 
 Removed covariates with pairwise correlations r > 0.7 and VIF > 3. 
-Final list of 12 covariates:
+Final list of 13 covariates:
 
 * log stream gradient
-* mean catchment elevation
+* log mean catchment elevation
+* log mean catchment slope
 * watershed percent north aspect
 * mean watershed slope
 * log watershed area
 * distance to coast
-* watershed wetland percent
-* logit glacier cover
-* logit lake cover
+* arcsine square-root watershed wetland percent
+* arcsine square-root watershed glacier cover
+* arcsine square-root watershed lake cover
 * snow index
 * summer precipitation
+* glacier presence-absence
 
 # Select random effects
 
-Created a global model with all 12 covariates plus five interactions from Tim's Bristol Bay paper and results. Selected best random effects.
+Created a global model with all 13 covariates plus five interactions from Tim's Bristol Bay paper and results. Selected best random effects.
 
 Interactions: 
 
@@ -143,8 +289,8 @@ lme1_dr <- readRDS("output/lme1m_dredge_results.rds")
 #variable importance
 lme1_dr %>% 
   as_tibble() %>% 
-  mutate(across(cat_elev_MEAN:'wtd_north_per:wtd_slope_MEAN', ~ case_when(!is.na(.) ~ weight))) %>% 
-  select(cat_elev_MEAN:'wtd_north_per:wtd_slope_MEAN') %>% 
+  mutate(across(asrt_glac:'wtd_north_per:wtd_slope_MEAN', ~ case_when(!is.na(.) ~ weight))) %>% 
+  select(asrt_glac:'wtd_north_per:wtd_slope_MEAN') %>% 
   colSums(., na.rm = TRUE) %>% 
   enframe() %>% 
   arrange(desc(value)) %>% 
@@ -158,9 +304,9 @@ lme1_dr %>%
 Model set of 6 models:
 
 * global model
-* model with top 11 covariates
+* model with top 12 covariates
 * model with top 8 covariates
-* model with top 3 covariates
+* model with top 4 covariates
 * null model
 * random forest model (I randomly selected only 1 year for each site to avoid pseudo-replicating the spatial covariates)
 
@@ -182,8 +328,8 @@ xval_results <- read_rds("output/xval_results.rds")
 
 xval_results %>% 
   # filter(!xval_type == "LOO") %>% 
-  mutate(modelf = factor(model, levels = c("global", "lme_11vars", "lme_8vars", "lme_3vars", "lme_null", "rf"),
-                         labels = c("global", "11 vars.", "8 vars.", "3 vars.", "null", "RF"))) %>% 
+  mutate(modelf = factor(model, levels = c("global", "lme_12vars", "lme_8vars", "lme_4vars", "lme_null", "rf"),
+                         labels = c("global", "12 vars.", "8 vars.", "4 vars.", "null", "RF"))) %>% 
   ggplot(aes(x = modelf, y = rmse, color = xval_type)) +
   stat_summary(fun = "mean", geom = "point", size = 3) +
   stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
@@ -210,8 +356,8 @@ xval_preds <- readRDS("output/xval_preds.rds")
 
 xval_preds %>% 
   filter(xval_type == "LOO") %>% 
-  mutate(modelf = factor(model, levels = c("global", "lme_11vars", "lme_8vars", "lme_3vars", "lme_null", "rf"),
-                         labels = c("global", "11 vars.", "8 vars.", "3 vars.", "null", "RF"))) %>% 
+  mutate(modelf = factor(model, levels = c("global", "lme_12vars", "lme_8vars", "lme_4vars", "lme_null", "rf"),
+                         labels = c("global", "12 vars.", "8 vars.", "4 vars.", "null", "RF"))) %>% 
   ggplot(aes(x = TempSens, y = preds)) +
   geom_point() +
   geom_abline(aes(intercept = 0, slope = 1)) +
@@ -229,14 +375,54 @@ Spatial domain: salmon habitat for all regions. Select HU12 that intersect anadr
 Spatial scale: suggest using stream outlets associated with HU12 boundaries (smallest are 25 km^2^). We can use these outlets to create watersheds and calculate all the same covariates for prediction.  
 
 Temporal scenarios:
-Ideas for our scenarios include picking years with our temporal domain (2001-2019) that represent contrasting conditions that affect TS (e.g. low and high snow years). One problem with this idea is that one year could have really different conditions across our study area. Alternatively, we could set the conditions using a new data frame -- e.g. 90th percentile of snowpack by region. 
+Ideas for our scenarios include picking years within our temporal domain (2001-2019) that represent contrasting conditions that affect TS (e.g. low and high snow years). One problem with this idea is that conditions could vary across our study area so a high snow year in Bristol Bay may not match Copper. Alternatively, we could develop scenarios for prediction using high and low ranges of snowpack or precipitation for each region. 
 
+Comparison of standardized (subtract mean and divide by sd) temperature and precipitation values by different regions:
 
-
-climate scenario plot - air tmep precip and snow pariwise plots to see realistic scenarios by region
-
+* 2019 warm and low precipitation
+* 2016 warm and high precipitation
+* 2004 cold and high precipitation
+* 2017 and 2009 about normal years for both
 
 ```{r}
+clim_dat <- readRDS("output/clim_dat.rds")
+
+#deviations from normal
+clim_dat %>% 
+  group_by(Region, parameter) %>% 
+  mutate(Value_metric_sc = scale(Value_metric)) %>% 
+  ggplot(aes(x = Year, y = Value_metric_sc, color = Region)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
+  facet_wrap(~parameter, scales = "free", ncol = 1) +
+  geom_hline(aes(yintercept = 0)) +
+  theme_bw() +
+  theme(legend.position = "right") +
+  labs(y = "Standardized values")
+
+```
+
+Snowtel data indicate April 1st SWE (magnitude of spring snowpack) for different sites across some of our regions. Note that there were no snowtel sites with data for Bristol Bay or Kodiak. From Tim's paper, 2012 and 2013 were high snow years and 2015 was a low snow year.
+
+* 2012 was a high snow year
+* 2015 was a low snow year
+
+```{r}
+snowtel <- readRDS("output/snowtel.rds")
+
+#deviations from normal
+snowtel %>% 
+  filter(!grepl("Gulk|Tela", Snowtel_site)) %>% 
+  group_by(Snowtel_site) %>% 
+  mutate(swe_sc = scale(Apr1_SWE)) %>% 
+  ggplot(aes(x = Year, y = swe_sc, color = Snowtel_site)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
+  theme_bw() +
+  theme(legend.position = "right") +
+  geom_hline(aes(yintercept = 0)) +
+  facet_wrap(~Region, ncol = 1) +
+  labs(y = "Standardized values")
 
 ```
 
