@@ -25,6 +25,16 @@ library(tmap)
 library(lubridate)
 ```
 
+
+Modeling thermal sensitivities for five regions in Southern AK.
+
+1. Read in response and covariate data and combine to create model data frame
+2. Explore TS response - removed 3 sites with very negative TS
+3. Explore correlations and multi-collinearity of covariates -- only select those with pairwise correlation < 0.7 and stepwise remove covariates until all have VIF < 3
+4. Transform/model covariates as needed. Logit transformation for glacier cover and lake cover since 0-1 scale and both have large outliers -- note that after transformation there is still one outlier for lake coverage. Log transformation for watershed area and stream slope because skewed and continuous. Plotted watershed slope and LCLD (last day of the longest continuous snow season) and decided to remove effect of slope on snow and use the residual - per Tim's method -- new covariate called snow index. 
+
+
+
 # Original DFA
 
 Tim provided DFA output on November 8, 2021. Here are comments on the files from his email:
@@ -182,8 +192,11 @@ Which sites have negative TS and why?
 ```{r}
 mod_dat %>% 
   filter(TempSens < 0) %>% 
-  select(Site, TempSens, wtd_glacier_per, wtd_lake_per, wtd_north_per, wtd_lcld_jd)
+  select(Site, Year, TempSens, wtd_glacier_per, wtd_lake_per, wtd_north_per, wtd_lcld_jd) %>% 
+  arrange(TempSens)
 
+
+md %>% filter(SiteID == "572656154082400")
 summary(mod_dat)
 ```
 
@@ -200,6 +213,48 @@ mod_dat %>%
   ggplot(aes(x = meants, y = sdts, color = Region)) +
   geom_point()
 ```
+
+Variability in TS from year to year for sites with at least 5 years of data.
+
+```{r}
+mod_dat %>% 
+  group_by(Region, Site) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 4) %>% 
+  ggplot(aes(x = TempSens, y = Site)) +
+  geom_point() +
+  facet_wrap(~Region, scales = "free_y", ncol = 1)
+
+mod_dat %>% 
+  group_by(Region, Site) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 4) %>% 
+  summarize(ts_range = range(TempSens)) %>% 
+  ggplot() +
+  geom_histogram(aes(x = ts_range))
+
+mod_dat %>% 
+  group_by(Region, Site, wtd_elev_MEAN) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 4) %>% 
+  summarize(ts_range = range(TempSens)) %>% 
+  ggplot() +
+  geom_point(aes(x = ts_range, y = wtd_elev_MEAN))
+
+mod_dat %>% 
+  group_by(Region, Site, cat_elev_MEAN) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 4) %>% 
+  summarize(ts_range = range(TempSens)) %>% 
+  ggplot() +
+  geom_point(aes(x = ts_range, y = cat_elev_MEAN))
+
+mod_dat %>% 
+  ggplot() +
+  geom_histogram(aes(x = TempSens))
+```
+
+
 
 ## Pairwise correlations between TS and covariates
 
@@ -270,12 +325,15 @@ ggplot(transform(mod_dat, fct = cut(snow_ind, seq(from = min(snow_ind)-1, to = m
 Interesting! Can start to see negative relationship of aspect with TS, but only at highest slope watersheds, which makes sense.
 
 ```{r ts by north and wtd slope}
+summary(mod_dat)
 
-ggplot(transform(mod_dat, fct = cut(wtd_slope_MEAN, seq(from = 0, to = 32, length.out = 6))), 
+facet_var <- "wtd_slope_MEAN"
+
+ggplot(transform(mod_dat, fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 6))), 
        aes(y = TempSens, x = wtd_north_per)) +
   geom_point() +
   facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and north aspect", subtitle = "Facets are bins of mean watershed slope")
+  labs(title = "TS by mean watershed slope and north aspect", subtitle = paste0("Facets are bins of ", facet_var))
 ```
 
 No interaction.
@@ -464,4 +522,523 @@ sitemap <- tm_shape(regions) +
 sitemap
 
 ```
+
+
+
+# Read in data and combine
+
+New AR(1) model output from Tim.
+
+```{r responses, include = FALSE}
+ts_dat <- readRDS("output/TempSens_Arima_Results_from2000_2022-01-14.RDS") %>% as_tibble()
+
+# write_csv(ts_dat, "DFA/TempSens_Arima_Results2021.12.07.csv")
+
+```
+
+Read in covariates. Copied over from Dustin's script, but modified so that lcld is combined with the other covariates.
+
+```{r covariates, include = FALSE}
+
+#Data from covariates script
+cov.df.raw <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_Covariates.csv', header = TRUE) 
+#Data from spatial join script
+sites.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_sites_sj_maxfac.csv', header = TRUE)
+#Data from Modis Script
+lcld.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_wtd_lcld_mn.csv', header = TRUE)
+
+lcld.long <- lcld.df %>% 
+  pivot_longer(cols = wtd_lcld_mn_2001:wtd_lcld_mn_2019, names_to = "metric", values_to = "wtd_lcld") %>% 
+  mutate(Year = as.numeric(substr(metric, 13, 17)),
+         wtd_lcld_jd = wtd_lcld - 365) %>% 
+  select(-metric)
+
+#dput(colnames(sites.df))
+site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+                    "Area_km2","area_diff","size_diff", "lat", "lon",
+                    'str_ord','str_slope', "dist_coast_km", "ds_dist_outlet")
+
+sites.df <- sites.df %>% 
+  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
+  size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
+                        TRUE~'No Change')) %>% 
+  subset(select = site_keep_cols )
+
+#don't keep ds_dist_outlet bc it is incorrect for some sites/networks
+# sites.df %>% 
+#   ggplot(aes(x = dist_coast_km, y = ds_dist_outlet)) +
+#   geom_point()
+  
+#dput(colnames(cov.df.raw))
+wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope_MAX",
+  "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
+  "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
+  "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
+  "wtd_slope_MAX", "wtd_slope_MEAN", "wtd_slope_STD", "wtd_north_per", 
+  "wtd_wet_per","wtd_lake_per","wtd_glacier_per","wtd_area_sqKM")
+
+
+cov.df <- cov.df.raw %>%
+  mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
+  subset(select = wtd_keep_cols )
+
+# Convert na to 0
+cov.df[is.na(cov.df)] <- 0
+
+cov.all <- left_join(sites.df %>% select(SiteID, cat_ID_con, Region = region, str_ord, str_slope, dist_coast_km),
+                     cov.df)
+
+cov.all <- left_join(cov.all, lcld.long)
+# summary(cov.all)
+
+
+```
+
+Early exploration turned up lots of small problems that Dustin has fixed -- all recorded on [google sheet](https://docs.google.com/spreadsheets/d/1TJrNIwr14HJ4QV6-fB4ubmi0BoTNCG7UxoK-s--IsJM/edit#gid=624864644), QA review tab.
+
+```{r covariate exploration, eval = FALSE}
+
+names(cov.all)
+
+cov.all %>% 
+  group_by(Region) %>% 
+  summarize(meanslope = mean(wtd_slope_MEAN))
+
+cov.all %>% 
+  group_by(Region) %>% 
+  summarize(meanslope = mean(wtd_elev_MEAN))
+
+#2011 all fixed now.
+cov.all %>% 
+  filter(wtd_lcld_jd <0)
+
+cov.all %>% 
+  mutate(yr11 = case_when(Year == 2011 ~ 1, 
+                          TRUE ~ 0)) %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd, color = as.factor(yr11))) +
+  geom_point() +
+  facet_wrap(~Region)
+
+
+cov.all %>% 
+  # filter(!Year == 2011) %>% 
+  ggplot(aes(x = wtd_elev_MEAN, y = wtd_lcld_jd, color = Region)) +
+  geom_point() +
+  geom_smooth() 
+  facet_wrap(~Year)
+  
+
+```
+
+Comparing modis output with snowtel.
+
+```{r snow exploration, eval = FALSE}
+
+#these sort of match up to hillside snowtel (2006-2019) april 1st swe 
+# lowest years 2015, 2014, 2019
+# biggest years 2012 by a lot, then 2007-2010 all about the same
+cov.all %>% 
+  group_by(Region, Year) %>% 
+  summarize(meanlcld = mean(wtd_lcld_jd)) %>% 
+  pivot_wider(names_from = Year, values_from = meanlcld, names_sort = TRUE)
+
+cov.all %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = wtd_lcld_jd, after_stat(density), color = Region)) +
+  facet_wrap(~Year)
+```
+
+Generate a data frame that associates the SiteIDs in the response data frame with the covariate data frame. Tim's response data frame drops > 70 sites because they had limited summer data or data were prior to 2011 (he ran 2011-2020). We may go back and include older years now that we aren't running DFA so use the original model data frame sent to Tim (stream + air temps) and generate lookup for merging the SiteIDs. Then apply this to the response data frame with AR1 model output.
+
+We added prefixes to most of the SiteIDs when generating the data that didn't get carried over to the spatial data frames. 
+
+* find the SiteIDs that don't match in the two data frames (109) -- make sure all are converted to lower case because that is causing some mismatches.
+* remove the prefix -- for just the mismatched sites -- so that that spatial SiteIDs will join.
+* 13 sites in the response data frame not in the covariate data frame -- see [google sheet](https://docs.google.com/spreadsheets/d/1TJrNIwr14HJ4QV6-fB4ubmi0BoTNCG7UxoK-s--IsJM/edit#gid=1942759492) for how to fix them. 
+
+
+```{r create siteid_join data frame, include = FALSE}
+
+temp_dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds") %>% 
+  mutate(site_lower = tolower(SiteID))
+
+temp_md <- readRDS("data_preparation/final_data/md.rds")
+
+cov.all <- cov.all %>% 
+  mutate(site_lower = tolower(SiteID))
+
+#sites in temperature data frame not in covariate data frame
+remove_prefix <- anti_join(temp_dat %>% distinct(site_lower),
+          cov.all %>% distinct(site_lower)) %>%
+  arrange(site_lower) %>% 
+  pull(site_lower)
+
+siteid_join <- temp_dat %>% 
+  mutate(cov_id = case_when(site_lower %in% remove_prefix ~  str_remove(site_lower, pattern = "^.*?(_|-)"),
+                            TRUE ~ site_lower)) %>% 
+  distinct(ts_id = site_lower, cov_id)
+
+#13 mismatches
+# anti_join(siteid_join, cov.all, by = c("cov_id" = "site_lower"))
+
+siteid_join <- siteid_join %>% 
+  mutate(cov_id = case_when(cov_id == "katm_lbrooo" ~ "katm_lbrooo_lvl",
+                            cov_id == "katm_naknlo" ~ "katm_naknlo_lvl",
+                            cov_id == "lacl_kijilo" ~ "lacl_kijilo_lvl",
+                            cov_id == "lslil10" ~ "lslil",
+                            cov_id == "lsnlt10" ~ "lsnlt1",
+                            cov_id == "lsr93" ~ "lsr93lb",
+                            cov_id == "lsr106" ~ "lsr112.5",
+                            cov_id == "lacl_lclaro" ~ "lacl_lclaro_lvl",
+                            TRUE ~ cov_id))
+
+write.csv(siteid_join, "data_preparation/SiteID_join_spatial_to_temperature.csv")
+```
+
+Lots of sites in covariates not in response data frame -- check on how Tim filtered data completeness, which should explain why sites were dropped. For each site and year, Tim dropped any with less than 80% of days in June 1 - Aug 31 (jd 152-243). And, he only used sites with data from 2011-2020.
+
+
+```{r sites dropped in arima analysis, eval = FALSE}
+
+temp_dat %>% 
+  # filter(year(sampleDate) %in% 2001:2019) %>% 
+  distinct(SiteID) %>% nrow()
+ts_dat %>% distinct(Site) %>% nrow() #dropped 50 overall, 27 when filter on year only, so other 23 presumably didn't have complete summers of data
+
+anti_join(temp_dat %>% distinct(SiteID), ts_dat %>% distinct(SiteID = Site))
+
+# 49 sites
+temp_dat %>%
+  mutate(Year = year(sampleDate), jd = as.numeric(format(sampleDate, "%j"))) %>% 
+  filter(jd > 151, jd < 244) %>% 
+  group_by(SiteID, Year) %>% 
+  summarize(sum_percent = n()/92) %>%
+  mutate(keep = case_when(sum_percent >= 0.8 ~ 1,
+                          Year < 2011 ~ 0,
+                          Year > 2019 ~ 0,
+                          TRUE ~ 0)) %>% 
+  group_by(SiteID) %>% 
+  summarize(sum_complete = sum(keep)) %>% 
+  filter(sum_complete == 0)
+```
+
+Use merge table to join on SiteIDs. One site in responses without spatial data - Nerka Pike Creek, only 1 year, will be dropped.
+
+
+```{r create model data frame, include = FALSE}
+
+# nerka pike creek is only missing site now
+left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join, by = c("site_lower" = "ts_id")) %>% 
+  filter(Year %in% 2001:2019) %>% 
+  left_join(cov.all %>% rename(cov_id = site_lower)) %>%
+  distinct(Site)
+  filter(is.na(str_ord))
+
+mod_dat <- left_join(ts_dat %>% mutate(site_lower = tolower(Site)), siteid_join, by = c("site_lower" = "ts_id")) %>% 
+  filter(!Year == 2020) %>% 
+  left_join(cov.all %>% rename(cov_id = site_lower)) %>% 
+  filter(!is.na(str_ord))
+
+```
+
+
+## Add in daymet precipitation
+
+Tim C. included total summer precipitation as a predictor in his models so add from daymet here. Note that this is site specific precip, not from across the watershed.
+
+```{r merge with precip}
+
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet %>% distinct(measurement)
+
+#correct conversion is date2 bc date example below has Jan 1 as day 0!
+daymet %>% 
+  filter(year == 2006, 
+         yday == 152) %>% 
+  mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
+         date2 = as.Date(paste(year, yday), format = "%Y %j"))
+
+precip <- daymet %>%
+  filter(measurement %in% c("prcp..mm.day.")) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  rename(SiteID = site) %>% 
+  group_by(SiteID, Year = year(sampleDate)) %>% 
+  summarize(summer_precip = mean(value))
+
+rm(daymet)
+
+mod_dat <- left_join(mod_dat %>% select(-(site_lower:SiteID)), precip %>% rename(Site = SiteID))
+
+```
+
+
+
+# Data exploration
+
+## Response
+
+Look at sites with lots of negative TS as a check.
+
+* NPS Hardenburg bay is a bay in Lake Clark - drop.
+* usgs 15258000 is outlet of kenai lake, but still seems very lake affected or lake-like (kenai r at cooper landing) - drop
+* usgs 15260001 is outlet of cooper lake right below hydro dam - this seems very anthro-influenced -- drop
+* usfs solf lake fish pass and outlet creek are both located in lake -- is that right, should they be dropped?
+
+```{r negative ts values}
+mod_dat %>% 
+  filter(TempSens < 0) %>%
+  arrange(TempSens)
+
+drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001")
+
+mod_dat2 <- mod_dat %>% 
+  filter(!Site %in% drop_sites)
+
+```
+
+what about other sites in Luca's dataset?
+
+* middle arm eyak - remove?
+* middle fork 18 mile
+* 24.9 mile creek
+* ibeck lower side channel
+* eagle creek
+* pigot bay spawn channel - remove?
+* rude river side channel - remove?
+
+
+```{r negative ts values}
+
+mod_dat %>%  
+  filter(grepl("USFS|Martin", Site)) %>% distinct(Site)
+
+```
+
+Any outliers in TS?
+
+```{r ts boxplot by region}
+mod_dat2 %>% 
+  ggplot(aes(x = Region, y = TempSens)) +
+  geom_boxplot()
+```
+
+
+```{r ts dotplot}
+mod_dat2 %>% 
+  arrange(TempSens) %>% 
+  mutate(rowid = row_number()) %>%
+  ggplot(aes(x = TempSens, y = rowid,  color = Region)) +
+  geom_point() +
+  # scale_y_continuous(limits = c(0, 1500)) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        legend.position = "bottom", axis.title.y = element_blank())
+```
+
+Two sites with rather high TS.
+
+```{r}
+mod_dat2 %>% 
+  filter(TempSens > 0.7)
+
+```
+
+```{r ts histogram}
+mod_dat2 %>% 
+  ggplot(aes(x = TempSens)) +
+  geom_histogram() +
+  facet_wrap(~Region) +
+  theme_bw()
+
+```
+
+
+
+## Covariates 
+
+Checking outliers and collinearity. Drop those with high correlation.
+
+Check slopes first. A couple of outliers -- one for stream slope and two for minimum catchment slope. We checked the min catchment slopes and they are accurate, streams in very steep watersheds. One of those aslo had the high stream slope. Note that the mean, min, max statistics for slope and elevation by watershed are all highly correlated so just go with means for now and recheck using r and vif.
+
+Keep:
+
+* stream slope
+* mean catchment slope and elevation
+* mean watershed slope and elevation
+* watershed percent north facing 
+* distance to coast
+* watershed area
+* wetland, glacier, lake cover
+* modis snow date
+
+```{r pair plots for groups of covariates}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+#slope and aspect
+mod_dat %>% 
+  select(str_slope, cat_slope_MIN:cat_slope_STD, wtd_slope_MIN:wtd_slope_STD, wtd_north_per) %>% 
+  pairs(upper.panel = panel.cor)
+
+#elevation, area, and distance to coast
+mod_dat %>% 
+  select(cat_elev_MIN:cat_elev_STD, wtd_elev_MIN:wtd_elev_STD, wtd_area_sqKM, dist_coast_km) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+#landcover and snow date
+mod_dat %>% 
+  select(wtd_wet_per:wtd_lcld_jd) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+
+```
+
+
+Correlations for all covariates in list above. All r < 0.7, which is good.
+
+```{r pair plot for 12 cov}
+mod_dat %>% 
+  select(str_slope, cat_elev_MEAN, cat_slope_MEAN, wtd_north_per,
+         wtd_elev_MEAN, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+         wtd_wet_per, wtd_glacier_per, wtd_lake_per, wtd_lcld_jd) %>% 
+  pairs(upper.panel = panel.cor)
+```
+
+MODIS lcld as a function of watershed slope (Fig 2C in Tim's paper).
+
+```{r lcld versus watershed slope}
+mod_dat2 %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ I(x^2))
+```
+
+Generate snow index as residuals of model of lcld as a function of watershed slope (per Tim's paper). Compare squared watershed slope versus linear model using AIC.
+
+```{r snow index}
+ess_lme1 <- lme(wtd_lcld_jd ~ I(wtd_slope_MEAN^2), dat = mod_dat2, random = ~1|Year)
+ess_lme2 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN, dat = mod_dat2, random = ~1|Year)
+AIC(ess_lme1, ess_lme2)
+
+ess_lme_resid <- resid(ess_lme1, level = 1)
+
+mod_dat2 <- mod_dat2 %>% 
+  mutate(snow_ind = ess_lme_resid)
+
+#check that snow index is now not correlated to watershed slope.
+mod_dat2 %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = snow_ind)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+```
+
+
+Logit transformation of glacier and lake cover because both are percentages and have large outliers. Log transform watershed area and stream slope and replot. Transformation for slope needs minimum value because one 0 (following methods in mccune and grace 2002).
+
+
+```{r covariate transformations}
+
+mod_dat2 %>%
+  distinct(str_slope) %>%
+  arrange(str_slope)
+
+min_slope = 0.0000100000
+c_slope = as.integer(log10(min_slope))
+d_slope = 10^c_slope
+
+mod_dat2 <- mod_dat2 %>% 
+  mutate(log_area = log10(wtd_area_sqKM),
+         log_slope = log10(str_slope + d_slope) - c_slope,
+         asrt_glac = asin(sqrt(wtd_glacier_per/100)),
+         asrt_lake = asin(sqrt(wtd_lake_per/100)),
+         asrt_wet = asin(sqrt(wtd_wet_per/100)),
+         glac_10 = case_when(wtd_glacier_per > 0 ~ 1,
+                             TRUE ~ 0),
+         log_cat_elev = log10(cat_elev_MEAN),
+         log_cat_slope = log10(cat_slope_MEAN))
+
+mod_dat2 %>% 
+  select(log_slope, log_cat_elev, log_cat_slope, wtd_north_per,
+         wtd_elev_MEAN, wtd_slope_MEAN, log_area, dist_coast_km,
+         snow_ind, asrt_glac, asrt_lake, asrt_wet, glac_10) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+
+mod_dat2 %>% 
+  select(log_slope, log_cat_elev, log_cat_slope, wtd_north_per,
+         wtd_elev_MEAN, wtd_slope_MEAN, log_area, dist_coast_km,
+         snow_ind, asrt_glac, asrt_lake, asrt_wet) %>% 
+  apply(., 2, function(x) skewness(x))
+
+mod_dat2 %>% 
+  select(wtd_glacier_per, wtd_lake_per, wtd_wet_per, logit_glac, logit_lake, snow_ind,
+         asrt_glac, asrt_lake, asrt_wet) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+```
+
+Still one site in Bristol Bay -- Egegik River -- with very high lake cover not fixed by logit transformation. ~37%, next highest is 17%.
+
+```{r lake outlier}
+mod_dat2 %>% filter(logit_lake > -1)
+
+temp_md %>% 
+  filter(SiteID == "fws_580223156504200")
+
+```
+
+
+Set up a basic model to get VIF. 
+
+```{r vif for 12 cov}
+lm1 <- lm(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+         wtd_elev_MEAN + wtd_slope_MEAN + log_area + dist_coast_km + 
+         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + summer_precip, data = mod_dat2)
+
+vif(lm1)
+```
+
+Remove mean watershed elevation now all vif < 3 or close to it. Wtd slop is highest at 3.17 and the only one above 3.
+
+```{r vif 11 cov}
+lm2 <- lm(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+         wtd_slope_MEAN + log_area + dist_coast_km + 
+         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + summer_precip, data = mod_dat2)
+
+
+vif(lm2)
+```
+
+Save model data frame with snow index and covariate transformations.
+
+```{r}
+
+saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+
+#saving new version with additional covariate transformations 2/2/22
+# saveRDS(mod_dat, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+
+```
+
+
 

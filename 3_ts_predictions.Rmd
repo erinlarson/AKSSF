@@ -1,0 +1,178 @@
+---
+title: "3_ts_prediction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prediction for Kenai HUC8
+
+Example prediction for one huc8 using one model.
+
+```{r}
+
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds")
+
+md <- read_rds("data_preparation/final_data/md.rds")
+mod_dat <- left_join(mod_dat, md %>% dplyr::select(SiteID, deshka, HUC8, Name, Latitude, Longitude), by = c("Site" = "SiteID")) 
+
+
+lme_8vars <- formula(TempSens ~ wtd_north_per +
+                wtd_slope_MEAN + dist_coast_km + 
+                logit_glac + logit_lake + snow_ind + summer_precip +
+                  summer_precip*wtd_slope_MEAN)
+
+mod1 <- lme(lme_8vars, random = ~1 |HUC8/Site, data = mod_dat)
+```
+
+Read in new covariates for one huc8.
+
+```{r}
+read_csv("data_preparation/sensitivity_drivers/AKSSF_HUC12_Covariates.csv")
+```
+
+# Climate data summary
+
+Use daymet for all sites to generate average summer temperature and precipitation, merge with LCLD to get annual snowfall.
+
+```{r}
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet %>% distinct(measurement)
+
+#correct conversion is date2 bc date example below has Jan 1 as day 0!
+daymet %>% 
+  filter(year == 2006, 
+         yday == 152) %>% 
+  mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
+         date2 = as.Date(paste(year, yday), format = "%Y %j"))
+
+precip <- daymet %>%
+  filter(measurement %in% c("prcp..mm.day.")) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  rename(SiteID = site) %>% 
+  group_by(SiteID, Year = year(sampleDate)) %>% 
+  summarize(summer_precip = mean(value))
+
+rm(daymet)
+
+```
+
+Data downloaded from climate at a glance for Mat-Su, BB, and Kodiak Boroughs, and Valdez/Cordova census area.
+
+```{r}
+clim_files <- list.files("data_preparation/climate_division_data", full.names = TRUE)
+
+clim_dat <- map_df(clim_files, function(x) read_csv(x, skip = 4) %>% mutate(file_name = basename(x)))
+
+clim_dat <- clim_dat %>% 
+  mutate(region_code = substr(file_name, 4,6),
+         Region = case_when(region_code == "060" ~ "Bristol Bay Borough",
+                            region_code == "150" ~ "Kodiak Island Borough",
+                            region_code == "170" ~ "Matanuska-Susitna Borough",
+                            region_code == "261" ~ "Valdez-Cordova Census Area"),
+         parameter = case_when(grepl("pcp", file_name) ~ "Precipitation",
+                              grepl("tavg", file_name) ~ "Temperature"),
+         Value_metric = case_when(parameter == "Precipitation" ~ Value * 25.4,
+                                  parameter == "Temperature" ~ (Value - 32) * 5/9),
+         Year = as.numeric(substr(Date, 1, 4)))
+
+
+clim_dat %>% 
+  ggplot(aes(x = Year, y = Value_metric, color = Region)) +
+  geom_line() +
+  facet_wrap(~parameter, scales = "free", ncol = 1)
+
+#deviations from normal
+clim_dat %>% 
+  group_by(Region, parameter) %>% 
+  mutate(Value_metric_sc = scale(Value_metric)) %>% 
+  ggplot(aes(x = Year, y = Value_metric_sc, color = Region)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
+  facet_wrap(~parameter, scales = "free", ncol = 1) +
+  theme_bw() +
+  theme(legend.position = "right") +
+  labs(y = "Z-score values")
+
+saveRDS(clim_dat, "output/clim_dat.rds")
+```
+
+Add in snow from snowtel sites.
+
+
+```{r}
+snowtel <- read_csv("data_preparation/climate_division_data/snowtel_apr1_2001-19.txt", comment = "#")
+
+snowtel_sites <- colnames(snowtel)
+snowtel_sites <- sub(" Snow Water Equivalent (mm) Start of Month Values", "", snowtel_sites, fixed = TRUE)
+colnames(snowtel) <- snowtel_sites
+
+snowtel <- snowtel %>% 
+  pivot_longer(names_to = "Snowtel_site", values_to = "Apr1_SWE", -Date) %>% 
+  mutate(Year = as.numeric(substr(Date, 5,8)),
+         Region = case_when(grepl("Anch|Indep|Mcneil|Alye|Susitna|Moraine", Snowtel_site) ~ "Cook Inlet",
+                            grepl("Eyak|May|Gulkana", Snowtel_site) ~ "Copper",
+                            grepl("Tela", Snowtel_site) ~ "Bristol Bay",
+                            TRUE ~ NA_character_))
+
+snowtel %>% 
+  filter(!is.na(Apr1_SWE)) %>% 
+  count(Snowtel_site)
+
+snowtel %>% 
+  filter(!grepl("Gulk|Tela", Snowtel_site)) %>% 
+  ggplot(aes(x = Year, y = Apr1_SWE, color = Snowtel_site)) +
+  geom_line() 
+
+#deviations from normal
+snowtel %>% 
+  filter(!grepl("Gulk|Tela", Snowtel_site)) %>% 
+  group_by(Snowtel_site) %>% 
+  mutate(swe_sc = scale(Apr1_SWE)) %>% 
+  ggplot(aes(x = Year, y = swe_sc, color = Snowtel_site)) +
+  geom_line() +
+  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
+  theme_bw() +
+  theme(legend.position = "right") +
+  geom_hline(aes(yintercept = 0)) +
+  facet_wrap(~Region, ncol = 1) +
+  labs(y = "Standardized values")
+
+
+saveRDS(snowtel, "output/snowtel.rds")
+```
+
+
+
+
+
+```{r}
+#Data from Modis Script
+lcld.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_wtd_lcld_mn.csv', header = TRUE)
+
+lcld.long <- lcld.df %>% 
+  pivot_longer(cols = wtd_lcld_mn_2001:wtd_lcld_mn_2019, names_to = "metric", values_to = "wtd_lcld") %>% 
+  mutate(Year = as.numeric(substr(metric, 13, 17)),
+         wtd_lcld_jd = wtd_lcld - 365) %>% 
+  select(-metric)
+
+#Data from spatial join script
+sites.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_sites_sj_maxfac.csv', header = TRUE)
+
+#dput(colnames(sites.df))
+site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+                    "Area_km2","area_diff","size_diff", "lat", "lon",
+                    'str_ord','str_slope', "dist_coast_km", "ds_dist_outlet")
+
+sites.df <- sites.df %>% 
+  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
+  size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
+                        TRUE~'No Change')) %>% 
+  subset(select = site_keep_cols )
+
+left_join(sites.df, lcld.long)
+```
+

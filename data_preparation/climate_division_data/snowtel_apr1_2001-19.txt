@@ -1,0 +1,86 @@
+#------------------------------------------------- WARNING --------------------------------------------
+# 
+# The data you have obtained from this automated Natural Resources Conservation Service 
+# database are subject to revision regardless of indicated Quality Assurance level. 
+# Data are released on condition that neither the NRCS nor the United States Government 
+# may be held liable for any damages resulting from its use. 
+# 
+# SNOTEL air temperature data contains a known bias. This bias is rooted in the sensor 
+# conversion equation and varies through the output range. Solutions are in development. 
+# For more information go to Air Temperature Bias Correction. 
+# 
+# Help and Tutorials: https://www.nrcs.usda.gov/wps/portal/wcc/home/dataAccessHelp/helpCenters/reportGeneratorHelp/
+# Air Temperature Bias Correction: https://www.nrcs.usda.gov/wps/portal/wcc/home/snowClimateMonitoring/temperature/temperatureBiasCorrection/
+# 
+# Support Contact: usdafpacbc@servicenowservices.com
+# 
+#------------------------------------------------------------------------------------------------------
+# 
+# Reporting Frequency: Monthly
+# Date Range: Jan 2001 to May 2019
+# Report Instantaneous Data As: Start of Month
+#
+# Data for the following site(s) are contained in this file:
+#
+#	SNOTEL 1062: Anchor River Divide, AK
+#	SNOTEL 1070: Anchorage Hillside, AK
+#	SNOTEL 2222: Gulkana River, AK
+#	SNOTEL 1091: Independence Mine, AK
+#	SNOTEL 1096: May Creek, AK
+#	SNOTEL 1191: Mcneil River SGS, AK
+#	SNOTEL 1035: Moraine, AK
+#	SNOTEL 1103: Mt. Alyeska, AK
+#	SNOTEL 1073: Mt. Eyak, AK
+#	SNOTEL 967: Susitna Valley High, AK
+#	SNOTEL 1266: Telaquana Lake, AK
+# 
+# Data items provided in this file:
+#
+# Element Name           Value Type  Function Type  Function Duration               Base Data  Measurement Units  Sensor Depth  Element Code  Description                                                                                        
+# Snow Water Equivalent  Value       None           Instantaneous - Start of Month  N/A        Inches             N/A           WTEQ          Depth of water that would theoretically result if the entire snowpack were melted instantaneously  
+# 
+# Quality Control flags included:
+#
+# Flag    Name                Description
+#  V      Valid               Validated Data
+#  N      No Profile          No profile for automated validation
+#  E      Edit                Edit, minor adjustment for sensor noise
+#  B      Back Estimate       Regression-based estimate for homogenizing collocated Snow Course and Snow Pillow data sets
+#  K      Estimate            Estimate
+#  X      External Estimate   External estimate
+#  S      Suspect             Suspect data
+# 
+# Quality Assurance flags included:
+#
+# Flag    Name                Description
+#  U      Unknown             Unknown
+#  R      Raw                 No Human Review
+#  P      Provisional         Preliminary Human Review
+#  A      Approved            Processing and Final Review Completed
+# 
+#------------------------------------------------------------------------------------------------------
+# 
+# Reporting Frequency: Monthly; Date Range: Jan 2001 to May 2019
+#
+# As of: Feb 2, 2022 2:58:32 PM GMT-08:00
+#
+Date,Anchor River Divide (1062) Snow Water Equivalent (mm) Start of Month Values,Anchorage Hillside (1070) Snow Water Equivalent (mm) Start of Month Values,Gulkana River (2222) Snow Water Equivalent (mm) Start of Month Values,Independence Mine (1091) Snow Water Equivalent (mm) Start of Month Values,May Creek (1096) Snow Water Equivalent (mm) Start of Month Values,Mcneil River SGS (1191) Snow Water Equivalent (mm) Start of Month Values,Moraine (1035) Snow Water Equivalent (mm) Start of Month Values,Mt. Alyeska (1103) Snow Water Equivalent (mm) Start of Month Values,Mt. Eyak (1073) Snow Water Equivalent (mm) Start of Month Values,Susitna Valley High (967) Snow Water Equivalent (mm) Start of Month Values,Telaquana Lake (1266) Snow Water Equivalent (mm) Start of Month Values
+Apr 2001,,,,505,,,,1270,,208,
+Apr 2002,,,,287,,,0,790,,155,
+Apr 2003,,,,,,,76,452,,119,
+Apr 2004,,,,,,,226,813,,188,
+Apr 2005,297,,,,,,234,714,,323,
+Apr 2006,264,234,,262,,,185,663,394,145,
+Apr 2007,241,259,,302,,,244,658,660,173,
+Apr 2008,396,264,,267,135,,236,993,889,221,
+Apr 2009,218,259,,472,163,,203,881,592,239,
+Apr 2010,366,279,,206,99,,279,940,874,155,
+Apr 2011,229,183,,267,119,,137,549,610,175,
+Apr 2012,414,508,,483,130,,335,955,1321,307,
+Apr 2013,386,249,,404,114,,150,874,1046,231,
+Apr 2014,218,147,,442,140,,76,335,274,211,
+Apr 2015,135,51,,267,117,,0,112,119,117,0
+Apr 2016,401,157,,470,74,,150,551,310,170,107
+Apr 2017,231,224,,269,114,,163,478,665,155,112
+Apr 2018,320,170,,483,147,,122,373,305,188,178
+Apr 2019,358,147,61,302,69,,58,373,213,168,86
