@@ -1,0 +1,41 @@
+---
+title: "4_ts_figures"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(lubridate)
+library(tidyverse)
+```
+
+# AFS presenatation
+
+Figure of high versus low thermal sensitivity.
+
+```{r}
+dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
+
+dat <- dat %>% 
+  mutate(year = year(sampleDate))
+
+```
+
+
+```{r}
+dat %>% 
+  filter(SiteID %in% c("CIK_14", "CIK_3"), year %in% c(2013, 2015, 2019)) %>%
+  mutate(site = case_when(SiteID == "CIK_14" ~ "Anchor River",
+                          TRUE ~ "Chester Creek")) %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y = airDT)) +
+  geom_line(aes(x = sampleDate, y = meanDT), color = "blue") +
+  facet_grid(vars(site), vars(year), scales = "free_x") +
+  theme_bw() +
+  labs(x = "Date", y = "Temperature")
+
+mod_dat %>% 
+  filter(Site %in% c("CIK_14", "CIK_3"), Year %in% c(2013, 2015, 2019))
+```
+

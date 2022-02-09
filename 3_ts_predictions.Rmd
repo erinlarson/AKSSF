@@ -35,48 +35,25 @@ read_csv("data_preparation/sensitivity_drivers/AKSSF_HUC12_Covariates.csv")
 
 # Climate data summary
 
-Use daymet for all sites to generate average summer temperature and precipitation, merge with LCLD to get annual snowfall.
+Data downloaded from climate at a glance for Mat-Su, Kenai, BB, and Kodiak Boroughs, and Valdez/Cordova census area.
 
 ```{r}
-daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
-daymet %>% distinct(measurement)
-
-#correct conversion is date2 bc date example below has Jan 1 as day 0!
-daymet %>% 
-  filter(year == 2006, 
-         yday == 152) %>% 
-  mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
-         date2 = as.Date(paste(year, yday), format = "%Y %j"))
-
-precip <- daymet %>%
-  filter(measurement %in% c("prcp..mm.day.")) %>% 
-  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
-  filter(month(sampleDate) %in% 6:8) %>% 
-  rename(SiteID = site) %>% 
-  group_by(SiteID, Year = year(sampleDate)) %>% 
-  summarize(summer_precip = mean(value))
-
-rm(daymet)
-
-```
-
-Data downloaded from climate at a glance for Mat-Su, BB, and Kodiak Boroughs, and Valdez/Cordova census area.
-
-```{r}
-clim_files <- list.files("data_preparation/climate_division_data", full.names = TRUE)
+clim_files <- list.files("data_preparation/climate_division_data", full.names = TRUE, pattern = ".csv")
 
 clim_dat <- map_df(clim_files, function(x) read_csv(x, skip = 4) %>% mutate(file_name = basename(x)))
 
 clim_dat <- clim_dat %>% 
   mutate(region_code = substr(file_name, 4,6),
          Region = case_when(region_code == "060" ~ "Bristol Bay Borough",
+                            region_code == "122" ~ "Kenai Peninsula Borough",
                             region_code == "150" ~ "Kodiak Island Borough",
                             region_code == "170" ~ "Matanuska-Susitna Borough",
                             region_code == "261" ~ "Valdez-Cordova Census Area"),
-         parameter = case_when(grepl("pcp", file_name) ~ "Precipitation",
-                              grepl("tavg", file_name) ~ "Temperature"),
-         Value_metric = case_when(parameter == "Precipitation" ~ Value * 25.4,
-                                  parameter == "Temperature" ~ (Value - 32) * 5/9),
+         parameter = factor(case_when(grepl("pcp", file_name) ~ "Summer Precipitation",
+                              grepl("tavg", file_name) & grepl("3-8", file_name) ~ "Summer Temperature",
+                              TRUE ~ "Spring Temperature"), levels = c("Spring Temperature", "Summer Temperature", "Summer Precipitation")),
+         Value_metric = case_when(parameter == "Summer Precipitation" ~ Value * 25.4,
+                                  parameter %in% c("Summer Temperature", "Spring Temperature") ~ (Value - 32) * 5/9),
          Year = as.numeric(substr(Date, 1, 4)))
 
 
@@ -91,6 +68,7 @@ clim_dat %>%
   mutate(Value_metric_sc = scale(Value_metric)) %>% 
   ggplot(aes(x = Year, y = Value_metric_sc, color = Region)) +
   geom_line() +
+  geom_hline(aes(yintercept = 0)) +
   scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
   facet_wrap(~parameter, scales = "free", ncol = 1) +
   theme_bw() +
@@ -148,31 +126,4 @@ saveRDS(snowtel, "output/snowtel.rds")
 
 
 
-
-```{r}
-#Data from Modis Script
-lcld.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_wtd_lcld_mn.csv', header = TRUE)
-
-lcld.long <- lcld.df %>% 
-  pivot_longer(cols = wtd_lcld_mn_2001:wtd_lcld_mn_2019, names_to = "metric", values_to = "wtd_lcld") %>% 
-  mutate(Year = as.numeric(substr(metric, 13, 17)),
-         wtd_lcld_jd = wtd_lcld - 365) %>% 
-  select(-metric)
-
-#Data from spatial join script
-sites.df <- read.csv(file = 'data_preparation/sensitivity_drivers/AKSSF_sites_sj_maxfac.csv', header = TRUE)
-
-#dput(colnames(sites.df))
-site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
-                    "Area_km2","area_diff","size_diff", "lat", "lon",
-                    'str_ord','str_slope', "dist_coast_km", "ds_dist_outlet")
-
-sites.df <- sites.df %>% 
-  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
-  size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
-                        TRUE~'No Change')) %>% 
-  subset(select = site_keep_cols )
-
-left_join(sites.df, lcld.long)
-```
 

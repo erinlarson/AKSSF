@@ -309,5 +309,21 @@ tidy1 %>%
 
 ```
 
+What do Cook Inlet sites look like?
+
+```{r}
+
+tidy1 %>% 
+  filter(SiteID %in% c("CIK_14", "CIK_3", "CIK_30", "CIK_35", "CIK_38", "CIK_4", "CIK_6", "CIK_8"), term == "airDT_wk")  %>% 
+  group_by(SiteID) %>% 
+   mutate(ts_sc = scale(estimate)) %>% 
+  ggplot(aes(x = year, y = ts_sc, color = SiteID)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(aes(yintercept = 0)) +
+  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) 
+  
+
+```
 
 
