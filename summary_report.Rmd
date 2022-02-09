@@ -568,10 +568,14 @@ Comparison of standardized (subtract mean and divide by sd) temperature and prec
 ```{r}
 clim_dat <- readRDS("output/clim_dat.rds")
 
+scale_var <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+
 #deviations from normal
 clim_dat %>% 
   group_by(Region, parameter) %>% 
-  mutate(Value_metric_sc = scale(Value_metric)) %>% 
+  dplyr::mutate(Value_metric_sc = scale_var(Value_metric)) %>% 
   ggplot(aes(x = Year, y = Value_metric_sc, color = Region)) +
   geom_line() +
   scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
@@ -595,7 +599,7 @@ snowtel <- readRDS("output/snowtel.rds")
 snowtel %>% 
   filter(!grepl("Gulk|Tela", Snowtel_site)) %>% 
   group_by(Snowtel_site) %>% 
-  mutate(swe_sc = scale(Apr1_SWE)) %>% 
+  mutate(swe_sc = scale_var(Apr1_SWE)) %>% 
   ggplot(aes(x = Year, y = swe_sc, color = Snowtel_site)) +
   geom_line() +
   scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
