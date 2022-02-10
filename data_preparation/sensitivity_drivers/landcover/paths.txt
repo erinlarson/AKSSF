@@ -1,0 +1,5 @@
+dm data:
+AWC = "D:\\Basedata\\AWC\\AWC_2021_SpeciesEvents.gdb\\awcEventArcs"
+NHD Parent folder = "D:\\Basedata\\NHDPlus"
+NHD WBD HU12 = "D:\\Basedata\\NHD_H_Alaska_State_GDB.gdb\\WBD\\WBDHU12"
+
