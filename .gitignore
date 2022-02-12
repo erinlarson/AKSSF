@@ -8,10 +8,11 @@ Outline-Objectives.html
 output
 hydrography
 data preparation/formatted data
-data preparation/final data
 data_preparation/formatted_data
-data_preparation/final_data
 data_preparation/source
+data_preparation/final_data/Daily_Data
+data_preparation/final_data/archive
+data_preparation/final_data/Metadata
 .httr-oauth
 .httr-oauth-SUSPENDED
 Deshka_Attributes_02072020_Lakes_Wetlands_Working.ipynb
