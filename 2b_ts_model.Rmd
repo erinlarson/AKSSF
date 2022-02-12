@@ -51,7 +51,7 @@ Model thermal sensitivities: mixed model or RF with random effects. First tested
 
 ```{r read in data}
 
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds") #saved from combining response and covariates above.
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds") #saved from combining response and covariates in 2a.
 
 md <- read_rds("data_preparation/final_data/md.rds")
 mod_dat <- left_join(mod_dat, md %>% dplyr::select(SiteID, deshka, HUC8, Name, Latitude, Longitude, SourceName, Waterbody_name), by = c("Site" = "SiteID")) 

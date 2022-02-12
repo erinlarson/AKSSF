@@ -1,18 +1,17 @@
 
 # Temp Metrics
 #####################
-# 10 metrics from previous Mat-Su work
+# 40 metrics from previous Mat-Su work
 # updates based on original R script: Temperature Descriptor Function - daily inputs.R
 ####################
 
 #Notes:
 # - convert to kelvin for correct calculation of cv
 # - added sd since units are in c vs c2 for var
-# - converted several metrics based on daily maximum temperatures to daily mean 
-#   since we only have means for UW dataset. Also removed anything related to
-#   daily ranges.
 
-# datainput <- deshka_sites_complete_summers
+
+# datainput <- sites_complete_summers
+
 
 tempmetrics <- function(datainput) {
   
@@ -23,7 +22,7 @@ tempmetrics <- function(datainput) {
   tab <- data.frame()
   
   site_years <- datainput %>% 
-    distinct(SiteID, year) %>% 
+    distinct(SiteID, Year) %>% 
     ungroup()
   
   for(i in 1:nrow(site_years)) {
@@ -31,11 +30,18 @@ tempmetrics <- function(datainput) {
       arrange(sampleDate) 
     
     #magnitude metrics
-    ma <- dat %>%
-      mutate(ma_mean = rollapply(meanDT, 7, mean, align = 'center', fill = NA)) %>% 
+    mag_mets <- dat %>%
+      mutate(ma_mean = rollapply(meanDT, 7, mean, align = 'center', fill = NA),
+             ma_max = rollapply(maxDT, 7, mean, align = 'center', fill = NA)) %>% 
       summarize(MA7d_DAT = max(ma_mean, na.rm = TRUE),
-                MxDAT = max(meanDT, na.rm = TRUE)) %>% 
-      select(MA7d_DAT, MxDAT)
+                MA7d_DMT = max(ma_max, na.rm = TRUE),
+                MxDAT = max(meanDT, na.rm = TRUE),
+                MnDAT = mean(meanDT, na.rm = TRUE),
+                MxDMT = max(maxDT, na.rm = TRUE),
+                MnDMT = mean(maxDT, na.rm = TRUE),
+                MnDNT = mean(minDT, na.rm = TRUE),
+                NDNT = min(minDT, na.rm = TRUE)) %>% 
+      mutate(MxDIFF = MxDMT - NDNT)
     
     monthly <- dat %>% 
       mutate(month_abb = month(sampleDate, label = TRUE, abbr = TRUE),
@@ -49,46 +55,75 @@ tempmetrics <- function(datainput) {
       filter(mon_ct/month_den > 0.8) %>% 
       select(-month_den, -mon_ct) %>% 
       pivot_wider(values_from = mon_mn, names_from = month_abb)
-    
-    mag <- bind_cols(ma, monthly)
+
+    mag <- bind_cols(mag_mets, monthly)
     
     #variability metrics
     var <- dat %>% 
-      mutate(meanDT_Kelvin = meanDT + 273.15) %>% 
+      mutate(meanDT_Kelvin = meanDT + 273.15,
+             drange = maxDT - minDT) %>% 
       summarize(SIGMA_DAT = var(meanDT),
+                SIGMA_DMT = var(maxDT),
+                SIGMA_DNT = var(minDT),
                 SD = sd(meanDT),
                 CV_DAT = sd(meanDT)/mean(meanDT), #for comparison only
-                CV_DAT_K = sd(meanDT_Kelvin)/mean(meanDT_Kelvin)) %>% 
-      select(SIGMA_DAT, SD, CV_DAT, CV_DAT_K)
+                CV_DAT_K = sd(meanDT_Kelvin)/mean(meanDT_Kelvin),
+                RANGE_MAX = max(drange, na.rm = TRUE),
+                RANGE_MN = mean(drange, na.rm = TRUE)) 
     
+
     #frequency metrics
     freq <- dat %>% 
-      summarize(SUM_13 = sum(meanDT > 13),
-                SUM_18 = sum(meanDT > 18),
-                SUM_20 = sum(meanDT > 20))
+      summarize(SUM_13_DMT = sum(maxDT > 13),
+                SUM_18_DMT = sum(maxDT > 18),
+                SUM_20_DMT = sum(maxDT > 20))
     
     #duration metrics
-    rle13 <- data.frame(unclass(rle(dat$meanDT > 13)))
-    dur13 <- ifelse(nrow(rle13[rle13$values==TRUE,]) > 0, mean(rle13[rle13$values==TRUE,"lengths"]), 0)
-    rle18 <- data.frame(unclass(rle(dat$meanDT > 18)))
-    dur18 <- ifelse(nrow(rle18[rle18$values==TRUE,]) > 0, mean(rle18[rle18$values==TRUE,"lengths"]), 0)
-    rle20 <- data.frame(unclass(rle(dat$meanDT > 20)))
-    dur20 <- ifelse(nrow(rle20[rle20$values==TRUE,]) > 0, mean(rle20[rle20$values==TRUE,"lengths"]), 0)
-    dur <- data.frame(DUR_mn13 = dur13, DUR_mn18 = dur18, DUR_mn20 = dur20)
+    #these are mean event length and max event length greater than thresholds
+    #added also original duration metrics: no. of events longer than 6 days and number of events total
+    dur13 <- rle(dat$maxDT > 13) %>%
+      unclass() %>% 
+      as_tibble() %>% 
+      summarize(dur13 = case_when(sum(values == TRUE) > 0 ~ mean(lengths[values == TRUE]),
+                                  TRUE ~ 0),
+                dur13mx = case_when(sum(values == TRUE) > 0 ~ as.numeric(max(lengths[values == TRUE])),
+                                    TRUE ~ 0),
+                dur13gt6 = sum(values[values == TRUE & lengths > 6]),
+                dur13ct = sum(values[values == TRUE]))
+    dur18 <- rle(dat$maxDT > 18) %>%
+      unclass() %>% 
+      as_tibble() %>% 
+      summarize(dur18 = case_when(sum(values == TRUE) > 0 ~ mean(lengths[values == TRUE]),
+                                  TRUE ~ 0),
+                dur18mx = case_when(sum(values == TRUE) > 0 ~ as.numeric(max(lengths[values == TRUE])),
+                                    TRUE ~ 0),
+                dur18gt6 = sum(values[values == TRUE & lengths > 6]),
+                dur18ct = sum(values[values == TRUE]))
+    dur20 <- rle(dat$maxDT > 20) %>%
+      unclass() %>% 
+      as_tibble() %>% 
+      summarize(dur20 = case_when(sum(values == TRUE) > 0 ~ mean(lengths[values == TRUE]),
+                                  TRUE ~ 0),
+                dur20mx = case_when(sum(values == TRUE) > 0 ~ as.numeric(max(lengths[values == TRUE])),
+                                    TRUE ~ 0),
+                dur20gt6 = sum(values[values == TRUE & lengths > 6]),
+                dur20ct = sum(values[values == TRUE]))
+    
+    dur <- cbind(dur13, dur18, dur20)
     
     #timing metrics
     timmax <- dat %>% 
-      filter(meanDT == mag$MxDAT)%>% 
-      slice(1) %>% 
+      filter(maxDT == mag$MxDMT)%>% 
+      slice(1) %>% #first day when the daily maximum occurs 
       pull(sampleDate) %>% 
       yday()
     timmwmt <- dat %>%
-      mutate(ma_mean = rollapply(meanDT, 7, mean, align = 'center', fill = NA)) %>% 
-      filter(ma_mean == mag$MA7d_DAT) %>% 
+      mutate(ma_max = rollapply(maxDT, 7, mean, align = 'center', fill = NA)) %>% 
+      filter(ma_max == mag$MA7d_DMT) %>% 
       slice(1) %>% 
       pull(sampleDate) %>% 
       yday()
-    tim <- data.frame(MxDAT_jd = timmax, MA7d_DAT_jd = timmwmt)
+    tim <- data.frame(MxDMT_jd = timmax, MA7d_DMT_jd = timmwmt)
     
     newrow <- bind_cols(site_years %>% slice(i), mag, var, freq, dur, tim)
     tab <- bind_rows(tab, newrow) 

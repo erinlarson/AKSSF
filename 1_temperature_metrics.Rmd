@@ -12,56 +12,46 @@ library(lubridate)
 library(readxl)
 ```
 
-1. Read in final dataset
+# Read in final dataset
 
-New data from 11-21 is good with ls sites fixed
-
-```{r read in final dataset}
-temp <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
-md <- readRDS("data_preparation/final_data/md.rds")
-```
-
-Bring in new UW dataset with min and max for Tim Cline's sites that were originally just daily means. Note that these data were QAed in the SWSHP repo and I had to remove lots of data - duplicate logger types, high maxes indicating air temps, and means off by > 1 degree from the means archived by Tim and used to calculate TS. So, we may end up with a shorter list of site years for UW data for the thermal regime analysis.
-
-```{r new uw daily data}
-
-```
-
-
-
-Count sites by region.
+Read in new daily dataset that has daily min and max from UW data - received from Jackie and QAed in SWSHP repo. Note that this won't exactly match the sites and dates in the DFA analysis. There we some sites and years Jackie didn't have data for, some dates got removed so summer data may not be complete, and there were also some missing min and max for USGS sites.
 
 ```{r}
+tr_dat <- readRDS("data_preparation/final_data/daily_dat_forTR_2022-02-08.rds") %>% 
+  mutate(Year = year(sampleDate))
+
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+
 md %>% 
-  count(Region)
+  distinct(HUC8, Name) %>% 
+  arrange(HUC8)
 ```
 
 
-
-
-2. Calculate temperature metrics
+# Calculate temperature metrics
 
 This takes a long time to run. Saved as an rds to the output folder. Currently, the metrics files is based off of daily means only because missing max and min for UW. Emailed Tim to see if he has the raw data handy and could provide daily max, min, and mean (11/15/21).
 
 ```{r calculate metrics, eval = FALSE}
 
-source("temp_metrics_fcn_2021.R")
+source("temp_metrics_fcn_akssf_2021.R")
 
-names(temp)
-
-littlesu_sites <- temp %>% distinct(SiteID) %>% filter(grepl("lsr", SiteID))
-
-sites_complete_summers <- anti_join(temp, littlesu_sites) %>%
-  group_by(SiteID, year = year(sampleDate)) %>% 
+sites_complete_summers <- tr_dat %>%
+  filter(month(sampleDate) %in% 6:8) %>% 
+  group_by(SiteID, Year) %>% 
   mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
-  filter(percent_complete > 0.8)
+  filter(percent_complete >= 0.8)
 
-#lose 486 site years - which are all 2019 when we didn't have summer data!
-nrow(temp %>% distinct(SiteID, year = year(sampleDate))) - nrow(sites_complete_summers %>% count(SiteID, year))
-
-left_join(sites_complete_summers %>% ungroup() %>% distinct(SiteID), md %>% select(SiteID, Region)) %>% 
+tr_dat %>%
+  filter(month(sampleDate) %in% 6:8) %>% 
+  group_by(SiteID, Year) %>% 
+  mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
+  filter(percent_complete < 0.8) %>% 
+  distinct(SiteID, Year) %>% #441 site years
   ungroup() %>% 
-  count(Region)
+  group_by(SiteID) %>% 
+  summarize(yrs_missing = paste(Year, collapse = ", "))
+
 
 metrics <- sites_complete_summers %>% 
   tempmetrics(.)
@@ -71,26 +61,306 @@ saveRDS(metrics, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
 ```
 
 
+Add in the regions and thermal sensitivity from the model data frame.
 
-3. Explore thermal diversity across regions
+```{r add regions and ts}
+# metrics <- read_rds("output/metrics_2021-11-15.rds")
+
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds") #saved from combining response and covariates in 2a.
+
+left_join(metrics %>% rename(Site = SiteID), mod_dat %>% select(Site, Year, TempSens, Region)) %>% 
+  filter(is.na(TempSens)) %>% 
+  count(Year) #mostly 2020
 
 
-```{r read in saved metrics}
-metrics <- read_rds("output/metrics_2021-11-15.rds")
+metrics2 <- left_join(metrics %>% rename(Site = SiteID), mod_dat %>% select(Site, Year, TempSens, Region)) 
 
 ```
 
 
-Pairwise correlations among metrics.
+# Review outliers for bad data
+
+Convert the metrics long form so can add a group name.
+
+```{r add metric group name}
+mets_lg <- metrics2 %>% 
+  pivot_longer(cols = MA7d_DAT:TempSens, names_to = "metric", values_to = "value") %>% 
+  mutate(group = case_when(grepl("SIGMA|MxDIFF|SD|CV|RANGE", metric) ~ "Variability",
+                           grepl("dur", metric) ~ "Duration",
+                           grepl("SUM", metric) ~ "Frequency",
+                           grepl("jd", metric) ~ "Timing",
+                           metric == "TempSens" ~ "Sensitivity",
+                           TRUE ~ "Magnitude")) 
+
+```
+
+Pairplots of different metrics by group. Good way to see outliers and correlations.
 
 ```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y, use = "complete.obs"))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
 
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+mets_lg %>% 
+  filter(group %in% c("Magnitude", "Timing"))  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(MA7d_DAT:Jun) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+mets_lg %>% 
+  filter(group == "Variability")  %>%
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(MxDIFF:RANGE_MN) %>% 
+  pairs(upper.panel = panel.cor)
+
+mets_lg %>% 
+  filter(group %in% c("Frequency", "Duration"))  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(SUM_13_DMT:dur20ct) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+  
+```
+
+Check some of the sites with large maximum daily range and large variance.
+
+* 2018 for Little Martin River seems suspicious, possibly buried for most of the summer.
+* 2015 for silver salmon creek, suspiciously warm (24) max temp in early june about 5 days earlier than any of the other bb sites. But, there are many sites with 2015 data that were warm in early June, had a cold period, and got warm again. This site drains a lot of wetlands and lakes so hard to say. 
+
+
+```{r variance of dmt outliers}
+mets_lg %>% 
+  filter(metric == "SIGMA_DMT") %>% 
+  arrange(desc(value))
+
+#2013 is outlier for variance of daily max, but looks to be a year that started really cold and got warm.
+# this matches pattern in UW dataset, 2013 big snow year, but one of warmest years for stream temp in their dataset.
+sites_complete_summers %>% 
+  filter(SiteID  == "USFS_Solf Lake Fish Pass") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+#2018 was outlier. Hard to say, could have been buried coming into 2018 and also 2012. 2012 was a big snow year as was 2013,
+# but not 2018. 
+sites_complete_summers %>% 
+  filter(SiteID  == "USFS_Little Martin River") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+mod_dat %>% 
+  filter(Site  == "USFS_Little Martin River") %>%
+  select(wtd_lcld_jd, Year) %>% 
+  arrange(desc(wtd_lcld_jd))
+
+#2013 was outlier, but I think this is valid, big snow year means cold in June.
+# many of the UW sites got really warm later that summer. 
+sites_complete_summers %>% 
+  filter(SiteID  == "UW_Nerka Hidden Lake Creek") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+```
+
+```{r max range outliers}
+
+mets_lg %>% 
+  filter(metric == "RANGE_MAX") %>% 
+  arrange(desc(value))
+
+#2013 was an outlier, but that was a hot year in bb.
+sites_complete_summers %>% 
+  filter(SiteID  == "accs_mutsk09") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+#outlier from 2015, but the large spike was June 10, could have been when things were starting to warm up.
+sites_complete_summers %>% 
+  filter(SiteID  == "UW_Aleknagik Silver Salmon Creek") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x") 
+
+#check date of max temp for other sites in 2015.
+metrics2 %>% 
+  filter(Site  == "UW_Aleknagik Silver Salmon Creek", Year == 2015) %>% 
+  select(MxDMT_jd) #161
+
+# about 5 days earlier than the rest of the sites.
+metrics2 %>% 
+  filter(Year == 2015, Region == "Bristol_Bay") %>% 
+  select(MxDMT_jd) %>%
+  arrange(MxDMT_jd) %>% 
+  ggplot() +
+  geom_histogram(aes(x = MxDMT_jd))
+
+#check max temps
+metrics2 %>% 
+  filter(Year == 2015, Region == "Bristol_Bay") %>% 
+  select(MxDMT) %>% 
+  ggplot() +
+  geom_histogram(aes(x = MxDMT))
+
+#warmest temp outside of bad newhalen data.
+metrics2 %>% 
+  filter(Year == 2015, Region == "Bristol_Bay") %>% 
+  select(Site, MxDMT) %>% 
+  arrange(desc(MxDMT))
+```
+
+Obvious outlier on duration 20, but also check multiple outliers for 18. All of them seem valid, except for the Newhalen.
+
+* remove newhalen river 2015.
+
+
+```{r}
+mets_lg %>% 
+  filter(metric == "dur20") %>% 
+  arrange(desc(value))
+
+mets_lg %>% 
+  filter(metric == "dur18") %>% 
+  arrange(desc(value))
+
+sites_complete_summers %>% 
+  filter(SiteID  == "NPS_Newhalen_River") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x") +
+  labs(title="NPS_Newhalen_River")
+# ggsave("output/nps_bad_data.jpeg")
+
+#small deshka stream in 2019
+sites_complete_summers %>% 
+  filter(SiteID  == "OWL1") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+#our hot trib in little su in 2016, which was a pretty warm summer
+sites_complete_summers %>% 
+  filter(SiteID  == "lslak7") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+#wow the gulkana got really hot in 2019
+sites_complete_summers %>% 
+  filter(SiteID  == "usgs_15200280") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+#2015 is outlier, looks pretty normal for this site.
+#note this is a lake outlet, some strange minimums in June, but maybe that is normal for lakes during breakup?
+sites_complete_summers %>% 
+  filter(SiteID  == "fws_Long Lake Creek") %>% 
+  ggplot() +
+  geom_line(aes(x = sampleDate, y= maxDT), color = "red") +
+  geom_line(aes(x = sampleDate, y= minDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y= meanDT)) +
+  facet_wrap(~Year, scales = "free_x")
+
+
+```
+
+Make a rolling pdf of plots for all sites that show the max, min, mean faceted by year. Use complete so no straight lines across missing values. This seems like a pretty simple QA step that can flag bad years, burials, air temps, etc. Not sure how I missed the 2015 year for Newhalen.
+
+
+```{r pdf of dailies}
+
+sites <- left_join(sites_complete_summers, md %>% select(Site, Waterbody_name), by = c("SiteID" = "Site")) %>% 
+  ungroup() %>% 
+  distinct(SiteID, Waterbody_name)
+
+pdf("output/daily mean max min-all sites.pdf", width = 10)
+for(i in 1:nrow(sites)) {
+  dat <- left_join(sites %>% slice(i), sites_complete_summers)
+  dat2 <- dat %>%
+    mutate(date = as.Date(sampleDate)) %>% 
+    complete(date = seq.Date(min(date), max(date), by="day")) %>% 
+    mutate(Year = year(date)) %>% 
+    group_by(Year) %>% 
+    mutate(yrct = sum(!is.na(meanDT))) %>% 
+    filter(!yrct == 0)
+  p1 <- dat2 %>% 
+    filter(month(date) %in% 6:8) %>% 
+    ggplot() +
+    geom_line(aes(x = date, y= maxDT), color = "red") +
+    geom_line(aes(x = date, y= minDT), color = "blue") +
+    geom_line(aes(x = date, y= meanDT)) +
+    facet_wrap(~Year, scales = "free_x") +
+    labs(title = sites %>% slice(i) %>% pull(SiteID),
+         subtitle = sites %>% slice(i) %>% pull(Waterbody_name))
+  print(p1)
+}
+dev.off()
+
+
+```
+
+Observations: (note to Dustin: I trust accs, cik (including deshka sites that start with deshka, moose, or kroto), usgs so skimmed those, focussed on other data providers...)
+
+* kdk_eftrv01 2016 looks buried.
+* USFS_Ibeck Creek-Low has really large daily variation in 2016/2017, but not 18/19. This doesn't match with snow or precip.
+* USFS_Little Martin River looks buried for half of 2012 and 2018.
+* USFS_Power Creek looks buried for parts of 2016, 2018, and 2019.
+* UW_Nerka Sam Creek possible air temp in July 2013.
+* UW_Aleknagik Big Whitefish looks buried in 2012, but also other years with low daily range.
+
+
+
+```{r}
+mod_dat %>% 
+  filter(Site == "USFS_Ibeck Creek-Low") %>% 
+  select(Year, summer_precip, wtd_lcld_jd)
 ```
 
 
 
-Note that to get information from md, need to use distinct. There are multiple entries for a few sites that were valid, but we combined into one time series.
+# Data exploration
 
+pca
+cluster analysis
 
 ```{r}
 
