@@ -99,7 +99,20 @@ awcQcDict = {'Bristol_Bay_2088326': '324-10-10150-2053',
              'Copper_River_75003900039073': '228-70-10500',
              'Copper_River_75003900027771': '212-10-10010-2052'
              }
+
 # cat_ID_con to corresponding AWC code from AWCLakeEvents (2021) fc
 awcLakesQcLakesDict = {'Bristol_Bay_2087913': '324-10-10150-2207-0030',
                        'Bristol_Bay_2068072': '324-10-10150-2207-0030'
                        }
+
+# Dictionary to relate catchments to awc using awc OIDs for those missed in spatial join
+addQcDict = {'Cook_Inlet_75000200005444':['33293','33377','33783','34180','34507','34887','35179'],
+             'Copper_River_75003900039073':['29073','29201','30133','29280','30050'],
+             'Bristol_Bay_2088326':['10834','11507','11797','11853','12520'],
+             'Bristol_Bay_4076505':['19499','19742','20129','20309'],
+             'Bristol_Bay_4088904':['18865'],
+             'Kodiak_49617':['2136','2348','2586','3583','4384','2989','3931'],
+             'Prince_William_Sound_28086':['20731','21518'],
+             'Prince_William_Sound_43383':['28851','30379'],
+             'Prince_William_Sound_46513':['29224','30224','30481']
+            }
