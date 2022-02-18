@@ -1,5 +1,9 @@
+# Network INPUTS
 "T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb\\AKSSF_all_cats_int_merge"
 "T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb\\awcEventArcs_2021"
+"T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb\\AWCLakeEvents"
+"T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb"
+"T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb\\AKSSF_all_sites_sj_merge"
 
 
 # cat_ID_con to corresponding AWC code from awcEventsArcs (2021) fc
