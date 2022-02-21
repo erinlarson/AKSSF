@@ -16,6 +16,8 @@ library(readxl)
 
 Read in new daily dataset that has daily min and max from UW data - received from Jackie and QAed in SWSHP repo. Note that this won't exactly match the sites and dates in the DFA analysis. There we some sites and years Jackie didn't have data for, some dates got removed so summer data may not be complete, and there were also some missing min and max for USGS sites.
 
+* remove nps newhalen for 2015, obvious air temperatures when compared to other years.
+
 ```{r}
 tr_dat <- readRDS("data_preparation/final_data/daily_dat_forTR_2022-02-08.rds") %>% 
   mutate(Year = year(sampleDate))
@@ -25,6 +27,10 @@ md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 md %>% 
   distinct(HUC8, Name) %>% 
   arrange(HUC8)
+
+tr_dat <- tr_dat %>% 
+  filter(!(SiteID == "NPS_Newhalen_River" & year(sampleDate) == 2015))
+
 ```
 
 
@@ -42,6 +48,8 @@ sites_complete_summers <- tr_dat %>%
   mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
   filter(percent_complete >= 0.8)
 
+nrow(tr_dat %>% distinct(SiteID, Year)) - nrow(sites_complete_summers %>% distinct(SiteID, Year))
+
 tr_dat %>%
   filter(month(sampleDate) %in% 6:8) %>% 
   group_by(SiteID, Year) %>% 
@@ -52,16 +60,16 @@ tr_dat %>%
   group_by(SiteID) %>% 
   summarize(yrs_missing = paste(Year, collapse = ", "))
 
-
+#note warming is because the function evaluates the RHS of a case_when even though not true
 metrics <- sites_complete_summers %>% 
   tempmetrics(.)
 
-saveRDS(metrics, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
 
 ```
 
 
 Add in the regions and thermal sensitivity from the model data frame.
+Add in the filter that removes most of the Deshka sites so they don't overwhelm the summaries.
 
 ```{r add regions and ts}
 # metrics <- read_rds("output/metrics_2021-11-15.rds")
@@ -73,9 +81,22 @@ left_join(metrics %>% rename(Site = SiteID), mod_dat %>% select(Site, Year, Temp
   count(Year) #mostly 2020
 
 
-metrics2 <- left_join(metrics %>% rename(Site = SiteID), mod_dat %>% select(Site, Year, TempSens, Region)) 
+metrics2 <- left_join(metrics %>% rename(Site = SiteID), 
+                      mod_dat %>% select(Site, Year, TempSens, Region)) %>% 
+  left_join(md %>% select(Site, subset1, deshka))
+
 
 ```
+Save metrics data frame with the regions and subset1 on there.
+
+```{r save metrics}
+
+saveRDS(metrics2, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
+
+
+```
+
+
 
 
 # Review outliers for bad data
@@ -300,7 +321,13 @@ sites_complete_summers %>%
   geom_line(aes(x = sampleDate, y= meanDT)) +
   facet_wrap(~Year, scales = "free_x")
 
+mets_lg %>% 
+  filter(metric == "dur20mx") %>% 
+  arrange(desc(value))
 
+mets_lg %>% 
+  filter(metric == "dur20gt6") %>% 
+  arrange(desc(value))
 ```
 
 Make a rolling pdf of plots for all sites that show the max, min, mean faceted by year. Use complete so no straight lines across missing values. This seems like a pretty simple QA step that can flag bad years, burials, air temps, etc. Not sure how I missed the 2015 year for Newhalen.
@@ -338,7 +365,7 @@ dev.off()
 
 ```
 
-Observations: (note to Dustin: I trust accs, cik (including deshka sites that start with deshka, moose, or kroto), usgs so skimmed those, focussed on other data providers...)
+Observations: 
 
 * kdk_eftrv01 2016 looks buried.
 * USFS_Ibeck Creek-Low has really large daily variation in 2016/2017, but not 18/19. This doesn't match with snow or precip.
@@ -355,12 +382,132 @@ mod_dat %>%
   select(Year, summer_precip, wtd_lcld_jd)
 ```
 
+# Reduced list of metrics
+
+```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y, use = "complete.obs"))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+mets_lg %>% 
+  filter(group %in% c("Magnitude", "Timing")|metric == "TempSens")  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(MA7d_DAT:TempSens) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+mets_lg %>% 
+  filter(group == "Variability")  %>%
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(MxDIFF:RANGE_MN) %>% 
+  pairs(upper.panel = panel.cor)
+
+mets_lg %>% 
+  filter(group %in% c("Frequency", "Duration"))  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(SUM_13_DMT:dur20ct) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+  
+```
+
+For Mat-Su thermal regimes, settled on 10 metrics:
+
+* MWMT = MA7d_DMT
+* Range = RANGE_MAX 
+* Variance = SIGMA_DMT
+* CV - not valid for C, could use CV_DAT_K or SD, which are exactly correlated, but these have high correlation to variance
+* Freq_13 = SUM_13_DMT
+* Freq_18 = SUM_18_DMT
+* Dur_13 - dur13mx
+* Dur_18 = dur18mx
+* Tim_Max = MxDMT_jd
+* Tim_MWMT = MA7d_DMT_jd
+
+Others to consider that aren't r > 0.8 with metrics above:
+
+* NDNT - minimum of daily mins
+* TempSens
+* MnDAT - mean of daily averages over summer, e.g. mean summer temperature
 
 
-# Data exploration
+
+```{r}
+mets_12 <- c("MA7d_DMT", "RANGE_MAX", "SIGMA_DMT", "SUM_13_DMT", "SUM_18_DMT", "dur13mx", "dur18mx",
+             "MxDMT_jd", "MA7d_DMT_jd", "NDNT", "TempSens", "MnDAT", "RANGE_MN", "MxDMT")
+
+mets_lg %>% 
+  # distinct(metric)
+  filter(metric %in% mets_12)  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(MA7d_DMT:TempSens) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+mets_lg %>% 
+  distinct(Site, Year) %>% 
+  count(Site) %>% 
+  arrange(desc(n))
+
+mets_lg %>% 
+  filter(metric %in% mets_11, Site == "CIK_6") %>% 
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  arrange(TempSens) %>% 
+  select(MA7d_DMT:TempSens) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+
+mets_lg %>% 
+  filter(metric %in% mets_11)  %>%
+  select(-group) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>%
+  select(TempSens, Region, RANGE_MAX) %>% 
+  filter(!is.na(TempSens)) %>% 
+  ggplot(aes(x = TempSens, y = RANGE_MAX)) +
+  geom_point() +
+  facet_wrap(~Region)
+  
+
+```
+
+
+```{r}
+mets10_scwd <- mets_lg %>% 
+  filter(metric %in% mets_10) %>% 
+  group_by(metric) %>% 
+  mutate(value_sc = scale(value)) %>% 
+  select(Site, Year, metric, value_sc) %>% 
+  pivot_wider(names_from = metric, values_from = value_sc)
+
+summary(mets10_scwd)
+
+mets10_dist <- dist(mets10_scwd %>% select(-Site, -Year))
+
+hclust(mets10_dist, method = "ward.D2") %>% plot()
+
+
+```
+
+
 
 pca
-cluster analysis
 
 ```{r}
 

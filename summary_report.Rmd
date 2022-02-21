@@ -66,7 +66,7 @@ trend_dat %>%
 As an alternative modeling method to estimate stream thermal sensitivity, Tim used the air temperature coefficient in a time series model for each site and summer using an auto-regressive lag of 1 day on the residuals (AR1 model). These results better matched the patterns between air-stream temperatures at the different sites.
 
 ```{r ar1 TS}
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-02.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
 
 mod_dat %>% 
   ggplot(aes(TempSens)) +
@@ -408,6 +408,142 @@ Summary table indicates variable importance and also lists surrogate splits. Int
 ```{r}
 summary(ct_pr)
 ```
+
+## Cook Inlet Regression Tree
+
+
+```{r}
+ct_ci <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% filter(Region == "Cook_Inlet"), method = "anova")
+# plotcp(ct_ci) 
+# printcp(ct_ci) 
+cp_parm <- 0.010000
+ct_cipr <- prune(ct_ci, cp = cp_parm)
+
+par(xpd = TRUE)
+plot(ct_cipr, compress = TRUE)
+text(ct_cipr, use.n = TRUE)
+
+```
+
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_cipr)
+```
+
+
+
+
+## Bristol Bay Regression Tree
+
+
+```{r}
+ct_bb <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% filter(Region == "Bristol_Bay"), method = "anova")
+
+# plotcp(ct_bb) 
+# printcp(ct_bb) 
+cp_parm <- 0.014908     
+ct_bbpr <- prune(ct_bb, cp = cp_parm)
+
+par(xpd = TRUE)
+plot(ct_bbpr, compress = TRUE)
+text(ct_bbpr, use.n = TRUE)
+
+```
+
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_bbpr)
+```
+
+
+
+## Kodiak Regression Tree
+
+
+```{r}
+ct_kod <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% filter(Region == "Kodiak"), method = "anova")
+plotcp(ct_kod) 
+printcp(ct_kod) 
+cp_parm <- 0.053756      
+ct_kodpr <- prune(ct_kod, cp = cp_parm)
+
+par(xpd = TRUE)
+plot(ct_kodpr, compress = TRUE)
+text(ct_kodpr, use.n = TRUE)
+
+```
+
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_kodpr)
+```
+
+
+
+## Prince William Sound Regression Tree
+
+
+```{r}
+ct_pws <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% filter(Region == "Prince_William_Sound"), method = "anova")
+ # plotcp(ct_pws) 
+ # printcp(ct_pws) 
+cp_parm <- 0.020529      
+ct_pwspr <- prune(ct_pws, cp = cp_parm)
+
+par(xpd = TRUE)
+plot(ct_pwspr, compress = TRUE)
+text(ct_pwspr, use.n = TRUE)
+
+```
+
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_pwspr)
+```
+
+
+
+## Copper River Regression Tree
+
+
+```{r}
+ct_cr <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
+                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
+                    data = mod_dat %>% filter(Region == "Copper_River"), method = "anova")
+ plotcp(ct_cr) 
+ printcp(ct_cr) 
+cp_parm <- 0.010826      
+ct_crpr <- prune(ct_cr, cp = cp_parm)
+
+par(xpd = TRUE)
+plot(ct_crpr, compress = TRUE)
+text(ct_crpr, use.n = TRUE)
+
+```
+
+Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
+
+```{r}
+summary(ct_crpr)
+```
+
 
 
 # Post-hoc exploration of regional TS

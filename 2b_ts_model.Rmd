@@ -19,28 +19,31 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-library(readxl)
-library(lubridate)
-library(GGally)
-library(corrplot)
-library(car)
-library(nlme)
-library(MuMIn)
-library(gpboost)
-library(randomForest)
-library(rfUtilities)
-library(MASS)
-library(geosphere)
-library(sf)
-library(glmmLasso)
-library(ggpubr)
-library(rnoaa)
-library(e1071)
-library(rpart)
-library(partykit)
-library(rpart.plot)
-library(REEMtree)
-library(MixRF)
+# library(readxl)
+# library(lubridate)
+# library(GGally)
+# library(corrplot)
+# library(car)
+# library(nlme)
+# library(MuMIn)
+# library(gpboost)
+# library(randomForest)
+# library(rfUtilities)
+# library(MASS)
+# library(geosphere)
+# library(sf)
+# library(glmmLasso)
+# library(ggpubr)
+# library(rnoaa)
+# library(e1071)
+# library(rpart)
+# library(partykit)
+# library(rpart.plot)
+# library(REEMtree)
+# library(MixRF)
+library(gbm)
+library(dismo)
+library(pdp)
 library(tidyverse)
 
 ```
@@ -51,7 +54,7 @@ Model thermal sensitivities: mixed model or RF with random effects. First tested
 
 ```{r read in data}
 
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-01-19.rds") #saved from combining response and covariates in 2a.
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds") #saved from combining response and covariates in 2a.
 
 md <- read_rds("data_preparation/final_data/md.rds")
 mod_dat <- left_join(mod_dat, md %>% dplyr::select(SiteID, deshka, HUC8, Name, Latitude, Longitude, SourceName, Waterbody_name), by = c("Site" = "SiteID")) 
@@ -1160,21 +1163,227 @@ mod_dat %>%
 ```
 
 
+# Boosted regression tree
 
-# Climate data for 2001-2019
-
-Anchorage forecast office at airport: GHCND:USC00500275
-King salmon airport: GHCND:USW00025503 (missing 2006-2012)
-Iliamna: GHCND:USW00025506 (even worse only 2001-2005)
-Kodiak airport: GHCND:USW00025501
-Cordova airport: GHCND:USW00026410
+Dismo example
 
 ```{r}
-mynoaakey = "LmempjqpgcLSxDQWiLvuaOAGmscrQCrb"
+library(dismo) 
+data(Anguilla_train)
+angaus.tc5.lr01 <- gbm.step(data=Anguilla_train, gbm.x = 3:13, gbm.y = 2,
+family = "bernoulli", tree.complexity = 5, learning.rate = 0.01, 
+bag.fraction = 0.5)
 
-
-clim_dat <- meteo_pull_monitors(monitors = c('USC00500275', 'USW00025503', 'USW00025506'), date_min = "2001-01-01",
-                      date_max = "2019-12-31", var = c("PRCP", "TAVG", "TMAX", "TMIN"))
+# Find interactions in the gbm model:
+find.int <- gbm.interactions( angaus.tc5.lr01)
+find.int$interactions
+find.int$rank.list
 ```
 
+
+
+Error except when convert mod_dat to a data frame. Also error on interactions when using data frame with other variables, create a simple input data frame with just what I need. SAME ERROR!
+
+
+```{r}
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds") #saved from combining response and covariates in 2a.
+
+mod_dat <-  mod_dat %>% 
+  filter(!(Site == "NPS_Newhalen_River" & Year == 2015))
+
+brt_in <- mod_dat %>% dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+                             wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km,
+                             asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region) %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame()
+
+#remove att and names from snow_ind (output of resid function)
+#this fixed error in interactions function
+brt_in[] <- lapply(brt_in, c)
+str(brt_in)
+
+```
+
+Interactions are all really weak, < 0.5 so they don't indicate any interaction in the perspectives plot. 
+
+```{r}
+
+brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
+                     data = brt_in,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+saveRDS(brt_step, "output/brt_tc5_lr005.rds")
+
+brt_gbm <- gbm(TempSens ~ ., data = brt_in, distribution = "gaussian",
+               n.trees = 8300, interaction.depth = 5, bag.fraction = 0.5,
+               cv.folds = 10, keep.data = TRUE, shrinkage = 0.005)
+
+saveRDS(brt_gbm, "output/brt-gbm_tc5_lr005.rds")
+
+
+summary(brt_step)
+
+gbm.plot(brt_step, smooth = TRUE, n.plots = 8) #plots of first order relationships
+
+brt_simplify <- gbm.simplify(brt_step) #this takes a long time to run.
+
+brt_int <- gbm.interactions(brt_step) #identifies interactions
+brt_int$rank.list
+
+gbm.perspec(brt_step, x = 9, y = 6) #plots interactions
+
+
+interact.gbm(brt_step, data = brt_in, n.trees = 200)
+```
+
+
+
+
+```{r}
+pd <- partial(brt_step, pred.var = c("snow_ind", "log_area"), pred.grid = brt_in, 
+              n.trees = 12250, train = brt_in)
+
+
+
+p1 <- pdp::partial(brt_gbm, pred.var = c("snow_ind", "log_area"), plot = TRUE, chull = TRUE, 
+              train = brt_in, n.trees = 12250)
+
+pp1
+# Default PDP
+pdp1 <- plotPartial(pd, rug = TRUE)
+
+
+# Add contour lines and use a different color palette
+rwb <- colorRampPalette(c("red", "white", "blue"))
+pdp2 <- plotPartial(pd, contour = TRUE, col.regions = rwb)
+
+# 3-D surface
+pdp3 <- plotPartial(pd, levelplot = FALSE, zlab = "cmedv", colorkey = TRUE, 
+                    screen = list(z = -20, x = -60))
+
+# Figure 5
+grid.arrange(pdp1, pdp2, pdp3, ncol = 3)
+```
+
+
+```{r elith model data and deviance explained}
+
+eel_dat <- read_csv("S:/Classes/Machine Learning Seminar/Boosted Regression Trees - supplementary material/jane_1390_sm_appendixs3/data/model.data.csv") %>% 
+  mutate(Method = as.factor(Method)) %>% 
+  as.data.frame()
+
+eel_brt <- gbm_step(Angaus ~ ., data = eel_dat[,-1], distribution = "bernoulli",
+               n.trees = 1000, shrinkage = 0.01, interaction.depth = 5)
+
+eel_brt <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
+                     data = eel_dat[,-1],
+                     tree.complexity = 5, learning.rate = 0.01, bag.fraction = 0.5,
+                     n.folds = 10, family = "bernoulli", max.trees = 2000)
+
+
+summary(eel_brt)
+
+cv.dev <- eel_brt$cv.statistics$deviance.mean # save as estimated cv deviance in output
+null.dev <- eel_brt$self.statistics$mean.null #same as mean total deviance in output
+train.dev <- eel_brt$self.statistics$mean.resid #same as mean residual deviance in output
+
+dev.exp <- (null.dev - cv.dev)/null.dev
+dev.exp.train <- (null.dev - train.dev)/null.dev
+
+```
+
+Site cross-validation for gbm.
+
+```{r brt site cross val}
+site_xval <- mod_dat %>% 
+  distinct(Site) %>% 
+  arrange(Site) %>% 
+  mutate(group = c(rep(1:20, 20), rep(20, 7)))
+
+brt_xval_preds <- data.frame()
+
+ptm <- proc.time()
+
+#save the preds on testing data
+for(i in 1:20) {
+  test <- left_join(site_xval %>% filter(group == i), mod_dat)
+  train <- left_join(site_xval %>% filter(!group == i), mod_dat)
+  brt_train <- train %>% dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+                             wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km,
+                             asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region) %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame()
+
+  brt_train[] <- lapply(brt_train, c)
+  
+  brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
+                     data = brt_train,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000)
+
+  newpreds <- test %>% 
+    select(Site, Year) %>% 
+    mutate(preds = predict(brt_step, test))
+  
+  brt_xval_preds <- bind_rows(newpreds, brt_xval_preds)
+}
+
+# Stop the clock
+proc.time() - ptm
+
+# user  system elapsed 
+# 2890.29   10.11 2899.19 
+2899/60 #48 minutes
+
+brt_xval_preds %>% count(Site, Year)
+
+
+```
+
+
+```{r}
+left_join(mod_dat %>% select(Site, Year, Region, TempSens), brt_xval_preds) %>% 
+  mutate(Region = gsub("_", " ", Region)) %>% 
+  ggplot(aes(x = preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  facet_wrap(~Region) +
+  coord_cartesian(xlim = c(-0.2, 0.8), ylim = c(-0.2, 0.8)) +
+  # stat_cor() +
+  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.75, 1, 0.1)),
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.6, 1, 0.1)),
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity")
+
+
+left_join(mod_dat %>% select(Site, Year, Region, TempSens), brt_xval_preds) %>% 
+  ggplot(aes(x = preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  coord_cartesian(xlim = c(-0.2, 0.8), ylim = c(-0.2, 0.8)) +
+  # stat_cor() +
+  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.75, 1, 0.1)),
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.6, 1, 0.1)),
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity")
+
+```
+
+```{r}
+left_join(site_xval, mod_dat %>% distinct(Site, Region)) %>% 
+  count(group, Region) %>% 
+  arrange(desc(Region))
+
+left_join(site_xval, mod_dat %>% distinct(Site, Region)) %>% 
+  count(Region) 
+
+```
 
