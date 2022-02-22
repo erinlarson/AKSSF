@@ -104,7 +104,6 @@ TempSens_ARIMA <- lapply(2011:2020,FUN=function(y){
 }) %>% bind_rows()
 
 
-
 #End cluster
 stopCluster(cl)
 
