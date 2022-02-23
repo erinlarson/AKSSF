@@ -1,9 +1,4 @@
 ---
-knit: (function(input_file, encoding) {
-  out_dir <- 'docs';
-  rmarkdown::render(input_file,
- encoding=encoding,
- output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 title: "AKSSF Temperature Data Summary"
 output:
   html_document: 
@@ -70,8 +65,8 @@ This map shows the location of all of the sites that we have data for. Selecting
 
 ```{r read in data}
 
-sumdat <- readRDS("data_preparation/final_data/summer_data_wair2021-07-30.rds")
-md <- read_rds("data_preparation/final_data/md.rds")
+sumdat <- readRDS("data_preparation/final_data/archive/summer_data_wair2021-07-30.rds")
+md <- read_rds("data_preparation/final_data/archive/md.rds")
 
 md_sf <- st_as_sf(md, coords = c("Longitude", "Latitude"), crs = "wgs84")
 
@@ -126,7 +121,7 @@ Note: the previous comparison between catchment and site air temperatures was al
 
 Catchments are quite small in both the NHDPlus and our synthetic networks so there isn't a good reason to take an average over the catchment.
 
-```{r get catchments for Cook Inlet}
+```{r get catchments for Cook Inlet, eval = FALSE}
 
 cats_ci <- st_read(dsn = "T:/Aquatic/AKSSF/AKSSF_Hydrography.gdb", layer = "NHDPlusCatchments_CookInlet_Merge")
 

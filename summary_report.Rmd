@@ -34,34 +34,166 @@ library(rpart)
 library(tidyverse)
 ```
 
-This report summarizes the  thermal sensitivity results and draft predictive model for team meeting on February 4, 2022.
-Goals of the meeting are to discuss model inputs and methods and prediction scenarios.
+This report summarizes the new thermal sensitivity results for team meeting on February 22, 2022.
+Goals of the meeting are to discuss new DFA results and future scenarios of thermal sensitivity.
 
 Objectives: 
 
-1. Build a predictive model for stream thermal sensitivity (TS). 
-2. Develop scenarios to understand effects of warming stream temperatures on subsistence salmon populations.
+1. Model stream thermal sensitivity (TS) using hydrologic (snow and precipitation), landcover, and geomorphic predictors. 
+2. Develop scenarios to understand effects of changes in snowpack and warmer temperatures on subsistence salmon populations.
 
 The [project mapper](https://arcg.is/1nLqei) is updated with TS by year linked to sites and layers showing a lot of the input data and various hydrologic layers. 
 
 # Thermal sensitivity
 
-DFA output were biased for some years because most of the sites (half or more) came from one watershed with high thermal sensitivity. For some reason, the pattern in these sites all appeared on the trend and their TS was really low.
+## New DFA results
 
-```{r dfa plots}
-dfa_dat <- read_csv("DFA/output_8Nov21/GlobalModelEstimates_1trend_DUE.csv")
-trend_dat <- read_csv("DFA/output_8Nov21/GlobalTrends_1trend_DUE.csv")
+Tim reran the DFA with 1-3 trends using three new subsets of the original data: 
 
-dfa_dat %>% 
+* subset 1 removed 65 sites in the Deshka, 13 were kept that spanned the stream size and slope gradient.
+* subset 1 removed 65 Deshka sites + any sites with only 1 year of data in the period 2011-2019.
+* subset 1 removed 65 Deshka sites + any sites with less than 3 years of data in the period 2011-2019.
+
+```{r}
+dfa_results <- readRDS("output/dfa_results.rds")
+trend_results <- readRDS("output/trend_results.rds")
+```
+
+From TC: In many systems the temp sensitivity parameters decline with increasing numbers of trends (which indicates their variation is going to trends).
+
+```{r ts boxplots by number of trends}
+dfa_results %>% 
+  distinct(TempSens, trends, subset) %>% 
+  ggplot(aes(x = as.factor(trends), y = TempSens)) +
+  geom_boxplot() +
+  facet_wrap(~subset) +
+  labs(x = "Number of Trends", title = "Facets are data subsets")
+
+```
+
+Thermal sensitivity versus trend loadings. In the Bristol Bay analysis, there was a general pattern of sites with lower sensitivites loaded higher on the single trend. This is true for the single trend model, but not for the rest.
+
+```{r ts versus trend}
+
+dfa_results %>% 
+  filter(trends == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with One Trend")
+
+dfa_results %>% 
+  filter(trends == 2, trend_no == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Two Trends, Trend 1")
+
+dfa_results %>% 
+  filter(trends == 2, trend_no == 2) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Two Trends, Trend 2")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 1")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 2) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 2")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 3) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 3")
+```
+
+Frequency plots of thermal sensitivities by DFA (1, 2, or 3 trends), subset, year and region.
+
+```{r TS by subset year and region, fig.height=12, fig.width=10}
+dfa_results %>% 
+  filter(trends == 1) %>% 
   ggplot(aes(TempSens)) +
   geom_freqpoly(aes(color = Region)) +
-  facet_wrap(~Year)
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 1 Trend")
 
-trend_dat %>% 
-  ggplot(aes(x = DOY, y = Trend)) +
-  geom_line() + 
-  facet_wrap(~Year)
+dfa_results %>% 
+  filter(trends == 2) %>% 
+  ggplot(aes(TempSens)) +
+  geom_freqpoly(aes(color = Region)) +
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 2 Trends")
+
+dfa_results %>% 
+  filter(trends == 3) %>% 
+  ggplot(aes(TempSens)) +
+  geom_freqpoly(aes(color = Region)) +
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 3 Trends")
 ```
+
+From TC: 
+
+* It's common/unsurprising that DFA’s with more trends are favored by AIC model selection. However, these multiple trend models are less interesting to our questions as they tend to have the same issue we were having in that some of the common trends are soaking up the air temperature variation. 
+* The single trend models look improved across the subsets so these may be useful as per our original intentions.
+
+Plots of trends by different DFAs with 1, 2 and 3 trends.
+
+```{r}
+trend_results %>%
+  filter(trends == 1) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 1 Trend")
+
+trend_results %>%
+  filter(trends == 2) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 2 Trends")
+
+trend_results %>%
+  filter(trends == 3) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset)) +
+  labs(title = "DFA with 3 Trends")
+
+```
+
+Exploration of how covariates relate to sites that load strongly onto the trend in DFA with one trend.
+
+```{r}
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
+
+left_join(dfa_results %>% 
+            filter(trends == 1, subset == 1) %>% 
+            select(SiteID, Year, TempSens, Loadings),
+          mod_dat %>% 
+            select(SiteID = Site, Year, ar1_ts = TempSens, wtd_slope_MEAN, asrt_glac, log_area, snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip)) %>% 
+  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>% 
+  ggplot() +
+  geom_point(aes(x = value, y = Loadings)) +
+  facet_wrap(~vars, scales = "free")
+```
+
+
+
+
+## AR1 Results
 
 As an alternative modeling method to estimate stream thermal sensitivity, Tim used the air temperature coefficient in a time series model for each site and summer using an auto-regressive lag of 1 day on the residuals (AR1 model). These results better matched the patterns between air-stream temperatures at the different sites.
 
@@ -75,300 +207,29 @@ mod_dat %>%
 
 ```
 
-
-
-
-# Relationships between TS and covariates
-
-
-```{r pair plots against TS}
-
-panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(0, 1, 0, 1))
-    r <- abs(cor(x, y))
-    txt <- format(c(r, 0.123456789), digits = digits)[1]
-    txt <- paste0(prefix, txt)
-    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
-    text(0.5, 0.5, txt, cex = cex.cor * r)
-}
-
-panel.hist <- function(x, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(usr[1:2], 0, 1.5) )
-    h <- hist(x, plot = FALSE)
-    breaks <- h$breaks; nB <- length(breaks)
-    y <- h$counts; y <- y/max(y)
-    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
-}
-
-mod_dat %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-```
-
-Exploring interactions between covariates and TS. Starting with different variables and mean watershed slope.
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = wtd_north_per, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = wtd_north_per), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and north aspect", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = asrt_glac, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = asrt_glac), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and glacier cover", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = asrt_lake, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = asrt_lake), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and lake cover", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = asrt_wet, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = asrt_wet), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and wetland cover", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = summer_precip, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = summer_precip), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and summer precipitation", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_slope_MEAN"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = snow_ind, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = snow_ind), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by mean watershed slope and snow index", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-```{r}
-facet_var <- "wtd_north_per"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = snow_ind, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = snow_ind), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by watershed north percent and snow index", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-```{r}
-facet_var <- "wtd_north_per"
-
-mod_dat %>% 
-  mutate(fct = cut(get(facet_var), seq(from = min(get(facet_var)) - 0.01, to = max(get(facet_var)), length.out = 5))) %>% 
-  ggplot() +
-  geom_point(aes(y = TempSens, x = summer_precip, color = Region)) +
-  geom_smooth(aes(y = TempSens, x = summer_precip), method = "lm") +
-  facet_wrap(~fct) +
-  labs(title = "TS by watershed north percent and summer precipitation", subtitle = paste0("Facets are bins of ", facet_var))
-```
-
-
-# Reduce covariates
-
-Reduced the list of covariates based on pairwise correlations and VIF. Also transformed covariates that were heavily right skewed. Arcsine square-root for proportions and log10 for continuous. Glacier cover still heavily right-skewed so added a binary presence-absence for glacier cover as well and checked VIF.
-Final list of covariates, which are also listed with data sources on google drive [sheet](https://docs.google.com/spreadsheets/d/1Ir1HyvhHqfbUSaGjiI-ygeQwJkh2QsihtWueJfDQ4cA/edit#gid=0):
-
-* stream order
-* stream gradient
-* distance to coast
-* catchment min, max, and mean slope
-* watershed min, max, and mean slope
-* catchment min, max, and mean elevation
-* watershed min, max, and mean elevation
-* watershed percent north aspect
-* watershed percent wetland cover
-* watershed percent glacier cover
-* watershed percent lake cover
-* watershed area
-* watershed LCLD (last day of longest continuous snow season) by year (2001-2019) - converted to a snow index, the residuals of a model predicting LCLD using mean watershed slope^2^
-* total summer precipitation at site by year
-
-Removed covariates with pairwise correlations r > 0.7 and VIF > 3. 
-Final list of 13 covariates:
-
-* log stream gradient
-* log mean catchment elevation
-* log mean catchment slope
-* watershed percent north aspect
-* mean watershed slope
-* log watershed area
-* distance to coast
-* arcsine square-root watershed wetland percent
-* arcsine square-root watershed glacier cover
-* arcsine square-root watershed lake cover
-* snow index
-* summer precipitation
-* glacier presence-absence
-
-# Select random effects
-
-Created a global model with all 13 covariates plus five interactions from Tim's Bristol Bay paper and results. Selected best random effects.
-
-Interactions: 
-
-* snow x north
-* slope x north
-* north x precip
-* slope x precip
-* slope x snow
-
-Random effects:
-
-* none
-* random intercept for Site (multiple TS by year for sites)
-* random intercept for Site within HUC8
-* random intercept for Site within Region (this doesn't make a lot of sense per mixed effects literature since we only have 5 regions -- could include as a fixed effect)
-
-Lowest AIC for HUC8/Site. Predictions can be made at level 1 for HUC8, except for the one or two without data, which we can predict using level 0, or population mean for random intercept.
-
-# Develop model set 
-
-Dredged all subsets of global model to determine variable importance: sum of model weights for all models in which a covariate appears.  
-
-```{r variable importance}
-
-lme1_dr <- readRDS("output/lme1m_dredge_results.rds")
-
-#variable importance
-lme1_dr %>% 
-  as_tibble() %>% 
-  mutate(across(asrt_glac:'wtd_north_per:wtd_slope_MEAN', ~ case_when(!is.na(.) ~ weight))) %>% 
-  select(asrt_glac:'wtd_north_per:wtd_slope_MEAN') %>% 
-  colSums(., na.rm = TRUE) %>% 
-  enframe() %>% 
-  arrange(desc(value)) %>% 
-  ggplot(aes(y = fct_reorder(name, value), x = value)) +
-  geom_point() +
-  theme_bw() +
-  labs(x = "Variable Importance Value", y = "Covariates and Interactions")
-
-```
-
-Model set of 6 models:
-
-* global model
-* model with top 12 covariates
-* model with top 8 covariates
-* model with top 4 covariates
-* null model
-* random forest model (I randomly selected only 1 year for each site to avoid pseudo-replicating the spatial covariates)
-
-# Cross validation
-
-Model selection via cross-validation. Constructing appropriate cross-validation groups to select the optimal model depends on our prediction goals. This paper on [cross-validation strategies](https://onlinelibrary.wiley.com/doi/10.1111/ecog.02881) has some interesting ideas and guidance. I tried three different methods: temporal splits by groups of years, spatial splits by sites in the same HUC10, and leave-one-out.
-
-* Temporal cross-validation groups were constructed by splitting the years into five groups. For temporal cross-validation, predictions were made for the withheld data using the random intercept for HUC8.
-* Spatial cross-validation was done by constructing 21 groups with 6 HUC10 each that were not adjacent. Predictions were made using the population intercept since these groups overlapped with the HUC8 groupings used for the random intercept.
-* Leave-one-out cross validation withholds one site at a time, builds the model, and predicts for the years of data for that site. I removed any sites that were the only site in a HUC8 in order to predict with the HUC8 random intercepts.
-
-For all cross-validations, the predictions on the testing data were saved and used to calculate RMSE, MAE, and observed versus predicted correlations. 
-
-The figure shows the mean RMSE +/- 1SE across cross-validation groups. SE for LOO is missing because groups are only a single site so the RMSE was calculated for all predictions and not by group.
-
-```{r fig.width = 12, fig.height = 12}
-
-xval_results <- read_rds("output/xval_results.rds") 
-
-xval_results %>% 
-  # filter(!xval_type == "LOO") %>% 
-  mutate(modelf = factor(model, levels = c("global", "lme_12vars", "lme_8vars", "lme_4vars", "lme_null", "rf"),
-                         labels = c("global", "12 vars.", "8 vars.", "4 vars.", "null", "RF"))) %>% 
-  ggplot(aes(x = modelf, y = rmse, color = xval_type)) +
-  stat_summary(fun = "mean", geom = "point", size = 3) +
-  stat_summary(fun.data = "mean_se", geom = "errorbar", width = 0.2) +
-  labs(y = "RMSE on Validation Data", x = "Model", color = "Cross-validation Type") +
-  theme_bw() +
-  theme(legend.position = "bottom", text = element_text(size = 16))
-```
-
-Table summarizing average RMSE, MAE, and correlations for observed versus predicted TS by model.
-
-```{r }
-xval_results %>% 
-  group_by(model, xval_type) %>% 
-  summarize(mean_rmse = mean(rmse), mean_mae = mean(mae), mean_cor = mean(obs_pred)) %>% 
-  kable(digits = 2, col.names = c("Model", "Xval Type", "RMSE", "MAE", "Cor. (r)")) %>% 
-  kable_styling()
-
-```
-
-Plots of observed versus predicted TS by the different models using the LOO cross-validation predictions. The RF model was constructed with just one year for each site as before. Pearson correlations between observed and predicted by region indicate that the models do really poorly for the regions with very little data: Copper, PWS, and Kodiak. We could try region specific models, but we would likely need to consider a smaller set of predictors as these regions don't have a lot of data.
-
-```{r}
-xval_preds <- readRDS("output/xval_preds.rds")
-
-xval_preds %>% 
-  filter(xval_type == "LOO") %>% 
-  mutate(modelf = factor(model, levels = c("global", "lme_12vars", "lme_8vars", "lme_4vars", "lme_null", "rf"),
-                         labels = c("global", "12 vars.", "8 vars.", "4 vars.", "null", "RF"))) %>% 
-  ggplot(aes(x = TempSens, y = preds)) +
+Curious how the previous results compare to the TS from a DFA with one trend.
+
+```{r ar1 versus dfa ts}
+
+left_join(mod_dat %>% 
+            select(SiteID = Site, Year, ar1_ts = TempSens),
+          dfa_results %>% 
+            filter(trends == 1, subset == 1) %>% 
+            select(SiteID, Year, TempSens)) %>% 
+  ggplot(aes(x = ar1_ts, y = TempSens)) +
   geom_point() +
   geom_abline(aes(intercept = 0, slope = 1)) +
-  facet_grid(cols = vars(Region), rows = vars(modelf)) +
-  coord_cartesian(xlim = c(-0.2, 1), ylim = c(-0.2,1)) +
-  stat_cor(label.x.npc = 0, label.y = c(seq(0.6, 1, 0.1)))
-
+  coord_cartesian(xlim = c(-1, 1.6), ylim = c(-1, 1.6)) +
+  stat_cor()
 ```
 
+
+
+
+
 # CART analysis
+
+Note: everything below is based on TS from the AR1 model.
 
 Using rpart to create a regression tree with all of the data.
 
@@ -544,146 +405,6 @@ Summary table indicates variable importance and also lists surrogate splits. Int
 summary(ct_crpr)
 ```
 
-
-
-# Post-hoc exploration of regional TS
-
-For each region, the number of sites is listed along with a table showing the years for each site, and pairplots of TS against each of the covariates (separated into two plots since there are so many).
-
-Copper River
-
-```{r Copper}
-region_in <- "Copper_River"
-
-print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  group_by(Site) %>% 
-  summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable(longtable = TRUE) %>%
-  kable_styling()
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-```
-
-Kodiak
-
-```{r Kodiak}
-region_in <- "Kodiak"
-
-print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  group_by(Site) %>% 
-  summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable(longtable = TRUE) %>%
-  kable_styling()
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-```
-
-Prince William Sound
-
-```{r PWS}
-region_in <- "Prince_William_Sound"
-
-print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  group_by(Site) %>% 
-  summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable(longtable = TRUE) %>%
-  kable_styling()
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-```
-
-Cook Inlet
-
-```{r Cook Inlet}
-region_in <- "Cook_Inlet"
-
-print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  group_by(Site) %>% 
-  summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable(longtable = TRUE) %>%
-  kable_styling()
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-```
-
-Bristol Bay
-
-```{r Bristol Bay}
-region_in <- "Bristol_Bay"
-
-print(paste0(region_in, ": ", nrow(mod_dat %>% filter(Region == region_in) %>% distinct(Site)), " sites"))
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  group_by(Site) %>% 
-  summarize(years = paste(Year, collapse = ", ")) %>% 
-  kable(longtable = TRUE) %>%
-  kable_styling()
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat %>% 
-  filter(Region == region_in) %>% 
-  select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake, glac_10) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-```
 
 
 # Prediction scenarios

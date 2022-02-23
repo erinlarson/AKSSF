@@ -1143,7 +1143,7 @@ sitemap
 
 # Generating model subsets for new DFA by Tim
 
-During team meeting on 2/4/22, decided to investigate DFA again after subsetting sites in Deshka. We're interested in trying out different model trends that might accomodate the different types of sites we have in the data -- both TS and loadings on residual trends could be informative for understanding TS and scenarios of change in the future.
+During team meeting on 2/4/22, decided to investigate DFA again after subsetting sites in Deshka. We're interested in trying out different model trends that might accommodate the different types of sites we have in the data -- both TS and loadings on residual trends could be informative for understanding TS and scenarios of change in the future.
 
 There is already a field called deshka that flags the sites in that watershed. Add two new subsets:
 
@@ -1314,4 +1314,228 @@ write_csv(md, paste0("data_preparation/final_data/md_", Sys.Date(), ".csv"))
 
 
 ```
+
+
+# DFA February 2022 - data subsets 
+
+Tim reran the DFA using the different subsets created above and models with 1-3 trends. Email from him with results:
+
+"The DFA analysis have finished running. I went ahead and ran 1-3 trend DFA’s for each of the three subsets. I created some pdf’s that show the trends and the loadings to evaluate if things had improved using the subsets. I’m having some issues with GIT so I couldn’t push the requisite files (probably owing to my noob git status). I saved the Temperature Sensitivity and Trend Loading parameters in RDS files by data subset (i.e., ‘GlobalResults_Subset1’ and ‘GlobalTrends_Subset1’). They are still on the VM so hopefully you all can grab them.
+
+Here are a couple of observations:
+* Its common/unsurprising that DFA’s with more trends are favored by AIC model selection. However, these multiple trend models are less interesting to our questions as they tend to have the same issue we were having in that some of the common trends are soaking up the air temperature variation. In many systems the temp sensitivity parameters decline with increasing numbers of trends (which indicates their variation is going to trends).
+* The single trend models look improved across the subsets so these maybe useful as per our original intentions.
+* I think it will be interesting to look at the distributions of temperature sensitivity again and the relations between trend loadings and geomorphic attributes."
+
+This is complicated. We now have results for 
+
+* 3 data subsets: subset 1 removed 65 deshka sites, subset 2 further removed sites with only 1 year of data, subset 3 removed sites with only 1-2 years of data.
+* for each subset, Tim ran DFA models by year for 1, 2, and 3 trends.
+* for each DFA, there are TS and trends.
+
+## Subset 1 DFA results
+
+
+```{r dfa results}
+dfa_ss1 <- readRDS("DFA/GlobalResults_Subset1.RDS")
+dfa_ss2 <- readRDS("DFA/GlobalResults_Subset2.RDS")
+dfa_ss3 <- readRDS("DFA/GlobalResults_Subset3.RDS")
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")    
+
+dfa_ss1_wd <- left_join(dfa_ss1 %>% 
+            select(SiteID:TempSens_3) %>% 
+            pivot_longer(cols = TempSens_1:TempSens_3,
+                         names_to = "trends",
+                         values_to = "TempSens") %>% 
+            mutate(trends = as.numeric(substr(trends, 10, 10))),
+          dfa_ss1 %>% 
+            select(SiteID, Year, TrendLoad_1_1:TrendLoad_3_3) %>% 
+            pivot_longer(cols = TrendLoad_1_1:TrendLoad_3_3,
+                         names_to = "name",
+                         values_to = "Loadings") %>% 
+            mutate(trends = as.numeric(substr(name, 11, 11)),
+                   trend_no = as.numeric(substr(name, 13,13)))) %>% 
+              mutate(subset = 1) %>% 
+  left_join(md %>% select(SiteID = Site, Region, Waterbody_name))
+
+dfa_ss2_wd <- left_join(dfa_ss2 %>% 
+            select(SiteID:TempSens_3) %>% 
+            pivot_longer(cols = TempSens_1:TempSens_3,
+                         names_to = "trends",
+                         values_to = "TempSens") %>% 
+            mutate(trends = as.numeric(substr(trends, 10, 10))),
+          dfa_ss2 %>% 
+            select(SiteID, Year, TrendLoad_1_1:TrendLoad_3_3) %>% 
+            pivot_longer(cols = TrendLoad_1_1:TrendLoad_3_3,
+                         names_to = "name",
+                         values_to = "Loadings") %>% 
+            mutate(trends = as.numeric(substr(name, 11, 11)),
+                   trend_no = as.numeric(substr(name, 13,13)))) %>% 
+              mutate(subset = 2) %>% 
+  left_join(md %>% select(SiteID = Site, Region, Waterbody_name))
+
+dfa_ss3_wd <- left_join(dfa_ss3 %>% 
+            select(SiteID:TempSens_3) %>% 
+            pivot_longer(cols = TempSens_1:TempSens_3,
+                         names_to = "trends",
+                         values_to = "TempSens") %>% 
+            mutate(trends = as.numeric(substr(trends, 10, 10))),
+          dfa_ss3 %>% 
+            select(SiteID, Year, TrendLoad_1_1:TrendLoad_3_3) %>% 
+            pivot_longer(cols = TrendLoad_1_1:TrendLoad_3_3,
+                         names_to = "name",
+                         values_to = "Loadings") %>% 
+            mutate(trends = as.numeric(substr(name, 11, 11)),
+                   trend_no = as.numeric(substr(name, 13,13)))) %>% 
+              mutate(subset = 3) %>% 
+  left_join(md %>% select(SiteID = Site, Region, Waterbody_name))
+
+dfa_results <- bind_rows(dfa_ss1_wd, dfa_ss2_wd, dfa_ss3_wd)
+dfa_results %>% distinct(subset)
+
+saveRDS(dfa_results, "output/dfa_results.rds")
+```
+
+```{r trend results}
+trends_ss1 <- readRDS("DFA/GlobalTrends_Subset1.RDS")
+trends_ss2 <- readRDS("DFA/GlobalTrends_Subset2.RDS")
+trends_ss3 <- readRDS("DFA/GlobalTrends_Subset3.RDS")
+
+trend_results <- bind_rows(
+  trends_ss1 %>% 
+    pivot_longer(cols = Trend_1_1:Trend_3_3,
+                 names_to = "name",
+                 values_to = "value") %>% 
+    mutate(trends = as.numeric(substr(name, 7, 7)),
+           trend_no = as.numeric(substr(name, 9, 9)),
+           subset = 1),
+  trends_ss2 %>% 
+    pivot_longer(cols = Trend_1_1:Trend_3_3,
+                 names_to = "name",
+                 values_to = "value") %>% 
+    mutate(trends = as.numeric(substr(name, 7, 7)),
+           trend_no = as.numeric(substr(name, 9, 9)),
+           subset = 2),
+  trends_ss3 %>% 
+    pivot_longer(cols = Trend_1_1:Trend_3_3,
+                 names_to = "name",
+                 values_to = "value") %>% 
+    mutate(trends = as.numeric(substr(name, 7, 7)),
+           trend_no = as.numeric(substr(name, 9, 9)),
+           subset = 3)
+)
+
+saveRDS(trend_results, "output/trend_results.rds")
+```
+
+
+
+```{r ts boxplots by number of trends}
+dfa_results %>% 
+  distinct(TempSens, trends, subset) %>% 
+  ggplot(aes(x = as.factor(trends), y = TempSens)) +
+  geom_boxplot() +
+  facet_wrap(~subset)
+
+```
+
+
+```{r}
+dfa_results %>% 
+  filter(TempSens < 0) %>%
+  select(Waterbody_name, SiteID, Year, TempSens, subset, trends) %>% 
+  arrange(TempSens)
+
+dfa_ss1_wd %>% 
+  filter(Year == 2019, trends == 3, trend_no == "trend_2") %>% 
+  arrange(desc(Loadings))
+
+
+dfa_ss1_wd %>% 
+  filter(Year == 2020, trends == 2, trend_no == "trend_1") %>% 
+  arrange(desc(Loadings)) %>% 
+  select(SiteID, Waterbody_name)
+```
+
+
+
+```{r ts versus trend}
+
+dfa_results %>% 
+  filter(trends == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with One Trend")
+
+dfa_results %>% 
+  filter(trends == 2, trend_no == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Two Trends, Trend 1")
+
+dfa_results %>% 
+  filter(trends == 2, trend_no == 2) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Two Trends, Trend 2")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 1) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 1")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 2) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 2")
+
+dfa_results %>% 
+  filter(trends == 3, trend_no == 3) %>% 
+  ggplot(aes(TempSens, Loadings)) +
+  geom_point(aes(color = as.factor(subset))) +
+  facet_wrap(~Year) +
+  labs(title = "DFA with Three Trends, Trend 3")
+```
+
+Frequency plots of thermal sensitivities by year and region.
+
+```{r}
+
+dfa_results %>% 
+  ggplot(aes(TempSens)) +
+  geom_freqpoly(aes(color = Region)) +
+  facet_grid(rows = vars(Year), cols = vars(subset))
+
+
+```
+
+
+```{r}
+trend_results %>%
+  filter(trends == 1) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset))
+
+trend_results %>%
+  filter(trends == 2) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset))
+
+trend_results %>%
+  filter(trends == 3) %>% 
+  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
+  geom_line() + 
+  facet_grid(rows = vars(Year), cols = vars(subset))
+
+```
+
 
