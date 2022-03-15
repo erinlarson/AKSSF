@@ -33,6 +33,7 @@ library(kableExtra)
 library(rpart)
 library(tidyverse)
 library(ggrepel)
+library(ggpubr)
 ```
 
 This report summarizes the new thermal sensitivity results for team meeting on March 15, 2022.
@@ -53,7 +54,7 @@ Tim reran the DFA using a daylength covariate:
 
 Plots of daylength values across sites. Daylength on summer solstice varies by about two hours across the sites. 
 
-```{r}
+```{r daylength plots}
 dayl  <- readRDS("data_preparation/daymet/daily_daylength_only.rds")
 md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 
@@ -76,6 +77,38 @@ dayl %>%
   labs(title = "Daylength from June 1 to Oct 1 for 57 and 63 degress Latitude")
 
 ```
+
+Correlation between day length and air temperatures.
+
+```{r daylength-air temp plots}
+
+air_dat <- readRDS("data_preparation/final_data/summer_data_wair_dayl2022-03-01.rds")
+
+air_dat %>% 
+  summarize(cor(airDT, daylen_min),
+            cor(airDT, global_dayl))
+
+air_dat %>% 
+  ggplot(aes(x = daylen_min, y = airDT)) +
+  geom_point() +
+  stat_cor() +
+  stat_regline_equation(aes(label =  paste(..eq.label.., ..adj.rr.label.., sep = "~~~~")),
+                        label.x = 650, label.y = 21) +
+  labs(title = "Site-specific daylength")
+
+
+air_dat %>% 
+  ggplot(aes(x = global_dayl, y = airDT)) +
+  geom_point() +
+  stat_cor() +
+  stat_regline_equation(aes(label =  paste(..eq.label.., ..adj.rr.label.., sep = "~~~~")),
+                        label.x = 650, label.y = 21) +
+  labs(title = "Global daylength")
+
+```
+
+
+
 
 AIC results for models with different covariates and global versus site-specific daylengths.
 
