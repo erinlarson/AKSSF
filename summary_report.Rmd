@@ -32,378 +32,134 @@ library(ggpubr)
 library(kableExtra)
 library(rpart)
 library(tidyverse)
+library(ggrepel)
 ```
 
-This report summarizes the new thermal sensitivity results for team meeting on February 22, 2022.
+This report summarizes the new thermal sensitivity results for team meeting on March 15, 2022.
 Goals of the meeting are to discuss new DFA results and future scenarios of thermal sensitivity.
 
-Objectives: 
+The [project mapper](https://arcg.is/1nLqei) is updated with TS by year linked to sites and layers showing a lot of the input data and various hydrologic layers. Dustin has also added the catchments that we are predicting over -- these correspond to the stream reaches with the largest contributing area in each HU12 in the study area with salmon habitat. There are also layers showing salmon habitat by species from the AWC.
 
-1. Model stream thermal sensitivity (TS) using hydrologic (snow and precipitation), landcover, and geomorphic predictors. 
-2. Develop scenarios to understand effects of changes in snowpack and warmer temperatures on subsistence salmon populations.
 
-The [project mapper](https://arcg.is/1nLqei) is updated with TS by year linked to sites and layers showing a lot of the input data and various hydrologic layers. 
+# New DFA results
 
-# Thermal sensitivity
+Tim reran the DFA using a daylength covariate:
 
-## New DFA results
+* ran on all three subsets from our last analysis. Moving forward with first subset (removed 65 sites from Deshka) since that addressed the problems with trends from before and keeps the most data.
+* single trend models
+* three different covariate combinations: Air Temp, Daylength, Air Temp + Daylength. AIC favored the models with both air temp and daylength.
+* global daylength (from site with average latitude) or site-specific daylength. AIC favored global daylength, but models are very similar.
 
-Tim reran the DFA with 1-3 trends using three new subsets of the original data: 
 
-* subset 1 removed 65 sites in the Deshka, 13 were kept that spanned the stream size and slope gradient.
-* subset 1 removed 65 Deshka sites + any sites with only 1 year of data in the period 2011-2019.
-* subset 1 removed 65 Deshka sites + any sites with less than 3 years of data in the period 2011-2019.
+Plots of daylength values across sites. Daylength on summer solstice varies by about two hours across the sites. 
 
 ```{r}
-dfa_results <- readRDS("output/dfa_results.rds")
-trend_results <- readRDS("output/trend_results.rds")
-```
+dayl  <- readRDS("data_preparation/daymet/daily_daylength_only.rds")
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 
-From TC: In many systems the temp sensitivity parameters decline with increasing numbers of trends (which indicates their variation is going to trends).
+#june 21 is yday 172, summer solstice
+daylength_solstice <- dayl %>% 
+  filter(yday == 172) %>% 
+  left_join(md %>% select(SiteID = Site, Latitude)) %>% 
+  group_by(SiteID, Latitude) %>% 
+  summarize(mndl = mean(daylen))
 
-```{r ts boxplots by number of trends}
-dfa_results %>% 
-  distinct(TempSens, trends, subset) %>% 
-  ggplot(aes(x = as.factor(trends), y = TempSens)) +
-  geom_boxplot() +
-  facet_wrap(~subset) +
-  labs(x = "Number of Trends", title = "Facets are data subsets")
-
-```
-
-Thermal sensitivity versus trend loadings. In the Bristol Bay analysis, there was a general pattern of sites with lower sensitivites loaded higher on the single trend. This is true for the single trend model, but not for the rest.
-
-```{r ts versus trend}
-
-dfa_results %>% 
-  filter(trends == 1) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with One Trend")
-
-dfa_results %>% 
-  filter(trends == 2, trend_no == 1) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with Two Trends, Trend 1")
-
-dfa_results %>% 
-  filter(trends == 2, trend_no == 2) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with Two Trends, Trend 2")
-
-dfa_results %>% 
-  filter(trends == 3, trend_no == 1) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with Three Trends, Trend 1")
-
-dfa_results %>% 
-  filter(trends == 3, trend_no == 2) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with Three Trends, Trend 2")
-
-dfa_results %>% 
-  filter(trends == 3, trend_no == 3) %>% 
-  ggplot(aes(TempSens, Loadings)) +
-  geom_point(aes(color = as.factor(subset))) +
-  facet_wrap(~Year) +
-  labs(title = "DFA with Three Trends, Trend 3")
-```
-
-Frequency plots of thermal sensitivities by DFA (1, 2, or 3 trends), subset, year and region.
-
-```{r TS by subset year and region, fig.height=12, fig.width=10}
-dfa_results %>% 
-  filter(trends == 1) %>% 
-  ggplot(aes(TempSens)) +
-  geom_freqpoly(aes(color = Region)) +
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 1 Trend")
-
-dfa_results %>% 
-  filter(trends == 2) %>% 
-  ggplot(aes(TempSens)) +
-  geom_freqpoly(aes(color = Region)) +
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 2 Trends")
-
-dfa_results %>% 
-  filter(trends == 3) %>% 
-  ggplot(aes(TempSens)) +
-  geom_freqpoly(aes(color = Region)) +
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 3 Trends")
-```
-
-From TC: 
-
-* It's common/unsurprising that DFA’s with more trends are favored by AIC model selection. However, these multiple trend models are less interesting to our questions as they tend to have the same issue we were having in that some of the common trends are soaking up the air temperature variation. 
-* The single trend models look improved across the subsets so these may be useful as per our original intentions.
-
-Plots of trends by different DFAs with 1, 2 and 3 trends.
-
-```{r}
-trend_results %>%
-  filter(trends == 1) %>% 
-  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
-  geom_line() + 
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 1 Trend")
-
-trend_results %>%
-  filter(trends == 2) %>% 
-  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
-  geom_line() + 
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 2 Trends")
-
-trend_results %>%
-  filter(trends == 3) %>% 
-  ggplot(aes(x = DOY, y = value, color = as.factor(trend_no))) +
-  geom_line() + 
-  facet_grid(rows = vars(Year), cols = vars(subset)) +
-  labs(title = "DFA with 3 Trends")
-
-```
-
-Exploration of how covariates relate to sites that load strongly onto the trend in DFA with one trend.
-
-```{r}
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
-
-left_join(dfa_results %>% 
-            filter(trends == 1, subset == 1) %>% 
-            select(SiteID, Year, TempSens, Loadings),
-          mod_dat %>% 
-            select(SiteID = Site, Year, ar1_ts = TempSens, wtd_slope_MEAN, asrt_glac, log_area, snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip)) %>% 
-  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>% 
+daylength_solstice %>% 
   ggplot() +
-  geom_point(aes(x = value, y = Loadings)) +
-  facet_wrap(~vars, scales = "free")
+  geom_histogram(aes(x = mndl)) +
+  labs(title = "Daylength on June 21st across AKSSF sites", x = "daylength")
+
+dayl %>% 
+  filter(SiteID %in% c("kdk_olgcr01a", "CIK_41", "CIK_11"), year == 2000) %>% 
+  ggplot() +
+  geom_line(aes(x =yday, y = daylen, color = SiteID)) +
+  labs(title = "Daylength from June 1 to Oct 1 for 57 and 63 degress Latitude")
+
+```
+
+AIC results for models with different covariates and global versus site-specific daylengths.
+
+```{r AIC results}
+
+global_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_GlobalAICtable.rds")
+site_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_SiteSpecificAICtable.rds")
+
+model_aic <- bind_rows(global_aic %>% mutate(daylength = "Global"),
+          site_aic %>% mutate(daylength = "Site-Specific"))
+
+model_aic %>%
+  group_by(daylength) %>% 
+  mutate(year = row_number()) %>% 
+  pivot_longer(cols = Air:Air.DayLen, names_to = "model", values_to = "AIC") %>% 
+  mutate(model_f = factor(model, labels = c("Air Only", "Air and Daylength", "Daylength Only"))) %>% 
+  ggplot(aes(y = as.factor(year), x = AIC, color = model_f)) +
+  geom_point(size = 2) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  facet_wrap(~daylength) +
+  labs(y = "Year", color = "Model")
+
+
 ```
 
 
+```{r read in results}
+load("DFA/DFAresults_GlobalDayLength_AllSubsets.Rdata")
 
+dfa_daylen_lg <- GlobalResults_DayLen_Subset1 %>% 
+  pivot_longer(cols = contains(c("Trend", "Sens"))) %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2),
+         ts_type = case_when(grepl("Z", parameter) ~ "z-score",
+                             TRUE ~ "raw"),
+         covariate = gsub("Z", "", parameter)) 
+  
+```
 
-## AR1 Results
+Common trends across the three different models using global daylength.
 
-As an alternative modeling method to estimate stream thermal sensitivity, Tim used the air temperature coefficient in a time series model for each site and summer using an auto-regressive lag of 1 day on the residuals (AR1 model). These results better matched the patterns between air-stream temperatures at the different sites.
-
-```{r ar1 TS}
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
-
-mod_dat %>% 
-  ggplot(aes(TempSens)) +
-  geom_freqpoly(aes(color = Region)) +
+```{r}
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:Trend_Air.DayLen, names_to = "model", values_to = "trend") %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
   facet_wrap(~Year)
 
 ```
 
-Curious how the previous results compare to the TS from a DFA with one trend.
+Coefficients for the daylength and air temperature covariates as both z-scores and raw covariate space. Something might have happened in the back-transformation for the daylength covariate --- or not? Should they all be the same?
 
-```{r ar1 versus dfa ts}
+```{r plot of TS}
 
-left_join(mod_dat %>% 
-            select(SiteID = Site, Year, ar1_ts = TempSens),
-          dfa_results %>% 
-            filter(trends == 1, subset == 1) %>% 
-            select(SiteID, Year, TempSens)) %>% 
-  ggplot(aes(x = ar1_ts, y = TempSens)) +
+dfa_daylen_lg %>% 
+  filter(!parameter == "TrendLoad") %>% 
+  ggplot(aes(x = value, color = model)) +
+  geom_freqpoly() +
+  facet_grid(vars(ts_type), vars(covariate)) +
+  theme_bw() +
+  labs(x = "Model Coefficient")
+
+```
+
+
+Exploration of how covariates relate to Thermal Sensitivities from model with global daylength and single trend.
+
+```{r}
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
+
+left_join(dfa_daylen_lg %>% 
+            filter(covariate == "TempSens", ts_type == "raw", model == "Air.DayLen") %>% 
+            select(SiteID, Year, TempSens = value),
+          mod_dat %>% 
+            select(SiteID = Site, Year, wtd_slope_MEAN, asrt_glac, log_area, 
+                   snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip)) %>% 
+  filter(!is.na(snow_ind)) %>% #removes one site that we dropped and all of 2020 (no modis)
+  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>%  
+  ggplot(aes(x = value, y = TempSens)) +
   geom_point() +
-  geom_abline(aes(intercept = 0, slope = 1)) +
-  coord_cartesian(xlim = c(-1, 1.6), ylim = c(-1, 1.6)) +
-  stat_cor()
+  facet_wrap(~vars, scales = "free_x")
 ```
 
-
-
-
-
-# CART analysis
-
-Note: everything below is based on TS from the AR1 model.
-
-Using rpart to create a regression tree with all of the data.
-
-```{r}
-ct_all <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat, method = "anova")
-```
-
-Print the cross validation results to select a complexity parameter for tree-pruning. From plotcp:
-"A good choice of cp for pruning is often the leftmost value for which the mean lies below the horizontal line." Select cp for 12 splits.
-
-```{r}
-plotcp(ct_all) 
-printcp(ct_all) 
-cp_parm <- 0.011197
-
-```
-
-Prune the tree and print the results.
-
-```{r}
-ct_pr <- prune(ct_all, cp = cp_parm)
-
-# print(ct_pr)
-
-par(xpd = TRUE)
-plot(ct_pr, compress = TRUE)
-text(ct_pr, use.n = TRUE)
-
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_pr)
-```
-
-## Cook Inlet Regression Tree
-
-
-```{r}
-ct_ci <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat %>% filter(Region == "Cook_Inlet"), method = "anova")
-# plotcp(ct_ci) 
-# printcp(ct_ci) 
-cp_parm <- 0.010000
-ct_cipr <- prune(ct_ci, cp = cp_parm)
-
-par(xpd = TRUE)
-plot(ct_cipr, compress = TRUE)
-text(ct_cipr, use.n = TRUE)
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_cipr)
-```
-
-
-
-
-## Bristol Bay Regression Tree
-
-
-```{r}
-ct_bb <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat %>% filter(Region == "Bristol_Bay"), method = "anova")
-
-# plotcp(ct_bb) 
-# printcp(ct_bb) 
-cp_parm <- 0.014908     
-ct_bbpr <- prune(ct_bb, cp = cp_parm)
-
-par(xpd = TRUE)
-plot(ct_bbpr, compress = TRUE)
-text(ct_bbpr, use.n = TRUE)
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_bbpr)
-```
-
-
-
-## Kodiak Regression Tree
-
-
-```{r}
-ct_kod <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat %>% filter(Region == "Kodiak"), method = "anova")
-plotcp(ct_kod) 
-printcp(ct_kod) 
-cp_parm <- 0.053756      
-ct_kodpr <- prune(ct_kod, cp = cp_parm)
-
-par(xpd = TRUE)
-plot(ct_kodpr, compress = TRUE)
-text(ct_kodpr, use.n = TRUE)
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_kodpr)
-```
-
-
-
-## Prince William Sound Regression Tree
-
-
-```{r}
-ct_pws <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat %>% filter(Region == "Prince_William_Sound"), method = "anova")
- # plotcp(ct_pws) 
- # printcp(ct_pws) 
-cp_parm <- 0.020529      
-ct_pwspr <- prune(ct_pws, cp = cp_parm)
-
-par(xpd = TRUE)
-plot(ct_pwspr, compress = TRUE)
-text(ct_pwspr, use.n = TRUE)
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_pwspr)
-```
-
-
-
-## Copper River Regression Tree
-
-
-```{r}
-ct_cr <- rpart(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
-                      wtd_slope_MEAN + log_area + dist_coast_km + asrt_wet + 
-                      asrt_glac + asrt_lake + snow_ind + summer_precip, 
-                    data = mod_dat %>% filter(Region == "Copper_River"), method = "anova")
- plotcp(ct_cr) 
- printcp(ct_cr) 
-cp_parm <- 0.010826      
-ct_crpr <- prune(ct_cr, cp = cp_parm)
-
-par(xpd = TRUE)
-plot(ct_crpr, compress = TRUE)
-text(ct_crpr, use.n = TRUE)
-
-```
-
-Summary table indicates variable importance and also lists surrogate splits. Interesting that snow index and precipitation are the least important variables.
-
-```{r}
-summary(ct_crpr)
-```
 
 
 
@@ -413,58 +169,86 @@ Spatial domain: salmon habitat for all regions. Select HU12 that intersect anadr
 Spatial scale: suggest using stream outlets associated with HU12 boundaries (smallest are 25 km^2^). We can use these outlets to create watersheds and calculate all the same covariates for prediction.  
 
 Temporal scenarios:
-Ideas for our scenarios include picking years within our temporal domain (2001-2019) that represent contrasting conditions that affect TS (e.g. low and high snow years). One problem with this idea is that conditions could vary across our study area so a high snow year in Bristol Bay may not match Copper. Alternatively, we could develop scenarios for prediction using high and low ranges of snowpack or precipitation for each region. 
+Ideas for our scenarios include picking years within our temporal domain (2001-2019) that represent contrasting conditions that affect TS (e.g. low and high snow years). 
 
-Comparison of standardized (subtract mean and divide by sd) temperature and precipitation values by different regions:
+Dustin selected HU12 that intersected the AWC, created watersheds, and calculated the mean watershed LCLD metric by year. These can be used to compare the range of LCLD julian dates across regions and years using the same watersheds from year to year.
 
-* 2019 warm and low precipitation
-* 2016 warm and high precipitation
-* 2006 cold and high precipitation
-* 2017 and 2009 about normal years for both
+Plot showing distribution of LCLD values across watersheds in each Region and year.
+
+```{r}
+lcld <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12_wtd_lcld_mn.csv") %>% 
+  pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2001:AwcHuc12_wtd_lcld_mn_2019, values_to = "julian_date") %>% 
+  mutate(Region = gsub('[[:digit:]]+', '', cat_ID_con) %>% gsub("_", " ", .),
+         Year = as.numeric(strsplit(name, "_") %>% sapply("[", 5)),
+         julian_date = julian_date - 365,
+         date = as.Date(as.character(julian_date), format = "%j"),
+         day = format(date, "%m-%d"))
+
+
+
+lcld %>% 
+  ggplot(aes(x = as.Date(day, format = "%m-%d"), color = Region)) +
+  geom_freqpoly() +
+  facet_wrap(~Year) +
+  theme_bw() +
+  labs(x = "Date")
+```
+
+Plot of mean LCLD by Region over time.
+
+```{r}
+lcld %>% 
+  group_by(Region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  ggplot(aes(y = mean_lcld, x = Year, color = Region)) +
+  geom_line() +
+  theme_bw() +
+  labs(y = "Mean LCLD across all watersheds")
+```
+
+Plots of mean LCLD by year in descending order for each region.
+
+```{r}
+
+lcld %>% 
+  group_by(Region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  mutate(temp = paste(as.factor(Year), Region, sep = "_")) %>% 
+  ggplot(aes(x = mean_lcld, y = fct_reorder(temp, mean_lcld))) +
+  geom_point() +
+  scale_y_discrete(labels = function(x) str_replace(x, "_Bristol Bay|_Cook Inlet|_Prince William Sound|_Kodiak|_Copper River", "")) +
+  facet_wrap(~Region, scales = "free_y") +
+  theme_bw() +
+  labs(x = "Mean LCLD (Julian Date)", y = "Year (Ordered by Region)")
+```
+
+
+In order to develop scenarios of summer conditions with high/low snowpack and warm/cold air temperatures, I merged the average summer air temperatures I downloaded from Climate at a Glance for the different regions. (I merged Valdez-Cordova Census Area to both PWS and Copper River). The plot below shows the average LCLD for salmon watersheds within each region against the average summer air temperatures for the same region. Note it's a little empty in the top R and bottom L where we don't have a lot of years with low snow and very cold or high snow and very warm since warm summers tend to melt the snowpack faster.
+
+* High snow, cold summer = 2012 looks good for all regions
+* High snow, warm summer = 2013 looks good for all regions
+* Low snow, cold summer = 2003, but note that it's actually not that cold.
+* Low snow, warm summer = 2019 is very warm across all regions, but it actually has average snowpack for Bristol Bay and Cook Inlet. 2016 is another option with low snow across all regions, but not quite as warm as other years.
 
 ```{r}
 clim_dat <- readRDS("output/clim_dat.rds")
 
-scale_var <- function(x){
-  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
-}
-
-#deviations from normal
-clim_dat %>% 
-  group_by(Region, parameter) %>% 
-  dplyr::mutate(Value_metric_sc = scale_var(Value_metric)) %>% 
-  ggplot(aes(x = Year, y = Value_metric_sc, color = Region)) +
-  geom_line() +
-  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
-  facet_wrap(~parameter, scales = "free", ncol = 1) +
-  geom_hline(aes(yintercept = 0)) +
+lcld %>% 
+  mutate(clim_region = case_when(grepl("Bristol", Region) ~ "Bristol Bay Borough",
+                                 grepl("Kodiak", Region) ~ "Kodiak Island Borough",
+                                 grepl("Cook", Region) ~ "Matanuska-Susitna Borough",
+                                 grepl("Copper", Region) ~ "Valdez-Cordova Census Area",
+                                 grepl("Prince", Region) ~ "Valdez-Cordova Census Area")) %>% 
+  group_by(Region, clim_region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  left_join(clim_dat %>% filter(parameter == "Temperature") %>% select(clim_region = Region, Value, Value_metric, Year)) %>% 
+  ggplot(aes(x = mean_lcld, y = Value)) +
+  geom_point() +
+  geom_text_repel(aes(label = substr(Year, 3, 4))) +
+  facet_wrap(~Region, scales = "free") +
   theme_bw() +
-  theme(legend.position = "right") +
-  labs(y = "Standardized values")
-
-```
-
-Snowtel data indicate April 1st SWE (magnitude of spring snowpack) for different sites across some of our regions. Note that there were no snowtel sites with data for Bristol Bay or Kodiak. From Tim's paper, 2012 and 2013 were high snow years and 2015 was a low snow year.
-
-* 2012 was a high snow year
-* 2015 was a low snow year
-
-```{r}
-snowtel <- readRDS("output/snowtel.rds")
-
-#deviations from normal
-snowtel %>% 
-  filter(!grepl("Gulk|Tela", Snowtel_site)) %>% 
-  group_by(Snowtel_site) %>% 
-  mutate(swe_sc = scale_var(Apr1_SWE)) %>% 
-  ggplot(aes(x = Year, y = swe_sc, color = Snowtel_site)) +
-  geom_line() +
-  scale_x_continuous(breaks = c(seq(2000, 2019, 2))) +
-  theme_bw() +
-  theme(legend.position = "right") +
-  geom_hline(aes(yintercept = 0)) +
-  facet_wrap(~Region, ncol = 1) +
-  labs(y = "Standardized values")
+  theme() +
+  labs(x = "Mean LCLD (Julian Date)", y = "Average Summer Air Temperature (F)")
 
 ```
 

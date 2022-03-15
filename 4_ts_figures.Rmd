@@ -11,6 +11,8 @@ library(tidyverse)
 library(gbm)
 library(dismo)
 library(ggpubr)
+library(ggrepel)
+library(stringi)
 
 panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
 {
@@ -41,6 +43,7 @@ Figure of high versus low thermal sensitivity.
 
 ```{r}
 dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 
 dat <- dat %>% 
   mutate(year = year(sampleDate))
@@ -48,50 +51,128 @@ dat <- dat %>%
 ```
 
 
-```{r}
+```{r TS - 2 sites}
 dat %>% 
+  mutate(color = "") %>% 
   filter(SiteID %in% c("CIK_14", "CIK_3"), year %in% c(2013, 2015, 2019)) %>%
   mutate(site = case_when(SiteID == "CIK_14" ~ "Anchor River",
                           TRUE ~ "Chester Creek")) %>% 
   ggplot() +
   geom_line(aes(x = sampleDate, y = airDT)) +
-  geom_line(aes(x = sampleDate, y = meanDT), color = "blue") +
+  geom_line(aes(x = sampleDate, y = meanDT, color = color)) +
+  scale_color_manual(values = "blue") +
   facet_grid(vars(site), vars(year), scales = "free_x") +
   theme_bw() +
-  labs(x = "Date", y = "Temperature")
+  labs(x = "Date", y = "Temperature", color = "Stream Temperature") +
+  theme(legend.position = "bottom", text = element_text(size = 18))
+
+ggsave("output/presentation_figs/TS plot for anchor and chester.jpeg", width = 8, height = 6)
 
 ```
+
+Figure showing availability of sites by region and year.
+
+Function to filter data frame by different combinations of julian date and completeness. Note this assumes a lot about the input data frame.
+
+```{r data filter function}
+
+jd_completeness_filter <- function(inputDat, jd_filter, completeness_filter) {
+  dat <- inputDat %>% 
+    mutate(jd = as.numeric(format(sampleDate, "%j")),
+           year = year(sampleDate)) %>% 
+    filter(jd >= 152, jd <= jd_filter) #June 1st to end date
+  ndays <- max(dat$jd) - min(dat$jd)
+  dat2 <- dat %>%
+    group_by(SiteID, year) %>%
+    mutate(completeness = n()/ndays * 100) %>% 
+    filter(completeness > completeness_filter) %>% 
+    ungroup()
+  return(dat2)
+}
+
+```
+
+
+```{r}
+dat2 <- jd_completeness_filter(dat, 243, 80)
+
+dat2 <- left_join(dat2, md %>% dplyr::select(SiteID = Site, Region))
+
+dat2 %>% 
+  distinct(SiteID, year) %>% 
+  count(year) %>% 
+  ggplot() +
+  geom_point(aes(x = year, y = n)) +
+  labs(x = "Year", y = "Number of Sites", title = "Sites with complete summer data") +
+  theme_bw() +
+  theme(text = element_text(size = 18))
+
+ggsave("output/presentation_figs/sites by year.jpeg", width = 8, height = 6)
+
+dat2  %>% 
+  distinct(Region, SiteID, year) %>% 
+  count(Region, year) %>% 
+  filter(year %in% c(2011:2019)) %>% 
+  ggplot() +
+  geom_col(aes(x = year, y = n, fill = Region), position = position_dodge()) +
+  labs(x = "Year", y = "Number of Sites") +
+  theme_bw() +
+  scale_x_continuous(breaks = c(2011, 2013, 2015, 2017, 2019)) +
+  theme(legend.position = "bottom", text = element_text(size = 18)) +
+  guides(fill=guide_legend(nrow=4,byrow=TRUE))
+
+ggsave("output/presentation_figs/sites by region and year.jpeg", width = 8, height = 6)
+
+
+
+```
+
+Why are some kodiak sites in above plot but don't have output from DFA?
+
+```{r}
+dat2 %>% 
+  filter(Region == "Kodiak", year %in% 2011:2014) %>% 
+  distinct(SiteID)
+
+mets %>% 
+  filter(SiteID %in% c("fws_kdk_aforv01", "fws_kdk_busrv01", "usgs_15295700")) %>% 
+  dplyr::select(SiteID, Year, TempSens)
+```
+
+
 
 # TS figures
 
 Read in metrics data frame.
 
 ```{r}
-mets <- readRDS("output/metrics_2022-02-17.rds")
+mets <- readRDS("output/metrics_2022-02-24.rds")
 
-mets %>% 
-  count(subset1)
-mets %>% 
-  filter(subset1 == 0) %>% 
-  distinct(Site, Year)
+mets %>%
+  filter(subset1==1 & deshka ==1) %>%
+  distinct(SiteID, Year) %>%
+  count(SiteID)
 
-mets %>% 
-  filter(subset1==1 & deshka ==1) %>% 
-  distinct(Site, Year) %>% 
-  count(Site)
+mets %>%
+  filter(subset1 == 1, Year %in% 2011:2019) %>% 
+  filter(is.na(TempSens))
+
+#filter to data used for dfa - subset 1 and study period 2011-19, also some sites that were removed.
+mets_sp <- mets %>%
+  filter(subset1 == 1, Year %in% 2011:2019, !is.na(TempSens)) 
+
+
 ```
 
-Plot of stream TS by region. Remove extra deshka sites.
+Plot of stream TS by region. 
 
-```{r}
-mets %>%
-  filter(subset1 == 1, Year %in% 2011:2019, !is.na(TempSens)) %>% 
+```{r ts by region and year}
+mets_sp %>%
   count(Region, Year) %>% 
   pivot_wider(names_from = Year, values_from = n, names_sort = TRUE)
 
 
-mets %>%
-  filter(subset1 == 1, Year %in% 2011:2019, !is.na(TempSens)) %>% 
+mets_sp %>%
   group_by(Region, Year) %>% 
   mutate(count = n(), 
          Region = gsub("_", " ", Region)) %>% 
@@ -102,9 +183,137 @@ mets %>%
   theme(text = element_text(size = 18)) +
   labs(x = "Year", y = "Thermal Sensitivity")
 
+mets_sp %>%
+  mutate(yearf = as.factor(Year)) %>% 
+  group_by(Region, yearf) %>% 
+  mutate(count = n(), 
+         Region = gsub("_", " ", Region)) %>% 
+  # filter(count > 7) %>% 
+  ggplot() +
+  geom_boxplot(aes(y = TempSens, x = yearf)) +
+  # geom_point(aes(x = yearf, y = TempSens)) +
+  theme_bw() +
+  theme(text = element_text(size = 18)) +
+  scale_x_discrete(breaks = c(2011, 2013, 2015, 2017, 2019),
+                   labels = c(11,13,15,17,19)) +
+  labs(x = "Year", y = "Thermal Sensitivity") +
+  facet_wrap(~Region)
+
 ggsave("output/presentation_figs/ts by region and year.jpeg", width = 12, height = 8)
 
 ```
+
+
+```{r ts by region boxplot}
+
+mets_sp %>%
+  group_by(Region, Year) %>% 
+  mutate(count = n(), 
+         Region = gsub("_", " ", Region)) %>% 
+  filter(count > 7) %>% 
+  ggplot() +
+  geom_boxplot(aes(y = TempSens, x = Region)) +
+  theme_bw() +
+  theme(text = element_text(size = 18)) +
+  labs(x = "Year", y = "Thermal Sensitivity")
+
+ggsave("output/presentation_figs/ts by region and year.jpeg", width = 12, height = 8)
+
+
+```
+
+```{r ts by region freqpoly}
+
+mets_sp %>%
+  group_by(Region) %>% 
+  mutate(med = median(TempSens),
+         Region = gsub("_", " ", Region),
+         med_pos = case_when(Region == "Cook Inlet" ~ 55,
+                             Region == "Bristol Bay" ~ 50,
+                             Region == "Copper River" ~ 45,
+                             Region == "Kodiak" ~ 40,
+                             Region == "Prince William Sound" ~ 35),
+         med_lab = paste(Region, round(med, 2), sep = " = ")) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = TempSens, color = Region)) +
+  # geom_vline(aes(xintercept = med, color = Region), linetype = 2, size = 1, show.legend = FALSE) +
+  geom_text(aes(x = 1.2, y = med_pos, label = med_lab, color = Region), show.legend = FALSE) +
+  theme_bw() +
+  theme(legend.position = "bottom", text = element_text(size = 18)) +
+  labs(y = "Count", x = "Thermal Sensitivity") +
+  guides(color=guide_legend(nrow=2,byrow=TRUE))
+
+ggsave("output/presentation_figs/ts freq plot by region.jpeg", width = 8, height = 6)
+  
+
+
+```
+
+
+TS for long-term sites
+
+```{r ts over time}
+mets %>% 
+  filter(Year %in% 2011:2019, !is.na(TempSens)) %>% 
+  group_by(SiteID) %>% 
+  mutate(ct = n()) %>% 
+  arrange(desc(ct)) %>% 
+  filter(ct > 4) %>% 
+  ggplot(aes(x = Year, y = TempSens, group = SiteID)) +
+  geom_line() +
+  # geom_point(size = 1) +
+  facet_wrap(~Region) +
+  theme(legend.position = "none")
+
+left_join(mets, md %>% dplyr::select(SiteID = Site, Waterbody_name)) %>% 
+  mutate(wb_lab = stri_extract_first(str_to_title(Waterbody_name), regex="\\w+")) %>% 
+  filter(Year %in% 2011:2019, !is.na(TempSens)) %>% 
+  group_by(SiteID) %>% 
+  mutate(ct = n()) %>% 
+  arrange(desc(ct)) %>% 
+  filter(ct == 9) %>%
+  mutate(label2 = paste(wb_lab, " = ", round(mean(TempSens), 2), " (", round(sd(TempSens), 2), ")",sep = "")) %>% 
+  # dplyr::select(wb_lab, TempSens, Year) %>% arrange(TempSens)
+  ggplot() +
+  geom_line(aes(x = Year, y = TempSens, color = Waterbody_name)) +
+  geom_line(data = . %>% filter(wb_lab %in% c("Wasilla", "Cooper")), aes(x = Year, y = TempSens, color = Waterbody_name), size = 2) +
+  # geom_point(size = 1) +
+  geom_text_repel(aes(x = Year, y = TempSens, label = label2), 
+                  data = . %>% filter(Year == 2015, grepl("Wasilla|COOPER", Waterbody_name)), size = 8) +
+  # facet_wrap(~Region) +
+  scale_x_continuous(breaks = c(2011, 2013, 2015, 2017, 2019)) +
+  theme_bw() +
+  theme(legend.position = "none", text = element_text(size = 18)) +
+  labs(y = "Thermal Sensitivity")
+
+ggsave("output/presentation_figs/ts long-term sites.jpeg", width = 12, height = 8)
+
+
+left_join(mets, md %>% dplyr::select(SiteID = Site, Waterbody_name)) %>% 
+  mutate(wb_lab = stri_extract_first(str_to_title(Waterbody_name), regex="\\w+")) %>% 
+  filter(Year %in% 2011:2019, !is.na(TempSens)) %>% 
+  group_by(SiteID, Waterbody_name) %>% 
+  mutate(ct = n()) %>% 
+  arrange(desc(ct)) %>% 
+  filter(ct == 9) %>% 
+  summarize(mean(TempSens), sd(TempSens))
+```
+
+
+TS for glacial sites
+
+```{r ts for glacial sites}
+mod_dat2 <- readRDS("data_preparation/final_data/model_data2022-02-24.rds")
+
+
+left_join(mod_dat2, md %>% dplyr::select(SiteID = Site, Waterbody_name)) %>%
+  filter(asrt_glac > 0) %>% distinct(SiteID, Waterbody_name, asrt_glac) %>% arrange(asrt_glac)
+  ggplot(aes(asrt_glac, TempSens)) +
+  geom_point(aes(size = log_area))
+  
+
+```
+
 
 
 ## pca
@@ -157,8 +366,8 @@ ggsave("output/presentation_figs/pca1_regions.jpeg", width = 12, height = 8)
 
 jpeg(filename = "output/presentation_figs/metrics_pairplot.jpeg", width = 12, height = 8, units = "in", res = 100)
 mets %>% 
-  dplyr::select(TempSens, RANGE_MAX, MA7d_DMT, MA7d_DMT_jd) %>% 
-  filter(!is.na(TempSens)) %>% 
+  dplyr::select(TS = TempSens, "Daily Range" = RANGE_MAX, "Maximum" = MA7d_DMT, "Timing" = MA7d_DMT_jd) %>% 
+  filter(!is.na(TS)) %>% 
   pairs(., diag.panel = panel.hist, upper.panel = panel.cor, lower.panel = panel.smooth)
 dev.off()
 
@@ -168,40 +377,6 @@ dev.off()
 
 Bring in saved brts.
 
-```{r}
-brt_step <- read_rds("output/brt_tc5_lr005.rds")
-
-cv.dev <- brt_step$cv.statistics$deviance.mean
-null.dev <- brt_step$self.statistics$mean.null
-train.dev <- brt_step$self.statistics$mean.resid
-
-dev.exp <- (null.dev - cv.dev)/null.dev #cross validated deviance explained
-dev.exp.train <- (null.dev - train.dev)/null.dev #training deviance explained
-
-brt_step$contributions %>% 
-  mutate(var_names = case_when(var == "wtd_slope_MEAN" ~ "Watershed slope",
-                               var == "log_cat_elev" ~ "Catchment elevation",
-                               var == "asrt_lake" ~ "Lake cover",
-                               var == "log_area" ~ "Watershed size",
-                               var == "summer_precip" ~ "Summer precipitation",
-                               var == "dist_coast_km" ~ "Distance to coast",
-                               var == "snow_ind" ~ "Snow index",
-                               var == "asrt_wet" ~ "Wetland cover",
-                               var == "log_cat_slope" ~ "Catchment slope",
-                               var == "log_slope" ~ "Stream gradient",
-                               var == "wtd_north_per" ~ "North aspect",
-                               var == "asrt_glac" ~ "Glacier cover",
-                               TRUE ~ var)) %>% 
-  ggplot(aes(x = rel.inf, y = fct_reorder(var_names, rel.inf))) +
-  geom_col() +
-  theme_bw() +
-  theme(text = element_text(size = 18), axis.title.y = element_blank()) +
-  labs(x = "Relative Variable Importance")
-
-ggsave("output/presentation_figs/brt_varimp.jpeg", width = 10, height = 8)
-
-
-```
 
 
 ```{r}
@@ -245,49 +420,7 @@ dev.off()
 ```
 
 
-```{r internal cv predictions}
-brt_out <- brt_in %>% 
-  mutate(preds = predict(brt_step),
-         cv.preds = brt_step$fold.fit)
 
-brt_out %>% 
-  mutate(Region = gsub("_", " ", Region)) %>% 
-  ggplot(aes(x = cv.preds, y = TempSens)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  geom_abline(aes(slope = 1, intercept = 0)) +
-  facet_wrap(~Region) +
-  coord_cartesian(xlim = c(-0.2, 0.8), ylim = c(-0.2, 0.8)) +
-  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.75, 1, 0.1)),
-                        aes(label = ..eq.label..)) +
-  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.6, 1, 0.1)),
-                        aes(label = ..adj.rr.label..)) +
-  theme_bw() +
-  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity") +
-  theme(text = element_text(size = 18))
-
-ggsave("output/presentation_figs/brt OP plot.jpeg", width = 10, height = 8) 
-```
-
-
-```{r internal cv predictions}
-
-brt_out %>% 
-  ggplot(aes(x = cv.preds, y = TempSens)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  geom_abline(aes(slope = 1, intercept = 0)) +
-  coord_cartesian(xlim = c(-0.2, 0.8), ylim = c(-0.2, 0.8)) +
-  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.75, 1, 0.1)),
-                        aes(label = ..eq.label..)) +
-  stat_regline_equation(label.x = -0.2, label.y = c(seq(0.6, 1, 0.1)),
-                        aes(label = ..adj.rr.label..)) +
-  theme_bw() +
-  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity") +
-  theme(text = element_text(size = 18))
-
-# ggsave("output/presentation_figs/brt OP plot.jpeg", width = 10, height = 8) 
-```
 
 
 ```{r rmse of internal cv predictions}

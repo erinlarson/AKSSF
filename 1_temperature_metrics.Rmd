@@ -74,16 +74,16 @@ Add in the filter that removes most of the Deshka sites so they don't overwhelm 
 ```{r add regions and ts}
 # metrics <- read_rds("output/metrics_2021-11-15.rds")
 
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds") #saved from combining response and covariates in 2a.
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-24.rds") #saved from combining response and covariates in 2c.
 
-left_join(metrics %>% rename(Site = SiteID), mod_dat %>% select(Site, Year, TempSens, Region)) %>% 
+left_join(metrics, mod_dat %>% select(SiteID, Year, TempSens, Region)) %>% 
   filter(is.na(TempSens)) %>% 
-  count(Year) #mostly 2020
+  count(Year) #mostly before 2011 or 2020, also quite a few from removing deshka sites in 2017-2019
 
 
-metrics2 <- left_join(metrics %>% rename(Site = SiteID), 
-                      mod_dat %>% select(Site, Year, TempSens, Region)) %>% 
-  left_join(md %>% select(Site, subset1, deshka))
+metrics2 <- left_join(metrics, 
+                      mod_dat %>% select(SiteID, Year, TempSens, Region)) %>% 
+  left_join(md %>% select(SiteID = Site, subset1, deshka))
 
 
 ```

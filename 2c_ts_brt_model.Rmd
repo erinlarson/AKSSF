@@ -1,0 +1,691 @@
+---
+title: "2c_ts_brt_model"
+output: html_document
+date: '2022-02-25'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dismo)
+library(gbm)
+library(ggpubr)
+library(tidyverse)
+library(sf)
+```
+
+Use single trend DFA results received from Tim on 2/22/22. Combine with covariates to create new model data frame.
+
+
+```{r create model data frame}
+dfa <- readRDS("output/dfa_results.rds")
+summary(dfa)
+
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
+summary(mod_dat)
+
+mod_dat2 <- left_join(dfa %>% 
+            filter(trends == 1, subset == 1, Year < 2020) %>% 
+            dplyr::select(SiteID, Year, TempSens, Loadings),
+          mod_dat %>% 
+            dplyr::select(SiteID = Site, Year, Region:log_precip)) 
+
+#good removed.
+mod_dat2 %>%           
+  filter((SiteID == "NPS_Newhalen_River" & Year == 2015))
+
+summary(mod_dat2)
+mod_dat2 %>% filter(is.na(log_slope)) %>% distinct(SiteID)
+
+drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak", "UW_Nerka Pike Creek")
+
+mod_dat2 <- mod_dat2 %>% 
+  filter(!SiteID %in% drop_sites)
+
+saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+
+```
+
+```{r}
+mod_dat2 <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
+
+names(mod_dat2)
+```
+
+
+```{r pair plots against TS}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y, use = "complete.obs"))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+mod_dat2 %>% 
+  dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+mod_dat2 %>% 
+  dplyr::select(TempSens, log_area, dist_coast_km, wtd_north_per,
+         asrt_wet, asrt_glac, asrt_lake) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
+
+```
+
+
+
+
+
+
+# Boosted regression tree
+
+Dismo example
+
+```{r}
+library(dismo) 
+data(Anguilla_train)
+angaus.tc5.lr01 <- gbm.step(data=Anguilla_train, gbm.x = 3:13, gbm.y = 2,
+family = "bernoulli", tree.complexity = 5, learning.rate = 0.01, 
+bag.fraction = 0.5)
+
+# Find interactions in the gbm model:
+find.int <- gbm.interactions( angaus.tc5.lr01)
+find.int$interactions
+find.int$rank.list
+```
+
+
+
+
+```{r brt data frame}
+brt_in <- mod_dat2 %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+                             wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km,
+                             asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region)
+
+#remove att and names from snow_ind (output of resid function)
+#this fixed error in interactions function
+brt_in[] <- lapply(brt_in, c)
+str(brt_in)
+
+names(brt_in)
+```
+
+Interactions are all really weak, < 0.5 so they don't indicate any interaction in the perspectives plot. 
+
+Output from step run:
+fitting final gbm model with a fixed number of 5200 trees for TempSens
+
+mean total deviance = 0.134 
+mean residual deviance = 0.023 
+ 
+estimated cv deviance = 0.05 ; se = 0.003 
+ 
+training data correlation = 0.911 
+cv correlation =  0.792 ; se = 0.013 
+ 
+elapsed time -  0.02 minutes
+
+```{r}
+
+brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
+                     data = brt_in,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+saveRDS(brt_step, paste("output/brt_dfa1tr", Sys.Date(), ".rds", sep = ""))
+```
+
+```{r}
+brt_step <- readRDS("output/brt_dfa1tr2022-02-24.rds")
+
+# brt_gbm <- gbm(TempSens ~ ., data = brt_in, distribution = "gaussian",
+#                n.trees = 8300, interaction.depth = 5, bag.fraction = 0.5,
+#                cv.folds = 10, keep.data = TRUE, shrinkage = 0.005)
+# 
+# saveRDS(brt_gbm, "output/brt-gbm_tc5_lr005.rds")
+
+
+summary(brt_step)
+
+gbm.plot(brt_step, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+# brt_simplify <- gbm.simplify(brt_step) #this takes a long time to run.
+
+brt_int <- gbm.interactions(brt_step) #identifies interactions
+brt_int$rank.list
+
+gbm.perspec(brt_step, x = 12, y =5) #plots interactions, but I can't get this to show anything
+
+
+interact.gbm(brt_step, data = brt_in, n.trees = 200)
+```
+
+
+
+```{r brt interaction}
+int_vars <- c("summer_precip", "wtd_slope_MEAN")
+
+pd_precip_slope <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE)
+pd_precip_slope
+
+int_vars <- c("log_area", "asrt_lake")
+pd_area_lake <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_area_lake
+
+int_vars <- c("snow_ind", "log_area")
+pd_area_snow <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, zlab = "TempSens", rug = TRUE,
+              chull = TRUE)
+pd_area_snow
+
+int_vars <- c("Region", "wtd_slope_MEAN") #for some reason can't use factor for this
+pd_area_snow <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, rug = TRUE)
+pd_area_snow
+
+```
+
+
+```{r elith model data and deviance explained}
+
+eel_dat <- read_csv("S:/Classes/Machine Learning Seminar/Boosted Regression Trees - supplementary material/jane_1390_sm_appendixs3/data/model.data.csv") %>% 
+  mutate(Method = as.factor(Method)) %>% 
+  as.data.frame()
+
+eel_brt <- gbm_step(Angaus ~ ., data = eel_dat[,-1], distribution = "bernoulli",
+               n.trees = 1000, shrinkage = 0.01, interaction.depth = 5)
+
+eel_brt <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
+                     data = eel_dat[,-1],
+                     tree.complexity = 5, learning.rate = 0.01, bag.fraction = 0.5,
+                     n.folds = 10, family = "bernoulli", max.trees = 2000)
+
+
+summary(eel_brt)
+
+cv.dev <- eel_brt$cv.statistics$deviance.mean # same as estimated cv deviance in output
+null.dev <- eel_brt$self.statistics$mean.null #same as mean total deviance in output
+train.dev <- eel_brt$self.statistics$mean.resid #same as mean residual deviance in output
+
+dev.exp <- (null.dev - cv.dev)/null.dev
+dev.exp.train <- (null.dev - train.dev)/null.dev
+
+```
+
+Deviance explained.
+
+```{r brt deviance}
+cv.dev <- brt_step$cv.statistics$deviance.mean # same as estimated cv deviance in output
+null.dev <- brt_step$self.statistics$mean.null #same as mean total deviance in output
+train.dev <- brt_step$self.statistics$mean.resid #same as mean residual deviance in output
+
+dev.exp <- (null.dev - cv.dev)/null.dev
+dev.exp.train <- (null.dev - train.dev)/null.dev
+
+dev.exp
+dev.exp.train
+```
+
+
+```{r variable importance plot}
+
+brt_step$contributions %>% 
+  mutate(var_names = case_when(var == "wtd_slope_MEAN" ~ "Watershed slope",
+                               var == "log_cat_elev" ~ "Catchment elevation",
+                               var == "asrt_lake" ~ "Lake cover",
+                               var == "log_area" ~ "Watershed size",
+                               var == "summer_precip" ~ "Summer precipitation",
+                               var == "dist_coast_km" ~ "Distance to coast",
+                               var == "snow_ind" ~ "Snow index",
+                               var == "asrt_wet" ~ "Wetland cover",
+                               var == "log_cat_slope" ~ "Catchment slope",
+                               var == "log_slope" ~ "Stream gradient",
+                               var == "wtd_north_per" ~ "North aspect",
+                               var == "asrt_glac" ~ "Glacier cover",
+                               TRUE ~ var)) %>% 
+  ggplot(aes(x = rel.inf, y = fct_reorder(var_names, rel.inf))) +
+  geom_col() +
+  theme_bw() +
+  theme(text = element_text(size = 18), axis.title.y = element_blank()) +
+  labs(x = "Relative Variable Importance")
+
+ggsave("output/presentation_figs/brt_varimp.jpeg", width = 10, height = 8)
+
+
+```
+
+
+```{r brt internal xval}
+brt_out <- brt_in %>% 
+  mutate(preds = predict(brt_step),
+         cv.preds = brt_step$fold.fit)
+summary(brt_out)
+
+
+brt_out %>% 
+  mutate(Region = gsub("_", " ", Region)) %>% 
+  ggplot(aes(x = cv.preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  facet_wrap(~Region) +
+  coord_cartesian(xlim = c(-0.7, 1.5), ylim = c(-0.7, 1.5)) +
+  stat_regline_equation(label.x = -0.6, label.y = 1.2,
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.65, label.y = 0.9,
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity") +
+  theme(text = element_text(size = 18))
+
+ggsave("output/presentation_figs/brt OP plot.jpeg", width = 10, height = 8) 
+
+brt_out %>% 
+  mutate(sqerror = (TempSens - cv.preds)^2) %>% 
+  summarize(sqrt(mean(sqerror)))
+
+```
+
+
+```{r internal cv predictions single plot}
+
+brt_out %>% 
+  ggplot(aes(x = cv.preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  coord_cartesian(xlim = c(-0.7, 1.5), ylim = c(-0.7, 1.5)) +
+  stat_regline_equation(label.x = -0.6, label.y = 1.2,
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.65, label.y = 0.9,
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity") +
+  theme(text = element_text(size = 18))
+
+ggsave("output/presentation_figs/brt OP single plot.jpeg", width = 10, height = 8)
+```
+
+
+
+
+Site cross-validation for gbm.
+
+```{r brt site cross val}
+site_xval <- mod_dat2 %>% 
+  distinct(SiteID) %>% 
+  mutate(group = sample(1:15, 318, replace = TRUE)) 
+
+brt_xval_preds <- data.frame()
+
+ptm <- proc.time()
+
+#save the preds on testing data
+for(i in 1:15) {
+  test <- left_join(site_xval %>% filter(group == i), mod_dat2)
+  train <- left_join(site_xval %>% filter(!group == i), mod_dat2)
+  brt_train <- train %>% dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
+                             wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km,
+                             asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region) %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame()
+
+  brt_train[] <- lapply(brt_train, c)
+  
+  brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
+                     data = brt_train,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000)
+
+  newpreds <- test %>% 
+    select(SiteID, Year) %>% 
+    mutate(preds = predict(brt_step, test))
+  
+  brt_xval_preds <- bind_rows(newpreds, brt_xval_preds)
+}
+
+# Stop the clock
+proc.time() - ptm
+
+ # user  system elapsed 
+ # 998.64    3.62 1001.77 
+1001/60 #17 minutes
+
+brt_xval_preds %>% count(SiteID, Year) %>% distinct(n)
+
+
+```
+
+
+```{r}
+left_join(mod_dat2 %>% select(SiteID, Year, Region, TempSens), brt_xval_preds) %>% 
+  mutate(Region = gsub("_", " ", Region)) %>% 
+  ggplot(aes(x = preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  facet_wrap(~Region) +
+  coord_cartesian(xlim = c(-0.7, 1.5), ylim = c(-0.7, 1.5)) +
+  stat_regline_equation(label.x = -0.6, label.y = 1.2,
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.65, label.y = 0.9,
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity")
+
+
+left_join(mod_dat2 %>% select(SiteID, Year, Region, TempSens), brt_xval_preds) %>% 
+  ggplot(aes(x = preds, y = TempSens)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  coord_cartesian(xlim = c(-0.7, 1.5), ylim = c(-0.7, 1.5)) +
+  stat_regline_equation(label.x = -0.6, label.y = 1.2,
+                        aes(label = ..eq.label..)) +
+  stat_regline_equation(label.x = -0.65, label.y = 0.9,
+                        aes(label = ..adj.rr.label..)) +
+  theme_bw() +
+  labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity")
+
+```
+
+```{r}
+left_join(site_xval, mod_dat2 %>% distinct(SiteID, Region)) %>% 
+  count(group, Region) %>% 
+  arrange(desc(Region))
+
+left_join(site_xval, mod_dat2 %>% distinct(SiteID, Region)) %>% 
+  count(Region) 
+
+```
+
+
+## brt untransformed predictors
+
+I first did this as a check to see if it changed the model, which it did not.
+
+Now to make things easier to create some simple predictions for the presentation, I am not transforming anything -- even snow, and I am dropping stream slope and summer precip since I don't have those handy for the huc12 outlets yet.
+
+
+```{r }
+brt_in2 <- mod_dat2 %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, 
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_ind, glac_10)
+
+#remove att and names from snow_ind (output of resid function)
+#this fixed error in interactions function
+brt_in2[] <- lapply(brt_in2, c)
+str(brt_in2)
+
+names(brt_in2)
+```
+
+
+Output from step run:
+fitting final gbm model with a fixed number of 5500 trees for TempSens
+
+mean total deviance = 0.134 
+mean residual deviance = 0.023 
+ 
+estimated cv deviance = 0.049 ; se = 0.004 
+ 
+training data correlation = 0.913 
+cv correlation =  0.798 ; se = 0.012 
+ 
+elapsed time -  0.02 minutes 
+
+```{r}
+
+brt_step2 <- gbm.step(gbm.y = 1, gbm.x = 2:11, 
+                     data = brt_in2,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+# saveRDS(brt_step, paste("output/brt_dfa1tr", Sys.Date(), ".rds", sep = ""))
+
+summary(brt_step2)
+```
+
+
+
+# Predictions
+
+Bring in hu12 outlet covariates and snowpack for 2012 (high) and 2015 (low) years.
+
+distance to coast in point file
+summer precip from daymet - not ready yet
+stream slope - dustin will add later
+
+```{r}
+hu12_dat <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
+# huc12_pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
+
+hu12_snow <- hu12_dat %>% 
+  dplyr::select(AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019, wtd_slope_MEAN = AwcHuc12_wtd_slope_MEAN,
+                cat_ID_con) %>% 
+  pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019, names_to = "name", values_to = "lcld") %>% 
+  mutate(year = substr(name,22,25)) %>% 
+  filter(!is.na(lcld))
+
+summary(hu12_snow)
+
+hu12_snow %>% 
+  ggplot(aes(x = lcld)) +
+  geom_histogram() +
+  facet_wrap(~year)
+
+hu12_snow %>% 
+  group_by(year) %>% 
+  summarize(mean(lcld))
+
+hu12_snow %>% 
+  ggplot(aes(y = lcld, x = wtd_slope_MEAN)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year)
+
+library(nlme)
+ess_lme1 <- lme(lcld ~ I(wtd_slope_MEAN^2), random = ~1|year, dat = hu12_snow)
+ess_lme2 <- lme(lcld ~ wtd_slope_MEAN, random = ~1|year, dat = hu12_snow)
+AIC(ess_lme1, ess_lme2)
+
+#AIC selects linear model in this case, but should probably use same resid as I did for the model data.
+hu12_snow <- hu12_snow %>% 
+  mutate(snow_ind = resid(ess_lme1, level = 1))
+
+hu12_snow %>% 
+  ggplot(aes(y = snow_ind, x = wtd_slope_MEAN)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year)
+
+```
+
+Double checked that values for all covariates are roughly in same ranges as in mod_dat -- they look fine, could probably make a figure showing histograms for both sets of covariates for team, but I don't think this is a problem, it seems no other variables have any effects of magnitude besides watershed slope.
+
+```{r}
+
+names(hu12_dat)
+
+brt_step2$var.names
+
+hu12_preds <- hu12_dat %>% 
+  mutate(glac_10 = case_when(AwcHuc12_wtd_glacier_per > 0 ~ 1,
+                             TRUE ~ 0),
+         wtd_area_sqKM = Shape_Area/1000000,
+         wtd_glacier_per = case_when(is.na(AwcHuc12_wtd_glacier_per) ~ 0,
+                                     TRUE ~ AwcHuc12_wtd_glacier_per),
+         wtd_lake_per = case_when(is.na(AwcHuc12_wtd_lake_per) ~ 0,
+                                  TRUE ~ AwcHuc12_wtd_lake_per),
+         Region = case_when(grepl("Cook", cat_ID_con) ~ "Cook Inlet",
+                            grepl("Bristol", cat_ID_con) ~ "Bristol Bay",
+                            grepl("Prince", cat_ID_con) ~ "Prince William Sound",
+                            grepl("Kodiak", cat_ID_con) ~ "Kodiak",
+                            grepl("Copper", cat_ID_con) ~ "Copper River",
+                            TRUE ~ NA_character_)) %>%  
+  dplyr::select(cat_elev_MEAN = AwcHuc12_cat_elev_MEAN,
+         cat_slope_MEAN = AwcHuc12_cat_slope_MEAN,
+         wtd_north_per = AwcHuc12_wtd_north_per,
+         wtd_slope_MEAN = AwcHuc12_wtd_slope_MEAN,
+         wtd_area_sqKM,
+         glac_10,
+         wtd_glacier_per,
+         wtd_lake_per,
+         wtd_wet_per = AwcHuc12_wtd_wet_per,
+         cat_ID_con,
+         Region) %>% 
+  left_join(hu12_snow %>% 
+              dplyr::select(snow_ind = snow_ind, cat_ID_con, year) %>% 
+              filter(year %in% c(2012, 2015)))
+
+summary(hu12_preds)
+summary(mod_dat2)
+
+preds_hisnow = bind_cols(hu12_preds %>% 
+                           filter(year == 2012) %>% 
+                           dplyr::select(Region, cat_ID_con, year), 
+                         preds = predict(brt_step2, newdata = hu12_preds %>% filter(year == 2012)))
+preds_losnow = bind_cols(hu12_preds %>% 
+                           filter(year == 2015) %>% 
+                           dplyr::select(Region, cat_ID_con, year), 
+                         preds = predict(brt_step2, newdata = hu12_preds %>% filter(year == 2015)))
+
+
+left_join(preds_hisnow %>% dplyr::select(hi = preds, cat_ID_con), preds_losnow %>% dplyr::select(lo = preds, cat_ID_con)) %>% 
+  mutate(diff = hi - lo) %>% summarize(mean(diff))
+
+
+
+
+```
+
+
+Read in spatial data. The cat_ID_con in the covariate data frame links to that field in the outlet point file, which also has the HUC12 code so can link to the huc12 polygons for mapping.
+
+```{r}
+hu12_pts <- st_read(dsn = "T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", layer = "AKSSF_awcHuc12_outlet_cats_points")
+hu12_polys <- st_read(dsn = "T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", layer = "AKSSF_AWC_HUC12s")
+regions <- st_read(dsn = "W:\\GIS\\AKSSF Southcentral\\AKSSF Southcentral.gdb", layer = "AKSSF_regions")
+
+hu12_polys <- hu12_polys %>% 
+  left_join(hu12_pts %>% st_drop_geometry() %>% dplyr::select(HUC12, cat_ID_con)) %>% 
+  left_join(preds_hisnow %>% dplyr::select(Region, cat_ID_con, preds))
+
+#the polygons have two datasets where there is nhd plus, just keep the nhdplus polygons
+hu12_polys <- hu12_polys %>% 
+  mutate(keep = case_when(Region %in% c("Cook Inlet", "Copper River") & MERGE_SRC == "NHD_H_HUC12" ~ 0,
+                          TRUE ~ 1)) %>% 
+  filter(!keep == 0)
+
+hu12_polys %>% st_drop_geometry() %>% count(Region, MERGE_SRC)
+
+ggplot() +
+  geom_sf(data = hu12_polys %>% filter(!is.na(preds)), aes(fill = preds), color = NA) +
+  geom_sf(data = regions %>% filter(Study_Region %in% c("Cook Inlet", "Copper River", "Prince William Sound")),
+          fill = NA) +
+  scale_fill_viridis_c() +
+  labs(fill = "Predicted Thermal Sensitivity") +
+  theme_bw() +
+  theme(legend.position = "bottom", text = element_text(size = 18))
+
+ggsave("output/presentation_figs/ts map.jpeg", width = 8, height = 6)
+
+```
+
+
+```{r}
+hu12_polys %>% st_drop_geometry() %>% distinct(HUType)
+  filter(!is.na(HUType))
+  
+hu12_polys %>% st_drop_geometry() %>% count(HUC12) %>% filter(n==2) %>%  arrange(HUC12)
+
+hu12_polys %>% st_drop_geometry() %>%  distinct(HUC12) #1035
+hu12_pts %>% st_drop_geometry() %>% distinct(cat_ID_con) #1018
+left_join(hu12_polys %>% st_drop_geometry() %>%  distinct(HUC12), 
+          hu12_pts %>% st_drop_geometry() %>% dplyr::select(HUC12, cat_ID_con)) %>% 
+  filter(is.na(cat_ID_con))
+hu12_polys %>% filter(is.na(preds)) %>% st_drop_geometry()
+
+preds_hisnow %>% 
+  group_by(Region) %>% 
+  # summarize(mean(preds),
+  #           sd(preds)) %>%
+  mutate(med = median(preds)) %>% distinct(Region, med)
+
+preds_hisnow %>% 
+  group_by(Region) %>% 
+  # summarize(mean(preds),
+  #           sd(preds)) %>%
+  mutate(med = median(preds),
+         med_pos = case_when(Region %in% c("Prince William Sound", "Cook Inlet") ~ med - 0.1,
+                             TRUE ~ med + 0.1)) %>% 
+  ggplot(aes(x = preds, color = Region)) +
+  geom_freqpoly() +
+  geom_vline(aes(xintercept = med, color = Region), linetype = 2, size = 1, show.legend = FALSE) +
+  geom_text(aes(x = med_pos, y = 50, label = round(med, 2)), show.legend = FALSE) +
+  theme_bw() +
+  theme(legend.position = "bottom", text = element_text(size = 18)) +
+  labs(y = "Count", x = "Predicted Thermal Sensitivity") 
+
+ggsave("output/presentation_figs/ts preds freq plot.jpeg", width = 8, height = 6)
+```
+
+Look at distribution of AWC stream lengths across HU12s.
+
+```{r}
+awc_hu12 <- read_csv("data_preparation/sensitivity_drivers/awcEventArcs_Intersect_H12s_Diss.csv")
+
+awc_hu12 %>% 
+  group_by(HUC12) %>% 
+  summarize(tot_len = sum(Shape_Length)) %>%
+  filter(tot_len > 2000) %>% 
+  ggplot(aes(x = tot_len)) +
+  geom_histogram(bins = 100) +
+  scale_x_log10()
+
+awc_hu12 %>% 
+  mutate(huc12f = as.factor(HUC12)) %>% 
+  group_by(huc12f) %>%
+  summarize(tot_len = sum(Shape_Length)) %>% 
+  ggplot(aes(x = tot_len, y = fct_reorder(huc12f, tot_len))) +
+  geom_point() +
+  theme(axis.text.y = element_blank())
+
+awc_hu12 %>% 
+  group_by(HUC12) %>% 
+  summarize(tot_len = sum(Shape_Length)) %>%
+  filter(tot_len < 1000)
+
+
+awc_hu12 %>% 
+  group_by(HUC12) %>% 
+  summarize(tot_len = sum(Shape_Length)) %>%
+  summarize(quantile(tot_len, probs = 0.07))
+```
+

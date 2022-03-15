@@ -1,0 +1,147 @@
+---
+title: "2d_ts_daylength"
+output: html_document
+date: '2022-03-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(sf)
+library(tmap)
+library(lubridate)
+library(ggpubr)
+library(nlme)
+library(e1071)
+library(car)
+```
+
+
+
+New DFA results from Tim on 3/14/22 that include daylength as a covariate in the DFA.
+
+Email from Tim:
+
+"I’ve run some DFA’s with air temp, day length, and air temp + day length. I went back to 1 trend models to simplify interpretation of results. I did this on all subsets, but I think we decided that subset 1 was pretty good. I also ran model with either global day length and the site-specific day length. Overall, models with either day length are very similar (according to AIC), but the global variable is almost always favored. There is some correlation between day length and air temp, and this is lower using the global day length variable, which may be why the models are favored.
+
+AIC model selection strongly favors air temp + day length models indicating that both variables are important. Interestingly, when you compare air temp to day length only models, Day Length was favored in all years but 2012.
+
+I saved AIC tables as RDS objects, SiteSpecificAICtable.RDS and GlobalAICtable.RDS. The results are stored in two Rdata files. DFAresults_GlobalDayLength_AllSubsets.Rdata and DFAresults_SiteSpecificDayLength_AllSubsets.Rdata on the vm.
+
+The parameters are stored in a data frame GlobalResults_DayLen_Subset1. Air temp sensitivity (in z-score space) are stored from each model as TempSens_Air, TempSens_Air.DayLen. Day Length effects (z-score space) in DayLenSens_DayLen and DayLenSens_Air.DayLen. There are columns named TempSens_DayLen and DayLenSens_Air but they are just filled with NA values since these were not estimated in the models (but generated as an artifact of my code).
+
+I took a cursory look at the models to ensure they were converging, parameters were reasonable, etc. But, I have been busy and have not had time to really work through the results more than that."
+
+
+SNOW
+
+```{r AIC tables}
+
+global_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_GlobalAICtable.rds")
+site_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_SiteSpecificAICtable.rds")
+
+model_aic <- bind_rows(global_aic %>% mutate(daylength = "Global"),
+          site_aic %>% mutate(daylength = "Site-Specific"))
+
+model_aic %>%
+  group_by(daylength) %>% 
+  mutate(year = row_number()) %>% 
+  pivot_longer(cols = Air:Air.DayLen, names_to = "model", values_to = "AIC") %>% 
+  mutate(model_f = factor(model, labels = c("Air Only", "Air and Daylength", "Daylength Only"))) %>% 
+  ggplot(aes(y = as.factor(year), x = AIC, color = model_f, shape = daylength)) +
+  geom_point() +
+  theme_bw() +
+  theme() +
+  # facet_wrap(~daylength) +
+  labs(y = "Year", color = "Model")
+
+site_aic %>%
+  mutate(year = row_number()) %>% 
+  pivot_longer(cols = Air:Air.DayLen, names_to = "model", values_to = "AIC") %>% 
+  mutate(model_f = factor(model, labels = c("Air Only", "Air and Daylength", "Daylength Only"))) %>% 
+  ggplot(aes(y = as.factor(year), x = AIC, color = model_f)) +
+  geom_point() +
+  theme_bw() +
+  theme() +
+  labs(y = "Year", color = "Model")
+
+global_aic %>%
+  mutate(year = row_number()) %>% 
+  pivot_longer(cols = Air:Air.DayLen, names_to = "model", values_to = "AIC") %>% 
+  mutate(model_f = factor(model, labels = c("Air Only", "Air and Daylength", "Daylength Only"))) %>% 
+  ggplot(aes(y = as.factor(year), x = AIC, color = model_f)) +
+  geom_point() +
+  theme_bw() +
+  theme() +
+  labs(y = "Year", color = "Model")
+
+```
+
+
+
+```{r read in results}
+load("DFA/DFAresults_GlobalDayLength_AllSubsets.Rdata")
+
+dfa_daylen_lg <- GlobalResults_DayLen_Subset1 %>% 
+  pivot_longer(cols = contains(c("Trend", "Sens"))) %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2),
+         ts_type = case_when(grepl("Z", parameter) ~ "z-score",
+                             TRUE ~ "raw"),
+         covariate = gsub("Z", "", parameter)) 
+  
+```
+
+
+Coefficients for the daylength and air temperature covariates as both z-scores and raw covariate space.
+
+```{r plot of TS}
+
+dfa_daylen_lg %>% 
+  filter(!parameter == "TrendLoad") %>% 
+  ggplot(aes(x = value, y = ..count../sum(..count..), color = model)) +
+  geom_freqpoly() +
+  facet_grid(vars(covariate), vars(ts_type), scales = "free")
+
+```
+
+Explore differences between z-score and raw sensitivities.
+
+```{r}
+
+GlobalResults_DayLen_Subset1 %>% select(TempSens_Air.DayLen, TempSensZ_Air.DayLen) %>% 
+  ggplot(aes(x = TempSens_Air.DayLen, y = TempSensZ_Air.DayLen)) +
+  geom_point()
+
+
+GlobalResults_DayLen_Subset1 %>% select(TempSens_Air, TempSensZ_Air) %>% 
+  ggplot(aes(x = TempSens_Air, y = TempSensZ_Air)) +
+  geom_point()
+
+
+GlobalResults_DayLen_Subset1 %>% 
+  mutate(TempSens_diff = TempSens_Air - TempSens_Air.DayLen) %>% 
+  ggplot(aes(x = TempSens_diff)) +
+  geom_freqpoly() +
+  geom_vline(aes(xintercept = 0), linetype = 2) +
+  facet_wrap(~Year)
+```
+
+Trends for different models.
+
+```{r}
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:Trend_Air.DayLen, names_to = "model", values_to = "trend") %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+```
+
+
+
+
+
+
+

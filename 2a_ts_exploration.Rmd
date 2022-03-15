@@ -419,25 +419,27 @@ rm(daymet)
 Look at sites with lots of negative TS as a check.
 
 * NPS Hardenburg bay is a bay in Lake Clark - drop.
-* USFS_Middle Arm Eyak is a bay in Eyak lake - drop.
+* USFS_Middle Arm Eyak - streambed measurements per Luca so location is just off.
 * usgs 15258000 is outlet of kenai lake, but still seems very lake affected or lake-like (kenai r at cooper landing) - drop
 * usgs 15260001 is outlet of cooper lake right below hydro dam - this seems very anthro-influenced -- drop
-* usfs solf lake fish pass and outlet creek are both located in lake -- is that right, should they be dropped?
-* usfs mckinley lake site also looks to be in a lake - drop?
+* usfs solf lake fish pass and outlet creek - outlet creek is lake influenced per Luca's notes. Location may be off if it looks like a lake site.
+* usfs mckinley lake site is a lake outlet and influenced by it per Luca's notes. Location is off a bit since it looks like it is in the lake.
 * 572656154082400 is karluk river on kodiak.
 
 ```{r negative ts values}
 mod_dat %>% 
-  mutate(neg_ts = case_when(TempSens < 0 ~ 1,
-                            TRUE ~ 0)) %>% 
-  filter(neg_ts == 1) %>% 
-  ggplot(aes(x = TempSens, y = Site)) +
+  filter(TempSens < 0) %>% 
+  ggplot(aes(x = TempSens, y = SiteID)) +
   geom_point()
+
+mod_dat %>% 
+  filter(TempSens < 0) %>% 
+  count(SiteID) %>% 
+  arrange(desc(n))
 
 md <- readRDS("data_preparation/final_data/md.rds")
 
-left_join(mod_dat, md %>% select(SiteID, Waterbody_name, SourceName), 
-          by = c("Site" = "SiteID")) %>% 
+left_join(mod_dat, md %>% select(SiteID, Waterbody_name, SourceName)) %>% 
   filter(Site == "572656154082400")
 
 drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak")

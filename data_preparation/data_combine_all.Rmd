@@ -341,6 +341,73 @@ saveRDS(sumdat, paste0("data_preparation/final_data/summer_data_wair", Sys.Date(
 write_csv(sumdat, path = paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".csv"))
 ```
 
+
+```{r daylength summary}
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet %>% distinct(measurement)
+
+#bring in md to check with latitude
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+md %>% 
+  summary()
+
+md %>% 
+  arrange(Latitude)
+
+dayl <- daymet %>%
+  filter(measurement == "dayl..s.") %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j"),
+         daylen = value/3600,
+         daylen_min = value/60) %>% 
+  filter(month(sampleDate) %in% 6:9) %>% 
+  rename(SiteID = site) 
+
+saveRDS(dayl, "data_preparation/daymet/daily_daylength_only.rds")
+
+
+#june 21 is yday 172, summer solstice
+daylength_solstice <- dayl %>% 
+  filter(yday == 172) %>% 
+  left_join(md %>% select(SiteID = Site, Latitude)) %>% 
+  group_by(SiteID, Latitude) %>% 
+  summarize(mndl = mean(daylen))
+
+
+#no variability by year
+dayl %>% 
+  filter(grepl("cik|CIK", SiteID), yday == 172) %>% 
+  ggplot() +
+  geom_line(aes(x = year, y = daylen, group = SiteID))
+  
+daylength_solstice %>% 
+  ggplot() +
+  geom_point(aes(x = Latitude, y = mndl*60)) 
+
+daylength_solstice %>% 
+  ggplot() +
+  geom_histogram(aes(x = mndl)) +
+  labs(title = "Daylength on June 21st across AKSSF sites", x = "daylength")
+ggsave("output/daylength_histogram.jpeg")
+
+dayl %>% 
+  filter(SiteID %in% c("kdk_olgcr01a", "CIK_41"), year == 2000) %>% 
+  ggplot() +
+  geom_line(aes(x =yday, y = daylen, color = SiteID)) +
+  labs(title = "Daylength from June 1 to Oct 1 for 57 and 63 degress Latitude")
+ggsave("output/daylength_plot.jpeg")
+
+dayl %>% filter(SiteID == "CIK_11", year == 2000) #%>% 
+  ggplot(aes(x = yday, y = value/60)) +
+  geom_point()
+  
+md %>% filter(Site == "CIK_11")
+
+
+dayl %>% summary()
+
+```
+
+
 # read and check saved data
 
 Note, Sue has a site in BB that doesn't have any summer data - Big Creek in Naknek. Seems like she started it in fall 2016, recovered a little bit of data and that was it - confirmed on her metadata sheet.
@@ -382,22 +449,39 @@ dev.off()
 
 ```
 
-# Remove Newhalen 2015 -- BAD DATA
+# Updated stream-air data frame 3/1/22
 
 Discovered that Newhalen 2015 was bad after running thermal metrics. Also one air temperature spike in maxes, but that might be due to using UW database dailies in thermal regime dataset we reviewed - everything looks fine in daily means from Tim. Dustin and I reviewed the max min means plots for all sites in dataset. Lots of suspected burials but hard to know for sure.
+
+- Also removing 4 sites that have very low thermal sensitivities some were in lakes and one had one year of data and we did not calculate spatial predictors for.
+- Adding in daylength as secondary covariate for DFA. Will add in site specific and also an average across all sites.
 
 ```{r}
 final_data <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
 
-# 237898 - 85
-final_data2 <- final_data %>% 
-  filter(!(SiteID == "NPS_Newhalen_River" & year(sampleDate) == 2015))
-         
-final_data %>% 
-  filter(SiteID == "UW_Nerka Sam Creek" & year(sampleDate) == 2013) 
+# hardenburg bay looks like a lake site that was missed, two usgs sites are lake outlets, one is below a dam and other is outlet of kenai lake, very lake influenced, nerka pike creek we don't have spatial data for, only 1 year of stream temps anyways.
 
-saveRDS(final_data2, paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".rds"))
-write_csv(final_data2, path = paste0("data_preparation/final_data/summer_data_wair", Sys.Date(), ".csv"))
+drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "UW_Nerka Pike Creek")
+
+#3960
+final_data %>% 
+  filter((SiteID == "NPS_Newhalen_River" & year(sampleDate) == 2015)|(SiteID %in% drop_sites)) %>% 
+  count(SiteID)
+
+# 237898 - 3960 = 233938
+final_data2 <- final_data %>% 
+  filter(!(SiteID == "NPS_Newhalen_River" & year(sampleDate) == 2015),
+         !(SiteID %in% drop_sites))
+         
+#add in site-specific daylength
+final_data3 <- left_join(final_data2, dayl %>% dplyr::select(SiteID, sampleDate, daylen_min))
+
+final_data4 <- left_join(final_data3, dayl %>% 
+                           filter(SiteID == "CIK_11") %>% #has approx. mean lat and long across all sites
+                           dplyr::select(sampleDate, global_dayl = daylen_min))
+
+saveRDS(final_data4, paste0("data_preparation/final_data/summer_data_wair_dayl", Sys.Date(), ".rds"))
+write_csv(final_data4, file = paste0("data_preparation/final_data/summer_data_wair_dayl", Sys.Date(), ".csv"))
 ```
 
 
