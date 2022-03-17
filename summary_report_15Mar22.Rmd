@@ -85,13 +85,6 @@ Correlation between day length and air temperatures.
 air_dat <- readRDS("data_preparation/final_data/summer_data_wair_dayl2022-03-01.rds")
 
 air_dat %>% 
-  filter(SiteID == "accs_mubon10", year(sampleDate) == 2019) %>% 
-  ggplot(aes(x = sampleDate)) +
-  geom_line(aes(y = meanDT), color = "blue") +
-  geom_line(aes(y = airDT)) 
-  
-
-air_dat %>% 
   summarize(cor(airDT, daylen_min),
             cor(airDT, global_dayl))
 
@@ -113,18 +106,6 @@ air_dat %>%
   labs(title = "Global daylength")
 
 ```
-
-
-```{r}
-air_dat <- readRDS("data_preparation/final_data/summer_data_wair_dayl2022-03-01.rds")
-
-air_dat %>% 
-  filter(SiteID == "accs_mubon10", year(sampleDate) == 2019) %>% 
-  ggplot(aes(x = sampleDate)) +
-  geom_line(aes(y = meanDT), color = "blue") +
-  geom_line(aes(y = airDT)) 
-```
-
 
 
 

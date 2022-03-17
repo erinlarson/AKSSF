@@ -484,5 +484,57 @@ saveRDS(final_data4, paste0("data_preparation/final_data/summer_data_wair_dayl",
 write_csv(final_data4, file = paste0("data_preparation/final_data/summer_data_wair_dayl", Sys.Date(), ".csv"))
 ```
 
+# Updated data frame with all air temperatures from June 1 - August 31
+
+Tim would like complete air temperature time series for each site and year for the DFA.
+
+```{r all air temps and daylength}
+final_data4 <- readRDS("data_preparation/final_data/summer_data_wair_dayl2022-03-01.rds")
+
+daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+
+air <- daymet %>%
+  filter(measurement %in% c("tmax..deg.c.", "tmin..deg.c.")) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
+  filter(month(sampleDate) %in% 6:9) %>% 
+  rename(SiteID = site) %>% 
+  group_by(SiteID, sampleDate) %>% 
+  summarize(airDT = mean(value))
+
+dayl <- daymet %>%
+  filter(measurement == "dayl..s.") %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j"),
+         daylen = value/3600,
+         daylen_min = value/60) %>% 
+  filter(month(sampleDate) %in% 6:9) %>% 
+  rename(SiteID = site) %>% 
+  select(SiteID, sampleDate, daylen, daylen_min)
+
+#add in global daylength for site with mean latitude
+dayl <- left_join(dayl, dayl %>% 
+  filter(SiteID == "CIK_11") %>% #has approx. mean lat and long across all sites
+  dplyr::select(sampleDate, global_dayl = daylen_min))
+
+rm(daymet)
+
+#need to filter daymet data so that is for just the sites and years we have data for (but complete summers)
+site_yr <- final_data4 %>% distinct(SiteID, year = year(sampleDate))
+daymet_merge <- left_join(air, dayl) %>% 
+  mutate(year = year(sampleDate)) %>% 
+  right_join(site_yr)
+
+final_data5 <- left_join(daymet_merge, final_data4) #now based on dates in the daymet file
+
+# I left in September because I'm not sure how we cutoff the original water temperatures. The filter to August may have been later by Tim.
+final_data5 %>% 
+  ungroup() %>% 
+  filter(is.na(meanDT)) %>% 
+  count(month(sampleDate))
+summary(final_data5)
+
+saveRDS(final_data5, paste0("data_preparation/final_data/summer_data_wair_dayl", Sys.Date(), ".rds"))
+write_csv(final_data5, file = paste0("data_preparation/final_data/summer_data_wair_dayl", Sys.Date(), ".csv"))
+
+```
 
 
