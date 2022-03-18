@@ -32,30 +32,12 @@ DOYseq<-seq(152,243)
 #create some new date/time columns
 #add region column
 #limit timeframe to chosen date range
-Tdat <- read.csv('../../data/summer_data_wair_dayl2022-03-01.csv',header=T,stringsAsFactors=F) %>% 
+Tdat <- read.csv('../../data/summer_data_wair_dayl2022-03-17.csv',header=T,stringsAsFactors=F) %>% 
   mutate(sampleDate = as.Date(sampleDate), DOY = format(sampleDate,'%j') %>% as.numeric(),Year=format(sampleDate,'%Y')%>% as.numeric()) %>%
   mutate(Region = MetaDat$Region[match(SiteID,MetaDat$Site)]) %>%
   filter(DOY %in% DOYseq)
 
 head(Tdat)
-
-if(sum(is.na(Tdat$airDT))>0) print('Error: Missing air temperature data')
-#head(MetaDat)
-#head(Tdat)
-
-#build time series matrix of mean daily water temp
-MeanDWT_TS <- Tdat %>% filter(Year==2019) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
-MeanDWT_TS[MeanDWT_TS==0] <- NA
-
-#dump sites with <70% of data
-MeanDWT_TS <- MeanDWT_TS[which(rowSums(!is.na(MeanDWT_TS)) >= round(0.8*length(DOYseq)) ),]
-
-#build time series of matching air temp
-MeanDAT_TS <- Tdat %>% filter(Year==2019, SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(airDT ~ SiteID + DOY,data=.)
-
-#Zscore response and air temp covariate
-zMeanDWT_TS <- apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
-zMeanDAT_TS <- apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
 
 #set.seed(15)
 #randomSet<-sample.int(nrow(zMeanDWT_TS),10)
@@ -82,19 +64,19 @@ Subset1_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   Sub1 <- Tdat %>% filter(SiteID %in% Sub1_Sites)
   MeanDWT_TS <- Sub1 %>% filter(Year==y) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
   MeanDWT_TS[MeanDWT_TS==0] <- NA #xtabs puts zeros in for missing dates in the dataset, we set those exact zeros to NA
-  
+
   #keep sites with >80% of data
   MeanDWT_TS <- MeanDWT_TS[which(rowSums(!is.na(MeanDWT_TS)) >= round(0.8*length(DOYseq)) ),]
   
   #build time series of matching daylength variable
-  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(daylen_min ~ SiteID + DOY,data=.)
+  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(global_dayl ~ SiteID + DOY,data=.)
   #build time series of matching air temp
   MeanDAT_TS <- Tdat %>% filter(Year==y, SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(airDT ~ SiteID + DOY,data=.)
   
-  #Zscore response and air temp covariate
-  zMeanDWT_TS <- apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
-  zDayLength_TS <- apply(DayLength_TS,1,FUN=Zscore) %>% t()
-  zMeanDAT_TS <- apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
+  #Zscore tables
+  zMeanDWT_TS<-apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
+  zDayLength_TS<-apply(DayLength_TS,1,FUN=Zscore) %>% t()
+  zMeanDAT_TS<-apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
   
   m1.air <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Covars = zMeanDAT_TS)
   m1.air$ydat <- zMeanDWT_TS
@@ -118,38 +100,72 @@ Subset1_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   m1.both$ydat <- zMeanDWT_TS
   m1.both$xdat <- rbind(zMeanDAT_TS,zDayLength_TS)
   
+  #Custom D parameter matrix for three covariates per site (air, day, interaction)
+  Dp1 <- matrix(0,nrow=nrow(zMeanDWT_TS),ncol=nrow(zMeanDWT_TS))
+  Df1 <- diag(x=1:nrow(zMeanDWT_TS))
+  Df2 <- diag(x=(nrow(zMeanDWT_TS)+1):(2*nrow(zMeanDWT_TS)))
+  Df3 <- diag(x=(2*nrow(zMeanDWT_TS)+1):(3*nrow(zMeanDWT_TS)))
+  if(!identical(dim(Dp1),dim(Df1))){break;print('Error')}
+  Dmat2 <- cbind(Dp1,Dp1,Dp1)
+  Dfac2 <- cbind(Df1,Df2,Df3)
+  Dfac2[Dfac2 == 0] <- NA
+  Dfac2 <- as.factor(Dfac2)
+  
+  IntVar <- zMeanDAT_TS*zDayLength_TS #apply(MeanDAT_TS*DayLength_TS,1,FUN=Zscore) %>% t()
+  # if(F){index<-52
+  # plot(as.numeric(colnames(MeanDAT_TS)),zMeanDAT_TS[index,],main=row.names(MeanDAT_TS)[index],type='l',col='blue',ylab='air temp',xlab='DOY')
+  # points(as.numeric(colnames(MeanDAT_TS)),zDayLength_TS[index,],type='l',col='red')
+  # points(as.numeric(colnames(MeanDAT_TS)),IntVar[index,],type='l',col='purple')}
+  
+  m1.int <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Dmat=Dmat2,Dfac=Dfac2,Covars = rbind(zMeanDAT_TS,zDayLength_TS,IntVar))
+  m1.int$ydat <- zMeanDWT_TS
+  m1.int$xdat <- rbind(zMeanDAT_TS,zDayLength_TS,IntVar)
   
   #lapply(1:nrow(zMeanDAT_TS),FUN=function(x){cor(zMeanDAT_TS[x,],zDayLength_TS[x,])}) %>% unlist() %>% hist()
   
-  #m1.air$AIC
-  #m1.day$AIC
-  #m1.both$AIC
+  # m1.air$AIC
+  # m1.day$AIC
+  # m1.both$AIC
+  # m1.int$AIC
+  
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.air$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.day$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.both$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.int$Fits)))
+  # 
+  # hist(diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]))
+  # diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]) %>% mean()
+  # lapply(1:nrow(zMeanDWT_TS),FUN=function(i){
+  #   summary(lm(zMeanDWT_TS[i,] ~ m1.int$Fits[i,]))$r.squared
+  # }) %>% unlist() %>% hist()
+  
+  
   
   #m1.air$Optimization
   #m1.both$Optimization
   
-  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both)
+  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both,m1.int=m1.int)
 }
 
 Subset2_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   #y<-2019
   dyn.load(dynlib("dfa1tmb"))
-  Sub2 <- Tdat %>% filter(SiteID %in% Sub2_Sites)
-  MeanDWT_TS <- Sub2 %>% filter(Year==y) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
+  Sub1 <- Tdat %>% filter(SiteID %in% Sub2_Sites)
+  MeanDWT_TS <- Sub1 %>% filter(Year==y) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
   MeanDWT_TS[MeanDWT_TS==0] <- NA #xtabs puts zeros in for missing dates in the dataset, we set those exact zeros to NA
   
   #keep sites with >80% of data
   MeanDWT_TS <- MeanDWT_TS[which(rowSums(!is.na(MeanDWT_TS)) >= round(0.8*length(DOYseq)) ),]
   
   #build time series of matching daylength variable
-  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(daylen_min ~ SiteID + DOY,data=.)
+  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(global_dayl ~ SiteID + DOY,data=.)
   #build time series of matching air temp
   MeanDAT_TS <- Tdat %>% filter(Year==y, SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(airDT ~ SiteID + DOY,data=.)
   
-  #Zscore response and air temp covariate
-  zMeanDWT_TS <- apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
-  zDayLength_TS <- apply(DayLength_TS,1,FUN=Zscore) %>% t()
-  zMeanDAT_TS <- apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
+  #Zscore tables
+  zMeanDWT_TS<-apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
+  zDayLength_TS<-apply(DayLength_TS,1,FUN=Zscore) %>% t()
+  zMeanDAT_TS<-apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
   
   m1.air <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Covars = zMeanDAT_TS)
   m1.air$ydat <- zMeanDWT_TS
@@ -173,38 +189,72 @@ Subset2_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   m1.both$ydat <- zMeanDWT_TS
   m1.both$xdat <- rbind(zMeanDAT_TS,zDayLength_TS)
   
+  #Custom D parameter matrix for three covariates per site (air, day, interaction)
+  Dp1 <- matrix(0,nrow=nrow(zMeanDWT_TS),ncol=nrow(zMeanDWT_TS))
+  Df1 <- diag(x=1:nrow(zMeanDWT_TS))
+  Df2 <- diag(x=(nrow(zMeanDWT_TS)+1):(2*nrow(zMeanDWT_TS)))
+  Df3 <- diag(x=(2*nrow(zMeanDWT_TS)+1):(3*nrow(zMeanDWT_TS)))
+  if(!identical(dim(Dp1),dim(Df1))){break;print('Error')}
+  Dmat2 <- cbind(Dp1,Dp1,Dp1)
+  Dfac2 <- cbind(Df1,Df2,Df3)
+  Dfac2[Dfac2 == 0] <- NA
+  Dfac2 <- as.factor(Dfac2)
+  
+  IntVar <- zMeanDAT_TS*zDayLength_TS #apply(MeanDAT_TS*DayLength_TS,1,FUN=Zscore) %>% t()
+  # if(F){index<-52
+  # plot(as.numeric(colnames(MeanDAT_TS)),zMeanDAT_TS[index,],main=row.names(MeanDAT_TS)[index],type='l',col='blue',ylab='air temp',xlab='DOY')
+  # points(as.numeric(colnames(MeanDAT_TS)),zDayLength_TS[index,],type='l',col='red')
+  # points(as.numeric(colnames(MeanDAT_TS)),IntVar[index,],type='l',col='purple')}
+  
+  m1.int <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Dmat=Dmat2,Dfac=Dfac2,Covars = rbind(zMeanDAT_TS,zDayLength_TS,IntVar))
+  m1.int$ydat <- zMeanDWT_TS
+  m1.int$xdat <- rbind(zMeanDAT_TS,zDayLength_TS,IntVar)
   
   #lapply(1:nrow(zMeanDAT_TS),FUN=function(x){cor(zMeanDAT_TS[x,],zDayLength_TS[x,])}) %>% unlist() %>% hist()
   
-  #m1.air$AIC
-  #m1.day$AIC
-  #m1.both$AIC
+  # m1.air$AIC
+  # m1.day$AIC
+  # m1.both$AIC
+  # m1.int$AIC
+  
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.air$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.day$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.both$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.int$Fits)))
+  # 
+  # hist(diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]))
+  # diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]) %>% mean()
+  # lapply(1:nrow(zMeanDWT_TS),FUN=function(i){
+  #   summary(lm(zMeanDWT_TS[i,] ~ m1.int$Fits[i,]))$r.squared
+  # }) %>% unlist() %>% hist()
+  
+  
   
   #m1.air$Optimization
   #m1.both$Optimization
   
-  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both)
+  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both,m1.int=m1.int)
 }
 
 Subset3_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   #y<-2019
   dyn.load(dynlib("dfa1tmb"))
-  Sub3 <- Tdat %>% filter(SiteID %in% Sub3_Sites)
-  MeanDWT_TS <- Sub3 %>% filter(Year==y) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
+  Sub1 <- Tdat %>% filter(SiteID %in% Sub3_Sites)
+  MeanDWT_TS <- Sub1 %>% filter(Year==y) %>% xtabs(meanDT ~ SiteID + DOY,data=.)
   MeanDWT_TS[MeanDWT_TS==0] <- NA #xtabs puts zeros in for missing dates in the dataset, we set those exact zeros to NA
   
   #keep sites with >80% of data
   MeanDWT_TS <- MeanDWT_TS[which(rowSums(!is.na(MeanDWT_TS)) >= round(0.8*length(DOYseq)) ),]
   
   #build time series of matching daylength variable
-  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(daylen_min ~ SiteID + DOY,data=.)
+  DayLength_TS <- Tdat %>% filter(Year==y,SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(global_dayl ~ SiteID + DOY,data=.)
   #build time series of matching air temp
   MeanDAT_TS <- Tdat %>% filter(Year==y, SiteID %in% row.names(MeanDWT_TS)) %>% xtabs(airDT ~ SiteID + DOY,data=.)
   
-  #Zscore response and air temp covariate
-  zMeanDWT_TS <- apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
-  zDayLength_TS <- apply(DayLength_TS,1,FUN=Zscore) %>% t()
-  zMeanDAT_TS <- apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
+  #Zscore tables
+  zMeanDWT_TS<-apply(MeanDWT_TS,1,FUN=Zscore) %>% t()
+  zDayLength_TS<-apply(DayLength_TS,1,FUN=Zscore) %>% t()
+  zMeanDAT_TS<-apply(MeanDAT_TS,1,FUN=Zscore) %>% t()
   
   m1.air <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Covars = zMeanDAT_TS)
   m1.air$ydat <- zMeanDWT_TS
@@ -228,17 +278,51 @@ Subset3_DFA <- foreach(y = 2011:2020,.packages=c('dplyr','TMB')) %dopar% {
   m1.both$ydat <- zMeanDWT_TS
   m1.both$xdat <- rbind(zMeanDAT_TS,zDayLength_TS)
   
+  #Custom D parameter matrix for three covariates per site (air, day, interaction)
+  Dp1 <- matrix(0,nrow=nrow(zMeanDWT_TS),ncol=nrow(zMeanDWT_TS))
+  Df1 <- diag(x=1:nrow(zMeanDWT_TS))
+  Df2 <- diag(x=(nrow(zMeanDWT_TS)+1):(2*nrow(zMeanDWT_TS)))
+  Df3 <- diag(x=(2*nrow(zMeanDWT_TS)+1):(3*nrow(zMeanDWT_TS)))
+  if(!identical(dim(Dp1),dim(Df1))){break;print('Error')}
+  Dmat2 <- cbind(Dp1,Dp1,Dp1)
+  Dfac2 <- cbind(Df1,Df2,Df3)
+  Dfac2[Dfac2 == 0] <- NA
+  Dfac2 <- as.factor(Dfac2)
+  
+  IntVar <- zMeanDAT_TS*zDayLength_TS #apply(MeanDAT_TS*DayLength_TS,1,FUN=Zscore) %>% t()
+  # if(F){index<-52
+  # plot(as.numeric(colnames(MeanDAT_TS)),zMeanDAT_TS[index,],main=row.names(MeanDAT_TS)[index],type='l',col='blue',ylab='air temp',xlab='DOY')
+  # points(as.numeric(colnames(MeanDAT_TS)),zDayLength_TS[index,],type='l',col='red')
+  # points(as.numeric(colnames(MeanDAT_TS)),IntVar[index,],type='l',col='purple')}
+  
+  m1.int <- runDFA(zMeanDWT_TS,NumStates=1,ErrStruc='DUE',EstCovar=T,indivCovar=T,Dmat=Dmat2,Dfac=Dfac2,Covars = rbind(zMeanDAT_TS,zDayLength_TS,IntVar))
+  m1.int$ydat <- zMeanDWT_TS
+  m1.int$xdat <- rbind(zMeanDAT_TS,zDayLength_TS,IntVar)
   
   #lapply(1:nrow(zMeanDAT_TS),FUN=function(x){cor(zMeanDAT_TS[x,],zDayLength_TS[x,])}) %>% unlist() %>% hist()
   
-  #m1.air$AIC
-  #m1.day$AIC
-  #m1.both$AIC
+  # m1.air$AIC
+  # m1.day$AIC
+  # m1.both$AIC
+  # m1.int$AIC
+  
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.air$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.day$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.both$Fits)))
+  # summary(lm(as.vector(zMeanDWT_TS) ~ as.vector(m1.int$Fits)))
+  # 
+  # hist(diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]))
+  # diag(m1.int$Estimates$D[,-c(1:(2*nrow(zMeanDWT_TS)))]) %>% mean()
+  # lapply(1:nrow(zMeanDWT_TS),FUN=function(i){
+  #   summary(lm(zMeanDWT_TS[i,] ~ m1.int$Fits[i,]))$r.squared
+  # }) %>% unlist() %>% hist()
+  
+  
   
   #m1.air$Optimization
   #m1.both$Optimization
   
-  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both)
+  list(m1.air=m1.air,m1.day=m1.day,m1.both=m1.both,m1.int=m1.int)
 }
 
 #End cluster
@@ -250,7 +334,7 @@ lapply(1:length(Subset1_DFA),FUN=function(x){
   AIC<-lapply(SS,FUN=function(y){
     return(y$AIC)
   }) %>% bind_cols()
-  colnames(AIC) <- c('Air','DayLen','Air.DayLen')
+  colnames(AIC) <- c('Air','DayLen','Air.DayLen','Air.DayLen.Int')
   return(AIC)
 }) %>% bind_rows() %>% apply(1,FUN=function(xx){return(xx-min(xx))}) %>% t()
 
@@ -265,30 +349,41 @@ lapply(1:3,FUN=function(sub.ind){
     #x<-1
     Sites <- SS[[x]][[1]]$ydat %>% row.names()
     Year <- rep(2010 + x,length(Sites))
-    TempSens <- lapply(1:length(SS[[x]]),FUN=function(yy,x1=x){
-      #yy<-SS[[x]][[1]]
-      YY<-SS[[x1]][[yy]]
-      if(names(SS[[x1]])[yy]!='m1.day'){
+    
+    TempSens <- lapply(1:length(SS[[x]]),FUN=function(yy){
+      YY<-SS[[x]][[yy]]
+      if(names(SS[[x]])[yy]!='m1.day'){
         diag(YY$Estimates$D[1:length(Sites),1:length(Sites)]) %>% as.vector()
       }else{
         rep(NA,length(Sites))
       }
     }) %>% bind_cols()
-    colnames(TempSens) <- paste0('TempSensZ_',c('Air','DayLen','Air.DayLen'))
+    colnames(TempSens) <- paste0('TempSensZ_',c('Air','DayLen','Air.DayLen','Air.DayLen.Int'))
+    TempSens <- TempSens %>% select(TempSensZ_Air,TempSensZ_Air.DayLen,TempSensZ_Air.DayLen.Int)
     
-    DayLenSens <- lapply(1:length(SS[[x]]),FUN=function(yy,x1=x){
-      #yy<-SS[[x]][[3]]
-      YY<-SS[[x1]][[yy]]
-      if(names(SS[[x1]])[yy]=='m1.day'){
+    DayLenSens <- lapply(1:length(SS[[x]]),FUN=function(yy){
+      YY<-SS[[x]][[yy]]
+      if(names(SS[[x]])[yy]=='m1.day'){
         diag(YY$Estimates$D[1:length(Sites),1:length(Sites)]) %>% as.vector()
-      }else if(names(SS[[x1]])[yy]=='m1.both'){
+      }else if(names(SS[[x]])[yy] %in% c('m1.both','m1.int')){
         diag(YY$Estimates$D[1:length(Sites),(length(Sites)+1):(2*length(Sites))]) %>% as.vector()
       }else{  
         rep(NA,length(Sites))
       }
-      
     }) %>% bind_cols()
-    colnames(DayLenSens) <- paste0('DayLenSensZ_',c('Air','DayLen','Air.DayLen'))
+    colnames(DayLenSens) <- paste0('DayLenSensZ_',c('Air','DayLen','Air.DayLen','Air.DayLen.Int'))
+    DayLenSens <- DayLenSens %>% select(DayLenSensZ_DayLen,DayLenSensZ_Air.DayLen,DayLenSensZ_Air.DayLen.Int)
+    
+    Interaction <- lapply(1:length(SS[[x]]),FUN=function(yy){
+      YY<-SS[[x]][[yy]]
+      if(names(SS[[x]])[yy]=='m1.int'){
+        diag(YY$Estimates$D[1:length(Sites),(2*length(Sites)+1):(3*length(Sites))]) %>% as.vector()
+      }else{  
+        rep(NA,length(Sites))
+      }
+    }) %>% bind_cols()
+    colnames(Interaction) <- paste0('InteractionZ_',c('Air','DayLen','Air.DayLen','Air.DayLen.Int'))
+    Interaction <- Interaction %>% select(InteractionZ_Air.DayLen.Int)
     
     TrendLoad <- lapply(SS[[x]],FUN=function(yy){
       #yy<-Subset1_DFA[[x]][[2]]
@@ -296,10 +391,23 @@ lapply(1:3,FUN=function(sub.ind){
       TLoad_out <- lapply(1:ncol(TLoad),FUN=function(zz){return(data.frame(TLoad[,zz]))})
       return(TLoad_out)
     }) %>% bind_cols()
-    colnames(TrendLoad) <- paste0('TrendLoad_',c('Air','DayLen','Air.DayLen'))
+    colnames(TrendLoad) <- paste0('TrendLoad_',c('Air','DayLen','Air.DayLen','Air.DayLen.Int'))
     
+    R2 <- lapply(1:length(SS[[x]]),FUN=function(yy){
+      YY<-SS[[x]][[yy]]
+      pdf(paste0('DFAfits_',x+2010,'_',names(SS[[x]])[yy],'_Subset',sub.ind,'.pdf'))
+      R2yy<-lapply(1:nrow(YY$ydat),FUN=function(ii){
+        plot(as.numeric(colnames(YY$ydat)),YY$ydat[ii,],pch=16,ylab='Z-score water temp',xlab='DOY',type='o',main=row.names(YY$ydat)[ii])
+        points(as.numeric(colnames(YY$ydat)),YY$Fits[ii,],type='l',col='blue',lwd=3)
+        r2ii <- summary(lm(YY$ydat[ii,]~YY$Fits[ii,]))$r.squared
+        return(r2ii)
+      }) %>% unlist()
+      dev.off()
+      
+      return(R2yy)
+    }) %>% unlist()
     
-    return(data.frame(SiteID = Sites,Year,TempSens,DayLenSens,TrendLoad))
+    return(data.frame(SiteID = Sites,Year,TempSens,DayLenSens,Interaction,TrendLoad,R2))
   }) %>% bind_rows()
   
   GlobalResults$Region <- Tdat$Region[match(GlobalResults$SiteID,Tdat$SiteID)]
@@ -333,7 +441,7 @@ lapply(1:3,FUN=function(sub.ind){
     datin <- Tdat %>% filter(SiteID == SS$SiteID[i], Year==SS$Year[i])
     aT<-datin %>% pull(airDT)
     sT<-datin %>% pull(meanDT)
-    dayl <- datin %>% pull(daylen_min)
+    dayl <- datin %>% pull(global_dayl)
   
     ZSO<-data.frame(TempSens_Air = SS$TempSensZ_Air[i] * sd(sT,na.rm=T) * (1/sd(aT,na.rm=T)),
     TempSens_Air.DayLen = SS$TempSensZ_Air.DayLen[i] * sd(sT,na.rm=T) * (1/sd(aT,na.rm=T)),
@@ -342,11 +450,33 @@ lapply(1:3,FUN=function(sub.ind){
     return(ZSO)
   }) %>% bind_rows()
   
-  assign(paste0('GlobalResults_DayLen_Subset',sub.ind),value=SS %>% bind_cols(ZscoreConv) %>% select(-DayLenSensZ_Air,-TempSensZ_DayLen),envir=.GlobalEnv)
+  assign(paste0('GlobalResults_DayLen_Subset',sub.ind),value=SS %>% bind_cols(ZscoreConv),envir=.GlobalEnv)
   return('Zscores converted')
   })
 
-save(list=ls(),file = 'DFAresults_SiteSpecificDayLength_AllSubsets.Rdata')
+#TempSens for interaction model
+lapply(1:3,FUN=function(sub.ind){
+  #Set subset data.frame
+  SS <- switch(sub.ind,GlobalResults_DayLen_Subset1,GlobalResults_DayLen_Subset2,GlobalResults_DayLen_Subset3)
+  
+  ZscoreConv <- lapply(1:nrow(SS),FUN=function(i){
+    #i<-1
+    datin <- Tdat %>% filter(SiteID == SS$SiteID[i], Year==SS$Year[i])
+    DOY <- datin$DOY
+    aT<-datin %>% pull(airDT)
+    sT<-datin %>% pull(meanDT)
+    dayl <- datin %>% pull(daylen_min)
+    TempSens_Air.DayLen.Int_byDOY <- (SS$TempSensZ_Air.DayLen.Int[i] + SS$InteractionZ_Air.DayLen.Int[i]*Zscore(dayl) ) * (sd(sT,na.rm=T) * (1/sd(aT,na.rm=T)))
+    return(data.frame(Year=rep(SS$Year[i],length(DOY)),SiteID=rep(SS$SiteID[i],length(DOY)),DOY,TempSens_Int=TempSens_Air.DayLen.Int_byDOY))
+  }) %>% bind_rows()
+  
+  assign(paste0('TempSens_Interaction_Subset',sub.ind),value=ZscoreConv,envir=.GlobalEnv)
+  return('Zscores converted')
+})
+
+TempSens_Interaction_Subset1
+
+save(list=ls(),file = 'DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata')
 
 
 # plot(GlobalTrends_DayLen_Subset1$Trend_Air,type='l')
