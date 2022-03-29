@@ -18,6 +18,7 @@ library(car)
 ```
 
 
+# Daylength + air temperature models
 
 New DFA results from Tim on 3/14/22 that include daylength as a covariate in the DFA.
 
@@ -34,7 +35,6 @@ The parameters are stored in a data frame GlobalResults_DayLen_Subset1. Air temp
 I took a cursory look at the models to ensure they were converging, parameters were reasonable, etc. But, I have been busy and have not had time to really work through the results more than that."
 
 
-SNOW
 
 ```{r AIC tables}
 
@@ -145,3 +145,220 @@ GlobalTrends_DayLen_Subset1 %>%
 
 
 
+
+
+# Daylength X air temperature interaction
+
+Tim reran the models above, but included an interaction term with daylength.
+
+Emails from Tim on 3/17/22:
+
+"I ran the new DFA models and created PDF’s with model fits (they are pretty cool to page through). I said this on the call the other day but on average we are explaining 88% of the variation in stream temperatures (for some sites its like 40%) The Global Results table now includes the R2 value for each site/year. In terms of model selection, the interaction is supported in all years by AIC. I also back transformed the coefficients, but for the interaction model it’s not straightforward since temp sensitivity now depends on Day Length so we might have to get creative about how we get those raw values (such as temp sensitivity on a specific day or set of days of interest).
+
+Those PDF’s are in the DFA folder and the new .Rdata file (DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata)
+
+I didn’t want to hold you up on modeling if you get to it next week. So, I went ahead and calculated temperature sensitivity for every DOY so you could extract whatever ones you might be interested in. There is now a new data.frame “TempSens_Interaction_Subset1” in the Rdata file that has 4 columns Site,Year,DOY,TempSens_Int (the back transformed temp sens. values including the day length for each DOY)."
+
+
+
+
+```{r read in interaction results}
+load("DFA/output_17Mar22/DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
+
+GlobalResults_DayLen_Subset1
+GlobalTrends_DayLen_Subset1
+```
+
+Read in md so can explore patterns among sites - can link siteids to waterbodies. Get basic spatial information on the data frame as well.
+
+```{r}
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+
+md %>% 
+  filter(grepl("CIK", Site)) %>% 
+  select(Site, Waterbody_name)
+
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
+
+sp_dat <- mod_dat %>% 
+  select(SiteID, str_ord:wtd_area_sqKM) %>%
+  distinct() %>% 
+  left_join(md %>% select(SiteID = Site, Waterbody_name))
+```
+
+
+```{r}
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:NA., names_to = "model", values_to = "trend") %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:NA., names_to = "model", values_to = "trend") %>% 
+  saveRDS(file = "DFA/output_17Mar22/trends.rds")
+```
+
+In the results, there is a lot for each site and year. 
+
+For each model (air only, daylength only, air + daylength, air x daylength):
+
+* temperature sensitivities Z-score (3)
+* daylength sensitivities z-score (3)
+* interaction for that model only (1)
+* trend loadings for each model (4)
+* R2 (1)
+* back-transformed temperature sensitivity (2 models only)
+* back-transformed daylength sensitivity (2 models only)
+
+```{r}
+dfa_trends <- GlobalResults_DayLen_Subset1 %>%
+  select(SiteID, Year, contains("Trend")) %>% 
+  pivot_longer(cols = contains(c("Trend"))) %>% 
+  distinct() %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2)) 
+
+saveRDS(dfa_trends, file = "DFA/output_17Mar22/loadings.rds")
+
+#for some reason there are four R2 values per site-year-model
+GlobalResults_DayLen_Subset1 %>% 
+  arrange(SiteID, Year)
+
+dfa_sensZ <- GlobalResults_DayLen_Subset1 %>%
+  select(SiteID, Year, contains("Sens")) %>% 
+  pivot_longer(cols = contains(c("Sens"))) %>% 
+  distinct() %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2),
+         ts_type = case_when(grepl("Z", parameter) ~ "z-score",
+                             TRUE ~ "raw"),
+         covariate = gsub("Z", "", parameter)) 
+
+
+
+saveRDS(dfa_sensZ, file = "DFA/output_17Mar22/sens_site-year.rds")
+  
+```
+
+How do trend loadings correspond to model fit for each site and year?
+
+```{r}
+left_join(dfa_trends, sp_dat) %>% 
+  filter(is.na(str_slope)) %>% 
+  distinct(SiteID) #why are we missing all these little su sites in the spatial data frame? Check with Dustin.
+
+
+left_join(dfa_trends, sp_dat) %>% 
+  filter(!is.na(str_slope)) %>% 
+  filter(model == "Air.DayLen.Int") %>% 
+  ggplot(aes(x = value, y = R2)) +
+  geom_point(aes(color = wtd_glacier_per)) +
+  facet_wrap(~Year)
+```
+
+
+The back-transformed temperature sensitivities in the interaction model vary by day. 
+
+```{r}
+ts_int <- TempSens_Interaction_Subset1 %>%
+  left_join(sp_dat) 
+
+saveRDS(ts_int, file = "DFA/output_17Mar22/sens_day.rds")
+
+ts_int %>% 
+  filter(grepl("CIK", SiteID), Year %in% 2013:2019) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, color = Waterbody_name)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+ts_int %>% 
+  left_join(sp_dat) %>% 
+  filter(grepl("UW", SiteID)) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+ts_int %>% 
+  left_join(sp_dat) %>% 
+  filter(wtd_glacier_per > 5) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+
+#2018 was the highest precipitation summer in the time series,
+# which lowered TS for the low slope watersheds
+TempSens_Interaction_Subset1 %>%
+  left_join(sp_dat) %>% 
+  filter(wtd_slope_MEAN < 5) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+TempSens_Interaction_Subset1 %>%
+  left_join(sp_dat) %>% 
+  filter(wtd_slope_MEAN > 20) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+
+TempSens_Interaction_Subset1 %>%
+  left_join(sp_dat) %>% 
+  filter(wtd_north_per > 20) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+
+TempSens_Interaction_Subset1 %>%
+  left_join(sp_dat) %>% 
+  filter(SiteID %in% c("CIK_14", "CIK_3")) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, color = Waterbody_name)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+TempSens_Interaction_Subset1 %>% 
+  ggplot(aes(y = TempSens_Int, x = DOY)) +
+  geom_point()
+
+TempSens_Interaction_Subset1 %>% 
+  group_by(SiteID )
+
+```
+
+
+Coefficients for the daylength and air temperature covariates as both z-scores and raw covariate space.
+
+```{r plot of TS}
+
+dfa_daylen_lg %>% 
+  filter(!parameter == "TrendLoad") %>% 
+  ggplot(aes(x = value, y = ..count../sum(..count..), color = model)) +
+  geom_freqpoly() +
+  facet_grid(vars(covariate), vars(ts_type), scales = "free")
+
+```
+
+Explore differences between z-score and raw sensitivities.
+
+```{r}
+
+GlobalResults_DayLen_Subset1 %>% select(TempSens_Air.DayLen, TempSensZ_Air.DayLen) %>% 
+  ggplot(aes(x = TempSens_Air.DayLen, y = TempSensZ_Air.DayLen)) +
+  geom_point()
+
+
+GlobalResults_DayLen_Subset1 %>% select(TempSens_Air, TempSensZ_Air) %>% 
+  ggplot(aes(x = TempSens_Air, y = TempSensZ_Air)) +
+  geom_point()
+
+
+GlobalResults_DayLen_Subset1 %>% 
+  mutate(TempSens_diff = TempSens_Air - TempSens_Air.DayLen) %>% 
+  ggplot(aes(x = TempSens_diff)) +
+  geom_freqpoly() +
+  geom_vline(aes(xintercept = 0), linetype = 2) +
+  facet_wrap(~Year)
+```

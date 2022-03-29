@@ -1,0 +1,288 @@
+---
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+title: "AKSSF Temperature Data Summary"
+output:
+  html_document: 
+    df_print: paged
+    fig_width: 10
+    fig_height: 10
+    fig_caption: yes
+    code_folding: hide
+    toc: true
+    number_sections: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+editor_options: 
+  chunk_output_type: inline
+---
+
+Document last updated `r Sys.time()` by Rebecca Shaftel (rsshaftel@alaska.edu). 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(ggpubr)
+library(kableExtra)
+library(rpart)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+```
+
+This report summarizes the new thermal sensitivity results for team meeting on March 15, 2022.
+Goals of the meeting are to discuss new DFA results and future scenarios of thermal sensitivity.
+
+The [project mapper](https://arcg.is/1nLqei) is updated with TS by year linked to sites and layers showing a lot of the input data and various hydrologic layers. Dustin has also added the catchments that we are predicting over -- these correspond to the stream reaches with the largest contributing area in each HU12 in the study area with salmon habitat. There are also layers showing salmon habitat by species from the AWC.
+
+
+# New DFA results
+
+Tim reran the DFA using a daylength covariate:
+
+* ran on all three subsets from our last analysis. Moving forward with first subset (removed 65 sites from Deshka) since that addressed the problems with trends from before and keeps the most data.
+* single trend models
+* three different covariate combinations: Air Temp, Daylength, Air Temp + Daylength. AIC favored the models with both air temp and daylength.
+* global daylength (from site with average latitude) or site-specific daylength. AIC favored global daylength, but models are very similar.
+
+
+Plots of daylength values across sites. Daylength on summer solstice varies by about two hours across the sites. 
+
+```{r daylength plots}
+dayl  <- readRDS("data_preparation/daymet/daily_daylength_only.rds")
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+
+#june 21 is yday 172, summer solstice
+daylength_solstice <- dayl %>% 
+  filter(yday == 172) %>% 
+  left_join(md %>% select(SiteID = Site, Latitude)) %>% 
+  group_by(SiteID, Latitude) %>% 
+  summarize(mndl = mean(daylen))
+
+daylength_solstice %>% 
+  ggplot() +
+  geom_histogram(aes(x = mndl)) +
+  labs(title = "Daylength on June 21st across AKSSF sites", x = "daylength")
+
+dayl %>% 
+  filter(SiteID %in% c("kdk_olgcr01a", "CIK_41", "CIK_11"), year == 2000) %>% 
+  ggplot() +
+  geom_line(aes(x =yday, y = daylen, color = SiteID)) +
+  labs(title = "Daylength from June 1 to Oct 1 for 57 and 63 degress Latitude")
+
+```
+
+Correlation between day length and air temperatures.
+
+```{r daylength-air temp plots}
+
+air_dat <- readRDS("data_preparation/final_data/summer_data_wair_dayl2022-03-01.rds")
+
+air_dat %>% 
+  summarize(cor(airDT, daylen_min),
+            cor(airDT, global_dayl))
+
+air_dat %>% 
+  ggplot(aes(x = daylen_min, y = airDT)) +
+  geom_point() +
+  stat_cor() +
+  stat_regline_equation(aes(label =  paste(..eq.label.., ..adj.rr.label.., sep = "~~~~")),
+                        label.x = 650, label.y = 21) +
+  labs(title = "Site-specific daylength")
+
+
+air_dat %>% 
+  ggplot(aes(x = global_dayl, y = airDT)) +
+  geom_point() +
+  stat_cor() +
+  stat_regline_equation(aes(label =  paste(..eq.label.., ..adj.rr.label.., sep = "~~~~")),
+                        label.x = 650, label.y = 21) +
+  labs(title = "Global daylength")
+
+```
+
+
+
+
+AIC results for models with different covariates and global versus site-specific daylengths.
+
+```{r AIC results}
+
+global_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_GlobalAICtable.rds")
+site_aic <- readRDS("DFA/output_14Mar21/DFA_copy_DFA_SiteSpecificAICtable.rds")
+
+model_aic <- bind_rows(global_aic %>% mutate(daylength = "Global"),
+          site_aic %>% mutate(daylength = "Site-Specific"))
+
+model_aic %>%
+  group_by(daylength) %>% 
+  mutate(year = row_number()) %>% 
+  pivot_longer(cols = Air:Air.DayLen, names_to = "model", values_to = "AIC") %>% 
+  mutate(model_f = factor(model, labels = c("Air Only", "Air and Daylength", "Daylength Only"))) %>% 
+  ggplot(aes(y = as.factor(year), x = AIC, color = model_f)) +
+  geom_point(size = 2) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  facet_wrap(~daylength) +
+  labs(y = "Year", color = "Model")
+
+
+```
+
+
+```{r read in results}
+load("DFA/DFAresults_GlobalDayLength_AllSubsets.Rdata")
+
+dfa_daylen_lg <- GlobalResults_DayLen_Subset1 %>% 
+  pivot_longer(cols = contains(c("Trend", "Sens"))) %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2),
+         ts_type = case_when(grepl("Z", parameter) ~ "z-score",
+                             TRUE ~ "raw"),
+         covariate = gsub("Z", "", parameter)) 
+  
+```
+
+Common trends across the three different models using global daylength.
+
+```{r}
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:Trend_Air.DayLen, names_to = "model", values_to = "trend") %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+```
+
+Coefficients for the daylength and air temperature covariates as both z-scores and raw covariate space. Something might have happened in the back-transformation for the daylength covariate --- or not? Should they all be the same?
+
+```{r plot of TS}
+
+dfa_daylen_lg %>% 
+  filter(!parameter == "TrendLoad") %>% 
+  ggplot(aes(x = value, color = model)) +
+  geom_freqpoly() +
+  facet_grid(vars(ts_type), vars(covariate)) +
+  theme_bw() +
+  labs(x = "Model Coefficient")
+
+```
+
+
+Exploration of how covariates relate to Thermal Sensitivities from model with global daylength and single trend.
+
+```{r}
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
+
+left_join(dfa_daylen_lg %>% 
+            filter(covariate == "TempSens", ts_type == "raw", model == "Air.DayLen") %>% 
+            select(SiteID, Year, TempSens = value),
+          mod_dat %>% 
+            select(SiteID = Site, Year, wtd_slope_MEAN, asrt_glac, log_area, 
+                   snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip)) %>% 
+  filter(!is.na(snow_ind)) %>% #removes one site that we dropped and all of 2020 (no modis)
+  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>%  
+  ggplot(aes(x = value, y = TempSens)) +
+  geom_point() +
+  facet_wrap(~vars, scales = "free_x")
+```
+
+
+
+
+# Prediction scenarios
+
+Spatial domain: salmon habitat for all regions. Select HU12 that intersect anadromous waters catalog.
+Spatial scale: suggest using stream outlets associated with HU12 boundaries (smallest are 25 km^2^). We can use these outlets to create watersheds and calculate all the same covariates for prediction.  
+
+Temporal scenarios:
+Ideas for our scenarios include picking years within our temporal domain (2001-2019) that represent contrasting conditions that affect TS (e.g. low and high snow years). 
+
+Dustin selected HU12 that intersected the AWC, created watersheds, and calculated the mean watershed LCLD metric by year. These can be used to compare the range of LCLD julian dates across regions and years using the same watersheds from year to year.
+
+Plot showing distribution of LCLD values across watersheds in each Region and year.
+
+```{r}
+lcld <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12_wtd_lcld_mn.csv") %>% 
+  pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2001:AwcHuc12_wtd_lcld_mn_2019, values_to = "julian_date") %>% 
+  mutate(Region = gsub('[[:digit:]]+', '', cat_ID_con) %>% gsub("_", " ", .),
+         Year = as.numeric(strsplit(name, "_") %>% sapply("[", 5)),
+         julian_date = julian_date - 365,
+         date = as.Date(as.character(julian_date), format = "%j"),
+         day = format(date, "%m-%d"))
+
+
+
+lcld %>% 
+  ggplot(aes(x = as.Date(day, format = "%m-%d"), color = Region)) +
+  geom_freqpoly() +
+  facet_wrap(~Year) +
+  theme_bw() +
+  labs(x = "Date")
+```
+
+Plot of mean LCLD by Region over time.
+
+```{r}
+lcld %>% 
+  group_by(Region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  ggplot(aes(y = mean_lcld, x = Year, color = Region)) +
+  geom_line() +
+  theme_bw() +
+  labs(y = "Mean LCLD across all watersheds")
+```
+
+Plots of mean LCLD by year in descending order for each region.
+
+```{r}
+
+lcld %>% 
+  group_by(Region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  mutate(temp = paste(as.factor(Year), Region, sep = "_")) %>% 
+  ggplot(aes(x = mean_lcld, y = fct_reorder(temp, mean_lcld))) +
+  geom_point() +
+  scale_y_discrete(labels = function(x) str_replace(x, "_Bristol Bay|_Cook Inlet|_Prince William Sound|_Kodiak|_Copper River", "")) +
+  facet_wrap(~Region, scales = "free_y") +
+  theme_bw() +
+  labs(x = "Mean LCLD (Julian Date)", y = "Year (Ordered by Region)")
+```
+
+
+In order to develop scenarios of summer conditions with high/low snowpack and warm/cold air temperatures, I merged the average summer air temperatures I downloaded from Climate at a Glance for the different regions. (I merged Valdez-Cordova Census Area to both PWS and Copper River). The plot below shows the average LCLD for salmon watersheds within each region against the average summer air temperatures for the same region. Note it's a little empty in the top R and bottom L where we don't have a lot of years with low snow and very cold or high snow and very warm since warm summers tend to melt the snowpack faster.
+
+* High snow, cold summer = 2012 looks good for all regions
+* High snow, warm summer = 2013 looks good for all regions
+* Low snow, cold summer = 2003, but note that it's actually not that cold.
+* Low snow, warm summer = 2019 is very warm across all regions, but it actually has average snowpack for Bristol Bay and Cook Inlet. 2016 is another option with low snow across all regions, but not quite as warm as other years.
+
+```{r}
+clim_dat <- readRDS("output/clim_dat.rds")
+
+lcld %>% 
+  mutate(clim_region = case_when(grepl("Bristol", Region) ~ "Bristol Bay Borough",
+                                 grepl("Kodiak", Region) ~ "Kodiak Island Borough",
+                                 grepl("Cook", Region) ~ "Matanuska-Susitna Borough",
+                                 grepl("Copper", Region) ~ "Valdez-Cordova Census Area",
+                                 grepl("Prince", Region) ~ "Valdez-Cordova Census Area")) %>% 
+  group_by(Region, clim_region, Year) %>% 
+  summarize(mean_lcld = mean(julian_date, na.rm = TRUE)) %>% 
+  left_join(clim_dat %>% filter(parameter == "Temperature") %>% select(clim_region = Region, Value, Value_metric, Year)) %>% 
+  ggplot(aes(x = mean_lcld, y = Value)) +
+  geom_point() +
+  geom_text_repel(aes(label = substr(Year, 3, 4))) +
+  facet_wrap(~Region, scales = "free") +
+  theme_bw() +
+  theme() +
+  labs(x = "Mean LCLD (Julian Date)", y = "Average Summer Air Temperature (F)")
+
+```
+
+
