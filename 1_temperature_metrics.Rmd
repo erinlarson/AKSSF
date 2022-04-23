@@ -60,6 +60,11 @@ tr_dat %>%
   group_by(SiteID) %>% 
   summarize(yrs_missing = paste(Year, collapse = ", "))
 
+#save short copy for Chris Sergeant to use with the function.
+sites_complete_summers %>% 
+  slice(1:50) %>% 
+  saveRDS("data_preparation/test_data_ChrisS.rds")
+
 #note warming is because the function evaluates the RHS of a case_when even though not true
 metrics <- sites_complete_summers %>% 
   tempmetrics(.)
