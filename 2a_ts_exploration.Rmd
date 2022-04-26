@@ -38,34 +38,52 @@ Modeling thermal sensitivities for five regions in Southern AK.
 4. Transform/model covariates as needed. Arcsine square root transformation for proportional covariates since 0-1 scale. Log transformation for continuous covariates. Plotted watershed slope and LCLD (last day of the longest continuous snow season) and decided to remove effect of slope on snow and use the residual - per Tim's method -- new covariate called snow index. Check for outliers after transformations.
 
 
-# Original DFA
+# DFA Results
 
-Tim provided DFA output on November 8, 2021. Here are comments on the files from his email:
-- GlobalModelEstimates_1trend_DUE.csv contains the estimated model coefficients. It has columns Region, SiteID, Year, TempSens_Z, TempSens, TrendLoad_Z, TrendLoad
-- TempSens_Z are the temperature sensitivity values in Z-score space, which come directly out of the model.
-- TempSens are the temperature sensitivity values that have been back-transformed to be in units of ºC water / ºC air.
-- TrendLoad_Z are the loadings on the common trend in Z-score space.
-- GlobalTrendEstimates_1trend_DUE.csv contains the estimated trends by year. This has columns Year, DOY, and Trend. DOY is just Julian day of year. Trend is the trend value for that DOY.
+Current DFA results include interaction between air temperature and daylength from 3/17/22. For first report, will move forward with TS in model with and without daylength.
 
-Read in final thermal sensitivities and trend loadings from global model. Tim found that regional models did not change the results.
 
-```{r responses}
+```{r dfa output}
+load("DFA/output_17Mar22/DFA_copy_DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
 
-dfa_dat <- read_csv("DFA/output_8Nov21/GlobalModelEstimates_1trend_DUE.csv")
-trend_dat <- read_csv("DFA/output_8Nov21/GlobalTrends_1trend_DUE.csv")
+dfa_ts <- GlobalResults_DayLen_Subset1 %>% 
+  select(Region, SiteID, Year, TempSens_Air.DayLen, TempSens_Air) %>% 
+  distinct()
 
-remove_lssites <- dfa_dat %>% distinct(SiteID) %>% filter(grepl("lsr", SiteID)) 
-dfa_dat <- dfa_dat %>% 
-  filter(!SiteID %in% remove_lssites)
+dfa_trends <- GlobalTrends_DayLen_Subset1 %>%
+  select(Year, DOY, Trend_Air, Trend_Air.DayLen) %>% 
+  pivot_longer(cols = c(Trend_Air.DayLen, Trend_Air), names_to = "model", values_to = "trend")  
+
+dfa_loads <- GlobalResults_DayLen_Subset1 %>% 
+  select(SiteID, Year, TrendLoad_Air, TrendLoad_Air.DayLen) %>% 
+  distinct()
 
 ```
 
-Plot of thermal sensitivity versus loading on common trend. Tim commented that sites with low thermal sensitivities often load strongly on the common trend, these might be groundwater sites, glacial sites, etc.
+
+Trends 
+
+```{r trends by year}
+
+dfa_trends %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+```
+
+Plot of thermal sensitivity versus loading on common trend. Tim commented that sites with low thermal sensitivities often load strongly on the common trend, these might be groundwater sites, glacial sites, etc. Some sites have negative loadings, most likely glacial sites that get cooler as the summer progresses.
 
 ```{r ts versus trend}
+#w daylength
+left_join(dfa_ts, dfa_loads) %>% 
+  ggplot(aes(TempSens_Air.DayLen, TrendLoad_Air.DayLen)) +
+  geom_point(aes(color = Region)) +
+  facet_wrap(~Year)
 
-dfa_dat %>% 
-  ggplot(aes(TempSens, TrendLoad_Z)) +
+#air only
+left_join(dfa_ts, dfa_loads) %>% 
+  ggplot(aes(TempSens_Air, TrendLoad_Air)) +
   geom_point(aes(color = Region)) +
   facet_wrap(~Year)
 
@@ -74,102 +92,21 @@ dfa_dat %>%
 Frequency plots of thermal sensitivities by year and region.
 
 ```{r}
-dfa_dat %>% 
-  ggplot(aes(TempSens)) +
+dfa_ts %>% 
+  ggplot(aes(TempSens_Air)) +
+  geom_freqpoly(aes(color = Region)) +
+  facet_wrap(~Year)
+
+dfa_ts %>% 
+  ggplot(aes(TempSens_Air.DayLen)) +
   geom_freqpoly(aes(color = Region)) +
   facet_wrap(~Year)
 
 # ggsave("output/ts_region_year.jpeg", width = 9, units = "in")
 ```
 
-Something strange going on in Cook Inlet in 2019, lots of site in Deshka with very low thermal sensitivities which makes no sense, these are relatively warm sites. This result does not match raw air temperature coefficients from simple lm fits.
 
-```{r}
-dfa_dat %>% 
-  filter(Region == "Cook Inlet", Year == 2019, TempSens < 0.25)
-```
-
-Somethings strange going on with sites in Deshka having very low thermal sensitivities. Read in raw air-stream temperatures and plot.
-Filter on time series with 70% of days from June 1 to August 31.
-
-```{r}
-dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds")
-
-dat <- dat %>% 
-  mutate(year = year(sampleDate))
-
-jd_completeness_filter <- function(inputDat, jd_filter, completeness_filter) {
-  dat <- inputDat %>% 
-    mutate(jd = as.numeric(format(sampleDate, "%j")),
-           year = year(sampleDate)) %>% 
-    filter(jd >= 152, jd <= jd_filter) #June 1st to end date
-  ndays <- max(dat$jd) - min(dat$jd)
-  dat2 <- dat %>%
-    group_by(SiteID, year) %>%
-    mutate(completeness = n()/ndays * 100) %>% 
-    filter(completeness > completeness_filter) %>% 
-    ungroup()
-  return(dat2)
-}
-
-dat2 <- jd_completeness_filter(dat, 243, 70)
-
-dat %>% distinct(SiteID, year) %>% nrow()
-dat2 %>% distinct(SiteID, year) %>% nrow()
-```
-
-
-Plot some of the deshka sites from 2019.
-
-```{r}
-
-dat2 %>% 
-  filter(SiteID == c("Deshka 1 Downstream", "Deshka 1 Tributary"), year == 2019) %>% 
-  ggplot() +
-  geom_line(aes(x = sampleDate, y = meanDT)) +
-  geom_line(aes(x = sampleDate, y= airDT), color = "blue") +
-  facet_wrap(~SiteID)
-
-# ggsave("output/desha_air-stream_2sites.jpeg", width = 9, units = "in")
-```
-
-Plot a couple of little susitna sites. Looks much more reasonable, lower site pretty cold in June probably due to snowmelt, then tracking air temperatures pretty well later in year. Upper site very cold and not tracking air temps.
-
-```{r}
-dat %>% filter(grepl("ls", SiteID)) %>% distinct(SiteID)
-
-dat2 %>% 
-  filter(SiteID == c("lsr28.3", "lsr112"), year == 2020) %>% 
-  ggplot() +
-  geom_line(aes(x = sampleDate, y = meanDT)) +
-  geom_line(aes(x = sampleDate, y= airDT), color = "blue") +
-  facet_wrap(~SiteID)
-```
-
-Plots of common trends: 2017-2019 are very strange and don't match general pattern of gw warming over season found in Cline et al. paper.
-
-```{r}
-trend_dat %>% 
-  ggplot(aes(x = DOY, y = Trend)) +
-  geom_line() + 
-  facet_wrap(~Year)
-```
-
-
-# Read in data and combine
-
-## ARIMA results
-
-New AR(1) model output from Tim.
-
-```{r responses, include = FALSE}
-ts_dat <- readRDS("output/TempSens_Arima_Results_from2000_2022-01-14.RDS") %>% as_tibble()
-
-# write_csv(ts_dat, "DFA/TempSens_Arima_Results2021.12.07.csv")
-
-```
-
-## Covariates
+# Read in Covariates
 
 Read in covariates. Copied over from Dustin's script, but modified so that lcld is combined with the other covariates.
 
@@ -228,7 +165,6 @@ cov.all <- left_join(cov.all, lcld.long)
 
 ```
 
-Early exploration turned up lots of small problems that Dustin has fixed -- all recorded on [google sheet](https://docs.google.com/spreadsheets/d/1TJrNIwr14HJ4QV6-fB4ubmi0BoTNCG7UxoK-s--IsJM/edit#gid=624864644), QA review tab.
 
 ```{r covariate exploration, eval = FALSE}
 
@@ -240,25 +176,13 @@ cov.all %>%
 
 cov.all %>% 
   group_by(Region) %>% 
-  summarize(meanslope = mean(wtd_elev_MEAN))
-
-#2011 all fixed now.
-cov.all %>% 
-  filter(wtd_lcld_jd <0)
-
-cov.all %>% 
-  mutate(yr11 = case_when(Year == 2011 ~ 1, 
-                          TRUE ~ 0)) %>% 
-  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd, color = as.factor(yr11))) +
-  geom_point() +
-  facet_wrap(~Region)
+  summarize(meanelev = mean(wtd_elev_MEAN))
 
 
 cov.all %>% 
-  # filter(!Year == 2011) %>% 
   ggplot(aes(x = wtd_elev_MEAN, y = wtd_lcld_jd, color = Region)) +
   geom_point() +
-  geom_smooth() 
+  geom_smooth() +
   facet_wrap(~Year)
   
 
@@ -284,16 +208,16 @@ cov.all %>%
 
 ## Combine SiteIDs 
 
-Generate a data frame that associates the SiteIDs in the response data frame with the covariate data frame. Tim's response data frame drops > 70 sites because they had limited summer data or data were prior to 2011 (he ran 2011-2020). We may go back and include older years now that we aren't running DFA so use the original model data frame sent to Tim (stream + air temps) and generate lookup for merging the SiteIDs. Then apply this to the response data frame with AR1 model output.
+Generate a data frame that associates the SiteIDs in the response data frame with the covariate data frame. Tim's response data frame drops > 70 sites because they had limited summer data or data were prior to 2011 (he ran 2011-2020). 
 
-We added prefixes to most of the SiteIDs when generating the data that didn't get carried over to the spatial data frames. 
+Used the original model data frame sent to Tim (stream + air temps) and generate lookup for merging the SiteIDs. Then apply this to the response data frame with TS. We added prefixes to most of the SiteIDs when generating the data that didn't get carried over to the spatial data frames. 
 
 * find the SiteIDs that don't match in the two data frames (109) -- make sure all are converted to lower case because that is causing some mismatches.
 * remove the prefix -- for just the mismatched sites -- so that that spatial SiteIDs will join.
 * 13 sites in the response data frame not in the covariate data frame -- see [google sheet](https://docs.google.com/spreadsheets/d/1TJrNIwr14HJ4QV6-fB4ubmi0BoTNCG7UxoK-s--IsJM/edit#gid=1942759492) for how to fix them. 
 
 
-```{r create siteid_join data frame, include = FALSE}
+```{r create siteid_join data frame, include = FALSE, eval = FALSE}
 
 temp_dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds") %>% 
   mutate(site_lower = tolower(SiteID))
@@ -333,7 +257,7 @@ write.csv(siteid_join, "data_preparation/SiteID_join_spatial_to_temperature.csv"
 
 Lots of sites in covariates not in response data frame -- check on how Tim filtered data completeness, which should explain why sites were dropped. For each site and year, Tim dropped any with less than 80% of days in June 1 - Aug 31 (jd 152-243). And, he only used sites with data from 2011-2020.
 
-```{r sites dropped in arima analysis, eval = FALSE}
+```{r sites dropped in dfa, eval = FALSE}
 
 temp_dat %>% 
   # filter(year(sampleDate) %in% 2001:2019) %>% 
@@ -357,24 +281,32 @@ temp_dat %>%
   filter(sum_complete == 0)
 ```
 
-Use merge table to join on SiteIDs. One site in responses without spatial data - Nerka Pike Creek, only 1 year, will be dropped.
+Use merge table to join on SiteIDs. One site in responses without spatial data - Egegik River, checking with Dustin on that one. fws_580223156504200 with data for 2015-2018.
 
 ```{r create model data frame, include = FALSE}
 
 siteid_join <- read_csv("data_preparation/SiteID_join_spatial_to_temperature.csv")
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 
-# nerka pike creek is only missing site now
-ts_dat %>% mutate(site_lower = tolower(Site)) %>% 
-  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>% 
-  filter(Year %in% 2001:2019) %>% 
-  left_join(cov.all %>% mutate(cov_id = tolower(SiteID))) %>%
-  filter(is.na(str_ord))
+cov.all <- cov.all %>% mutate(cov_id = tolower(SiteID),
+                   Region = gsub("_", " ", Region)) 
 
-mod_dat <- ts_dat %>% 
-  mutate(site_lower = tolower(Site)) %>% 
-  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>% 
-  filter(Year %in% 2001:2019) %>% 
-  left_join(cov.all %>% mutate(cov_id = tolower(SiteID))) %>% 
+dfa_ts %>% 
+  mutate(site_lower = tolower(SiteID)) %>% 
+  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>%
+  filter(Year %in% 2011:2019) %>% 
+  select(-Region) %>% 
+  left_join(cov.all %>% select(-SiteID)) %>% 
+  filter(is.na(str_ord)) 
+
+md %>% filter(Site == "fws_580223156504200")
+
+mod_dat <- dfa_ts %>% 
+  mutate(site_lower = tolower(SiteID)) %>% 
+  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>%
+  filter(Year %in% 2011:2019) %>% 
+  select(-Region) %>% 
+  left_join(cov.all %>% select(-SiteID)) %>% 
   filter(!is.na(str_ord))
 
 ```
@@ -386,7 +318,7 @@ Tim C. included total summer precipitation as a predictor in his models so add f
 
 ```{r merge with precip}
 
-daymet <- read_csv("data_preparation/daymet/site_daymet.csv")
+daymet <- read_csv("data_preparation/site_daymet_2011-19.csv")
 daymet %>% distinct(measurement)
 
 #correct conversion is date2 bc date example below has Jan 1 as day 0!
@@ -404,7 +336,8 @@ precip <- daymet %>%
   group_by(Site, Year) %>% 
   summarize(summer_precip = sum(value))
 
-mod_dat <- left_join(mod_dat %>% select(-(site_lower:SiteID)), precip)
+mod_dat <- left_join(mod_dat %>% rename(Site = SiteID) %>% select(-site_lower, -X1, -cov_id, -region), precip) 
+summary(mod_dat)
 
 rm(daymet)
 
@@ -416,36 +349,21 @@ rm(daymet)
 
 ## Response
 
-Look at sites with lots of negative TS as a check.
-
-* NPS Hardenburg bay is a bay in Lake Clark - drop.
-* USFS_Middle Arm Eyak - streambed measurements per Luca so location is just off.
-* usgs 15258000 is outlet of kenai lake, but still seems very lake affected or lake-like (kenai r at cooper landing) - drop
-* usgs 15260001 is outlet of cooper lake right below hydro dam - this seems very anthro-influenced -- drop
-* usfs solf lake fish pass and outlet creek - outlet creek is lake influenced per Luca's notes. Location may be off if it looks like a lake site.
-* usfs mckinley lake site is a lake outlet and influenced by it per Luca's notes. Location is off a bit since it looks like it is in the lake.
-* 572656154082400 is karluk river on kodiak.
+Look at sites with lots of negative TS as a check. original list of sites using just air temperature and no daylength is much different than model with both in it. For now, leave all sites. Note that some of the lake affected sites may be very difficult to model TS for since lake temperatures can change so quickly.
 
 ```{r negative ts values}
-mod_dat %>% 
-  filter(TempSens < 0) %>% 
-  ggplot(aes(x = TempSens, y = SiteID)) +
-  geom_point()
 
-mod_dat %>% 
-  filter(TempSens < 0) %>% 
-  count(SiteID) %>% 
+left_join(mod_dat, md %>% select(Site, Waterbody_name, SourceName)) %>% 
+  filter(TempSens_Air.DayLen < 0) %>% 
+  group_by(Site, Waterbody_name) %>%
+  summarize(n = n(), mean_ts = mean(TempSens_Air.DayLen)) %>% 
   arrange(desc(n))
 
-md <- readRDS("data_preparation/final_data/md.rds")
-
-left_join(mod_dat, md %>% select(SiteID, Waterbody_name, SourceName)) %>% 
-  filter(Site == "572656154082400")
-
-drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak")
-
-mod_dat2 <- mod_dat %>% 
-  filter(!Site %in% drop_sites)
+  
+# drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak")
+# 
+# mod_dat2 <- mod_dat %>% 
+#   filter(!Site %in% drop_sites)
 
 
 ```
@@ -463,45 +381,45 @@ what about other sites in Luca's dataset? We kept some that are not ones he orig
 Any outliers in TS? The only major one is the very negative value at Karluk River.
 
 ```{r ts boxplot by region}
-mod_dat2 %>% 
-  ggplot(aes(x = Region, y = TempSens)) +
+mod_dat %>% 
+  ggplot(aes(x = Region, y = TempSens_Air.DayLen)) +
   geom_boxplot()
 ```
 
 
 ```{r ts dotplot}
-mod_dat2 %>% 
-  arrange(TempSens) %>% 
+mod_dat %>% 
+  arrange(TempSens_Air.DayLen) %>% 
   mutate(rowid = row_number()) %>%
-  ggplot(aes(x = TempSens, y = rowid,  color = Region)) +
+  ggplot(aes(x = TempSens_Air.DayLen, y = rowid,  color = Region)) +
   geom_point() +
   # scale_y_continuous(limits = c(0, 1500)) +
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         legend.position = "bottom", axis.title.y = element_blank())
 ```
 
-Two sites with rather high TS.
+some sites with high TS.
 
 ```{r}
-mod_dat2 %>% 
-  filter(TempSens > 0.7)
+mod_dat %>% 
+  filter(TempSens_Air.DayLen > 0.7)
 ```
 
 ```{r ts histogram}
-mod_dat2 %>% 
-  ggplot(aes(x = TempSens)) +
+mod_dat %>% 
+  ggplot(aes(x = TempSens_Air.DayLen)) +
   geom_histogram() +
   facet_wrap(~Region) +
   theme_bw()
 
 ```
-
+# STOPPED HERE 4/22/22. NOTE THAT I AM NOT USING SCRIPTS B AND D EITHER SO MAYBE DELETE THOSE OR NOTE ON TOP.
 
 ## Covariates 
 
 Checking outliers and collinearity. Drop those with high correlation.
 
-Check slopes first. A couple of outliers -- one for stream slope and two for minimum catchment slope. We checked the min catchment slopes and they are accurate, streams in very steep watersheds. One of those aslo had the high stream slope. Note that the mean, min, max statistics for slope and elevation by watershed are all highly correlated so just go with means for now and recheck using r and vif.
+Check slopes first. A couple of outliers -- one for stream slope and two for minimum catchment slope. We checked the min catchment slopes and they are accurate, streams in very steep watersheds. One of those also had the high stream slope. Note that the mean, min, max statistics for slope and elevation by watershed are all highly correlated so just go with means for now and recheck using r and vif.
 
 Keep:
 

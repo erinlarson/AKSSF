@@ -127,9 +127,9 @@ Note: this was run off of the metadata lat/long and not the final shp where some
 
 
 ```{r read in site locations and save csv}
-md <- readRDS("final_data/md.rds")
+md <- readRDS("final_data/md_2022-02-08.rds")
 
-write.csv(md %>% distinct(SiteID, Latitude, Longitude), file = paste0("sites", Sys.Date(), ".csv"),
+write.csv(md %>% distinct(Site, Latitude, Longitude), file = paste0("sites", Sys.Date(), ".csv"),
           row.names = FALSE)
 ```
 
@@ -137,14 +137,14 @@ write.csv(md %>% distinct(SiteID, Latitude, Longitude), file = paste0("sites", S
 Download daymet data for 40 years and all sites.
 
 ```{r daymet for all sites}
-dm_batch <- download_daymet_batch(file_location = "sites2021-11-23.csv",
-                      start = 1980,
-                      end = 2020,
+dm_batch <- download_daymet_batch(file_location = "sites2022-04-22.csv",
+                      start = 2011,
+                      end = 2019,
                       simplify = TRUE,
                       silent = TRUE)
 
 
-write_csv(dm_batch, "daymet/site_daymet.csv")
+write_csv(dm_batch, "site_daymet_2011-19.csv")
 
 dm_batch %>% 
   distinct(site, measurement)

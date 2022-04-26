@@ -14,6 +14,18 @@ library(tidyverse)
 library(sf)
 ```
 
+Update this with TS created by Tim on 3/17/22.
+
+
+```{r}
+load("DFA/output_17Mar22/DFA_copy_DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
+
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
+
+```
+
+
 Use single trend DFA results received from Tim on 2/22/22. Combine with covariates to create new model data frame.
 
 

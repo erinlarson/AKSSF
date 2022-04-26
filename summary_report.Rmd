@@ -114,7 +114,6 @@ ts_doy %>%
   facet_wrap(~ ts_type + covariate, scales = "free") 
 ```
 
-
 Exploration of how TS changes by day in the interaction model, first plot is patterns by region and year. 
 
 ```{r ts by day all sites}
