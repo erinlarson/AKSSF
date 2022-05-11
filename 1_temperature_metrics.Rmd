@@ -31,6 +31,11 @@ md %>%
 tr_dat <- tr_dat %>% 
   filter(!(SiteID == "NPS_Newhalen_River" & year(sampleDate) == 2015))
 
+tr_dat %>% 
+  distinct(SiteID, year(sampleDate)) %>% 
+  count(SiteID) #%>% 
+  summarize(sum(n))
+
 ```
 
 
@@ -48,6 +53,12 @@ sites_complete_summers <- tr_dat %>%
   mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
   filter(percent_complete >= 0.8)
 
+sites_complete_summers %>% 
+  ungroup() %>% 
+  distinct(SiteID, year(sampleDate)) %>% 
+  count(SiteID) #%>% 
+  summarize(sum(n))
+
 nrow(tr_dat %>% distinct(SiteID, Year)) - nrow(sites_complete_summers %>% distinct(SiteID, Year))
 
 tr_dat %>%
@@ -60,12 +71,7 @@ tr_dat %>%
   group_by(SiteID) %>% 
   summarize(yrs_missing = paste(Year, collapse = ", "))
 
-#save short copy for Chris Sergeant to use with the function.
-sites_complete_summers %>% 
-  slice(1:50) %>% 
-  saveRDS("data_preparation/test_data_ChrisS.rds")
-
-#note warming is because the function evaluates the RHS of a case_when even though not true
+#note warning is because the function evaluates the RHS of a case_when even though not true
 metrics <- sites_complete_summers %>% 
   tempmetrics(.)
 
@@ -73,21 +79,21 @@ metrics <- sites_complete_summers %>%
 ```
 
 
-Add in the regions and thermal sensitivity from the model data frame.
+Add in the regions and thermal sensitivity from the model data frame, but note that TS is from 2011-2019, whereas the metrics dataset is all sites and years with complete summer time series.
 Add in the filter that removes most of the Deshka sites so they don't overwhelm the summaries.
 
 ```{r add regions and ts}
 # metrics <- read_rds("output/metrics_2021-11-15.rds")
 
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-24.rds") #saved from combining response and covariates in 2c.
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds") #saved from combining response and covariates in 2c.
 
-left_join(metrics, mod_dat %>% select(SiteID, Year, TempSens, Region)) %>% 
-  filter(is.na(TempSens)) %>% 
+left_join(metrics, mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen, Region)) %>% 
+  filter(is.na(TempSens_Air)) %>% 
   count(Year) #mostly before 2011 or 2020, also quite a few from removing deshka sites in 2017-2019
 
 
 metrics2 <- left_join(metrics, 
-                      mod_dat %>% select(SiteID, Year, TempSens, Region)) %>% 
+                      mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen, Region)) %>% 
   left_join(md %>% select(SiteID = Site, subset1, deshka))
 
 
@@ -97,7 +103,6 @@ Save metrics data frame with the regions and subset1 on there.
 ```{r save metrics}
 
 saveRDS(metrics2, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
-
 
 ```
 

@@ -12,96 +12,23 @@ library(gbm)
 library(ggpubr)
 library(tidyverse)
 library(sf)
+library(gridExtra)
+library(lubridate)
+library(nlme)
+
+select <- dplyr::select
 ```
 
-Update this with TS created by Tim on 3/17/22.
+Update this with TS created by Tim on 3/17/22. Model data frame created in script 2a with some exploration of response and covariates.
+
+* check rmse on individual sites. Luca had tagged some sites with very local hydrologic inputs that would be difficult to model using landscape covariates. Revisit his list with any sites that do poorly in this model.
+* Two outliers for minimum catchment slope, one matches a high stream slope, but other does not. Try model with and without these strange outliers to see if they have high leverage on model results.
 
 
-```{r}
-load("DFA/output_17Mar22/DFA_copy_DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
-
-md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
-
-```
-
-
-Use single trend DFA results received from Tim on 2/22/22. Combine with covariates to create new model data frame.
-
-
-```{r create model data frame}
-dfa <- readRDS("output/dfa_results.rds")
-summary(dfa)
-
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-08.rds")
-summary(mod_dat)
-
-mod_dat2 <- left_join(dfa %>% 
-            filter(trends == 1, subset == 1, Year < 2020) %>% 
-            dplyr::select(SiteID, Year, TempSens, Loadings),
-          mod_dat %>% 
-            dplyr::select(SiteID = Site, Year, Region:log_precip)) 
-
-#good removed.
-mod_dat2 %>%           
-  filter((SiteID == "NPS_Newhalen_River" & Year == 2015))
-
-summary(mod_dat2)
-mod_dat2 %>% filter(is.na(log_slope)) %>% distinct(SiteID)
-
-drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak", "UW_Nerka Pike Creek")
-
-mod_dat2 <- mod_dat2 %>% 
-  filter(!SiteID %in% drop_sites)
-
-saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+```{r read in model data frame}
+dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
 
 ```
-
-```{r}
-mod_dat2 <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
-
-names(mod_dat2)
-```
-
-
-```{r pair plots against TS}
-
-panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(0, 1, 0, 1))
-    r <- abs(cor(x, y, use = "complete.obs"))
-    txt <- format(c(r, 0.123456789), digits = digits)[1]
-    txt <- paste0(prefix, txt)
-    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
-    text(0.5, 0.5, txt, cex = cex.cor * r)
-}
-
-panel.hist <- function(x, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(usr[1:2], 0, 1.5) )
-    h <- hist(x, plot = FALSE)
-    breaks <- h$breaks; nB <- length(breaks)
-    y <- h$counts; y <- y/max(y)
-    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
-}
-
-mod_dat2 %>% 
-  dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-         wtd_slope_MEAN, snow_ind, wtd_lcld_jd, summer_precip) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-mod_dat2 %>% 
-  dplyr::select(TempSens, log_area, dist_coast_km, wtd_north_per,
-         asrt_wet, asrt_glac, asrt_lake) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist, lower.panel = panel.smooth)
-
-```
-
-
-
 
 
 
@@ -122,41 +49,45 @@ find.int$interactions
 find.int$rank.list
 ```
 
+Transformed covariates: log_slope, log_cat_elev, log_cat_slope, wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km, asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region
 
 
 
 ```{r brt data frame}
-brt_in <- mod_dat2 %>% 
+brt_in <- dat %>% 
   mutate(Region = as.factor(Region)) %>% 
   as.data.frame() %>% 
-  dplyr::select(TempSens, log_slope, log_cat_elev, log_cat_slope, 
-                             wtd_north_per, wtd_slope_MEAN, log_area, dist_coast_km,
-                             asrt_glac, asrt_lake, asrt_wet, snow_ind, summer_precip, Region)
+  dplyr::select(TempSens_Air, str_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip, Region)
 
-#remove att and names from snow_ind (output of resid function)
-#this fixed error in interactions function
-brt_in[] <- lapply(brt_in, c)
-str(brt_in)
+brt_in_dl <- dat %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens_Air.DayLen, str_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip, Region)
 
-names(brt_in)
 ```
 
 Interactions are all really weak, < 0.5 so they don't indicate any interaction in the perspectives plot. 
 
 Output from step run:
-fitting final gbm model with a fixed number of 5200 trees for TempSens
+fitting final gbm model with a fixed number of 7300 trees for TempSens_Air
 
-mean total deviance = 0.134 
-mean residual deviance = 0.023 
+mean total deviance = 0.065 
+mean residual deviance = 0.007 
  
-estimated cv deviance = 0.05 ; se = 0.003 
+estimated cv deviance = 0.019 ; se = 0.001 
  
-training data correlation = 0.911 
-cv correlation =  0.792 ; se = 0.013 
+training data correlation = 0.943 
+cv correlation =  0.839 ; se = 0.01 
  
-elapsed time -  0.02 minutes
+elapsed time -  0.03 minutes 
 
-```{r}
+
+
+```{r brt with ts from air only model}
 
 brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
                      data = brt_in,
@@ -164,11 +95,36 @@ brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14,
                      n.folds = 10, family = "gaussian", max.trees = 30000,
                      keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
 
-saveRDS(brt_step, paste("output/brt_dfa1tr", Sys.Date(), ".rds", sep = ""))
+saveRDS(brt_step, paste("output/brt_dfa1tr_air", Sys.Date(), ".rds", sep = ""))
 ```
 
+
+fitting final gbm model with a fixed number of 5400 trees for TempSens_Air.DayLen
+
+mean total deviance = 0.028 
+mean residual deviance = 0.006 
+ 
+estimated cv deviance = 0.014 ; se = 0.001 
+ 
+training data correlation = 0.897 
+cv correlation =  0.721 ; se = 0.016 
+ 
+elapsed time -  0.02 minutes 
+
+```{r brt with ts from air plus daylength model}
+
+brt_step_dl <- gbm.step(gbm.y = 1, gbm.x = 2:14, 
+                     data = brt_in_dl,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+saveRDS(brt_step_dl, paste("output/brt_dfa1tr_AirDL", Sys.Date(), ".rds", sep = ""))
+```
+
+
 ```{r}
-brt_step <- readRDS("output/brt_dfa1tr2022-02-24.rds")
+# brt_step <- readRDS("output/brt_dfa1tr2022-02-24.rds")
 
 # brt_gbm <- gbm(TempSens ~ ., data = brt_in, distribution = "gaussian",
 #                n.trees = 8300, interaction.depth = 5, bag.fraction = 0.5,
@@ -178,18 +134,35 @@ brt_step <- readRDS("output/brt_dfa1tr2022-02-24.rds")
 
 
 summary(brt_step)
+summary(brt_step_dl)
+
 
 gbm.plot(brt_step, smooth = TRUE, n.plots = 13) #plots of first order relationships
+gbm.plot(brt_step_dl, smooth = TRUE, n.plots = 13) #plots of first order relationships
 
 # brt_simplify <- gbm.simplify(brt_step) #this takes a long time to run.
 
 brt_int <- gbm.interactions(brt_step) #identifies interactions
 brt_int$rank.list
 
+brt_int_dl <- gbm.interactions(brt_step_dl) #identifies interactions
+brt_int_dl$rank.list
+
+
+
+
 gbm.perspec(brt_step, x = 12, y =5) #plots interactions, but I can't get this to show anything
 
-
+#error
 interact.gbm(brt_step, data = brt_in, n.trees = 200)
+```
+
+
+```{r brt simplify}
+brt_step_simp <- gbm.simplify(brt_step)
+brt_stepdl_simp <- gbm.simplify(brt_step_dl)
+
+
 ```
 
 
@@ -198,8 +171,19 @@ interact.gbm(brt_step, data = brt_in, n.trees = 200)
 int_vars <- c("summer_precip", "wtd_slope_MEAN")
 
 pd_precip_slope <- pdp::partial(brt_step, pred.var = int_vars, 
-              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE)
+              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE, rug = TRUE)
 pd_precip_slope
+
+
+int_vars <- c("summer_precip", "wtd_lake_per")
+pd_precip_lake <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_precip_lake
+
+int_vars <- c("wtd_lcld_jd", "wtd_slope_MEAN")
+pd_snow_slope <- pdp::partial(brt_step, pred.var = int_vars, 
+              n.trees = 5200, train = brt_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope
 
 int_vars <- c("log_area", "asrt_lake")
 pd_area_lake <- pdp::partial(brt_step, pred.var = int_vars, 
@@ -248,7 +232,7 @@ dev.exp.train <- (null.dev - train.dev)/null.dev
 
 Deviance explained.
 
-```{r brt deviance}
+```{r brt deviance air only}
 cv.dev <- brt_step$cv.statistics$deviance.mean # same as estimated cv deviance in output
 null.dev <- brt_step$self.statistics$mean.null #same as mean total deviance in output
 train.dev <- brt_step$self.statistics$mean.resid #same as mean residual deviance in output
@@ -261,27 +245,65 @@ dev.exp.train
 ```
 
 
+```{r brt deviance air and dl}
+cv.dev <- brt_step_dl$cv.statistics$deviance.mean # same as estimated cv deviance in output
+null.dev <- brt_step_dl$self.statistics$mean.null #same as mean total deviance in output
+train.dev <- brt_step_dl$self.statistics$mean.resid #same as mean residual deviance in output
+
+dev.exp <- (null.dev - cv.dev)/null.dev
+dev.exp.train <- (null.dev - train.dev)/null.dev
+
+dev.exp
+dev.exp.train
+```
+
+
 ```{r variable importance plot}
 
-brt_step$contributions %>% 
-  mutate(var_names = case_when(var == "wtd_slope_MEAN" ~ "Watershed slope",
-                               var == "log_cat_elev" ~ "Catchment elevation",
-                               var == "asrt_lake" ~ "Lake cover",
-                               var == "log_area" ~ "Watershed size",
-                               var == "summer_precip" ~ "Summer precipitation",
-                               var == "dist_coast_km" ~ "Distance to coast",
-                               var == "snow_ind" ~ "Snow index",
-                               var == "asrt_wet" ~ "Wetland cover",
-                               var == "log_cat_slope" ~ "Catchment slope",
-                               var == "log_slope" ~ "Stream gradient",
-                               var == "wtd_north_per" ~ "North aspect",
-                               var == "asrt_glac" ~ "Glacier cover",
-                               TRUE ~ var)) %>% 
-  ggplot(aes(x = rel.inf, y = fct_reorder(var_names, rel.inf))) +
+p1 <- brt_step$contributions %>% 
+  # mutate(var_names = case_when(var == "wtd_slope_MEAN" ~ "Watershed slope",
+  #                              var == "log_cat_elev" ~ "Catchment elevation",
+  #                              var == "asrt_lake" ~ "Lake cover",
+  #                              var == "log_area" ~ "Watershed size",
+  #                              var == "summer_precip" ~ "Summer precipitation",
+  #                              var == "dist_coast_km" ~ "Distance to coast",
+  #                              var == "snow_ind" ~ "Snow index",
+  #                              var == "asrt_wet" ~ "Wetland cover",
+  #                              var == "log_cat_slope" ~ "Catchment slope",
+  #                              var == "log_slope" ~ "Stream gradient",
+  #                              var == "wtd_north_per" ~ "North aspect",
+  #                              var == "asrt_glac" ~ "Glacier cover",
+  #                              TRUE ~ var)) %>% 
+  ggplot(aes(x = rel.inf, y = fct_reorder(var, rel.inf))) +
   geom_col() +
+  geom_vline(aes(xintercept = 10)) +
   theme_bw() +
   theme(text = element_text(size = 18), axis.title.y = element_blank()) +
   labs(x = "Relative Variable Importance")
+
+
+p2 <- brt_step_dl$contributions %>% 
+  # mutate(var_names = case_when(var == "wtd_slope_MEAN" ~ "Watershed slope",
+  #                              var == "log_cat_elev" ~ "Catchment elevation",
+  #                              var == "asrt_lake" ~ "Lake cover",
+  #                              var == "log_area" ~ "Watershed size",
+  #                              var == "summer_precip" ~ "Summer precipitation",
+  #                              var == "dist_coast_km" ~ "Distance to coast",
+  #                              var == "snow_ind" ~ "Snow index",
+  #                              var == "asrt_wet" ~ "Wetland cover",
+  #                              var == "log_cat_slope" ~ "Catchment slope",
+  #                              var == "log_slope" ~ "Stream gradient",
+  #                              var == "wtd_north_per" ~ "North aspect",
+  #                              var == "asrt_glac" ~ "Glacier cover",
+  #                              TRUE ~ var)) %>% 
+  ggplot(aes(x = rel.inf, y = fct_reorder(var, rel.inf))) +
+  geom_col() +
+  geom_vline(aes(xintercept = 10)) +
+  theme_bw() +
+  theme(text = element_text(size = 18), axis.title.y = element_blank()) +
+  labs(x = "Relative Variable Importance")
+
+grid.arrange(p1, p2, nrow = 1)
 
 ggsave("output/presentation_figs/brt_varimp.jpeg", width = 10, height = 8)
 
@@ -298,7 +320,7 @@ summary(brt_out)
 
 brt_out %>% 
   mutate(Region = gsub("_", " ", Region)) %>% 
-  ggplot(aes(x = cv.preds, y = TempSens)) +
+  ggplot(aes(x = cv.preds, y = TempSens_Air)) +
   geom_point() +
   geom_smooth(method = "lm") +
   geom_abline(aes(slope = 1, intercept = 0)) +
@@ -315,7 +337,7 @@ brt_out %>%
 ggsave("output/presentation_figs/brt OP plot.jpeg", width = 10, height = 8) 
 
 brt_out %>% 
-  mutate(sqerror = (TempSens - cv.preds)^2) %>% 
+  mutate(sqerror = (TempSens_Air - cv.preds)^2) %>% 
   summarize(sqrt(mean(sqerror)))
 
 ```
@@ -434,110 +456,280 @@ left_join(site_xval, mod_dat2 %>% distinct(SiteID, Region)) %>%
 ```
 
 
-## brt untransformed predictors
-
-I first did this as a check to see if it changed the model, which it did not.
-
-Now to make things easier to create some simple predictions for the presentation, I am not transforming anything -- even snow, and I am dropping stream slope and summer precip since I don't have those handy for the huc12 outlets yet.
-
-
-```{r }
-brt_in2 <- mod_dat2 %>% 
-  mutate(Region = as.factor(Region)) %>% 
-  as.data.frame() %>% 
-  dplyr::select(TempSens, cat_elev_MEAN, cat_slope_MEAN, 
-                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, 
-                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_ind, glac_10)
-
-#remove att and names from snow_ind (output of resid function)
-#this fixed error in interactions function
-brt_in2[] <- lapply(brt_in2, c)
-str(brt_in2)
-
-names(brt_in2)
-```
-
-
-Output from step run:
-fitting final gbm model with a fixed number of 5500 trees for TempSens
-
-mean total deviance = 0.134 
-mean residual deviance = 0.023 
- 
-estimated cv deviance = 0.049 ; se = 0.004 
- 
-training data correlation = 0.913 
-cv correlation =  0.798 ; se = 0.012 
- 
-elapsed time -  0.02 minutes 
-
-```{r}
-
-brt_step2 <- gbm.step(gbm.y = 1, gbm.x = 2:11, 
-                     data = brt_in2,
-                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
-                     n.folds = 10, family = "gaussian", max.trees = 30000,
-                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
-
-# saveRDS(brt_step, paste("output/brt_dfa1tr", Sys.Date(), ".rds", sep = ""))
-
-summary(brt_step2)
-```
-
-
-
 # Predictions
 
-Bring in hu12 outlet covariates and snowpack for 2012 (high) and 2015 (low) years.
+Bring in hu12 outlet covariates and snowpack for all years. Can focus results on 2012 (high) and 2015 (low) years. Need to rename all covariates in these files so they match the names in the model, so prediction will work.
 
-distance to coast in point file
-summer precip from daymet - not ready yet
-stream slope - dustin will add later
+```{r create hu12 covariate df}
+hu12.cov <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
+hu12.spls <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_SpLs.csv") 
+hu12.pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWCHuc12s_strwtd_cv.csv")
 
-```{r}
-hu12_dat <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
-# huc12_pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
+# dput(names(brt_in)) #getting correct variable names from model
 
-hu12_snow <- hu12_dat %>% 
-  dplyr::select(AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019, wtd_slope_MEAN = AwcHuc12_wtd_slope_MEAN,
-                cat_ID_con) %>% 
-  pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019, names_to = "name", values_to = "lcld") %>% 
-  mutate(year = substr(name,22,25)) %>% 
-  filter(!is.na(lcld))
+hu12.cov <- hu12.cov %>% 
+  select(cat_ID_con, cat_elev_MEAN = AwcHuc12_cat_elev_MEAN,
+         cat_slope_MEAN = AwcHuc12_cat_slope_MEAN,
+         wtd_north_per = AwcHuc12_wtd_north_per,
+         wtd_slope_MEAN = AwcHuc12_wtd_slope_MEAN,
+         wtd_glacier_per = AwcHuc12_wtd_glacier_per,
+         wtd_lake_per = AwcHuc12_wtd_lake_per,
+         wtd_wet_per = AwcHuc12_wtd_wet_per,
+         AwcHuc12_wtd_lcld_mn_2001:AwcHuc12_wtd_lcld_mn_2019) %>% 
+  pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2001:AwcHuc12_wtd_lcld_mn_2019, names_to = "name", values_to = "wtd_lcld_jd") %>% 
+  mutate(Year = substr(name, 22, 26) %>% as.numeric())
 
-summary(hu12_snow)
+# Four sites with watersheds that don't overlap MODIS, we're dropping them because they
+# are coastal. 
+summary(hu12.cov)
+hu12.cov %>% filter(is.na(wtd_lcld_jd)) %>% select(cat_ID_con, Year)
 
-hu12_snow %>% 
-  ggplot(aes(x = lcld)) +
-  geom_histogram() +
-  facet_wrap(~year)
+hu12.cov <- hu12.cov %>% 
+  filter(!is.na(wtd_lcld_jd))
 
-hu12_snow %>% 
-  group_by(year) %>% 
-  summarize(mean(lcld))
+# Convert na to 0 for lake and glacier percent.
+hu12.cov[is.na(hu12.cov)] <- 0
 
-hu12_snow %>% 
-  ggplot(aes(y = lcld, x = wtd_slope_MEAN)) +
-  geom_point() +
-  geom_smooth() +
-  facet_wrap(~year)
+hu12.spls <- hu12.spls %>% 
+  select(cat_ID_con, HUC12, sp_ls, dist_coast_km = dist_catch_coast_km)
 
-library(nlme)
-ess_lme1 <- lme(lcld ~ I(wtd_slope_MEAN^2), random = ~1|year, dat = hu12_snow)
-ess_lme2 <- lme(lcld ~ wtd_slope_MEAN, random = ~1|year, dat = hu12_snow)
-AIC(ess_lme1, ess_lme2)
+hu12.pts <- hu12.pts %>% 
+  select(cat_ID_con, Region = region, wtd_area_sqKM = wtd_AreaSqKm, str_slope)
 
-#AIC selects linear model in this case, but should probably use same resid as I did for the model data.
-hu12_snow <- hu12_snow %>% 
-  mutate(snow_ind = resid(ess_lme1, level = 1))
 
-hu12_snow %>% 
-  ggplot(aes(y = snow_ind, x = wtd_slope_MEAN)) +
-  geom_point() +
-  geom_smooth() +
-  facet_wrap(~year)
+hu12.df <- left_join(hu12.spls, hu12.pts) %>% left_join(hu12.cov)
+
+#one site with missing data - this is a coastal outlet that we dropped above because 
+# it is missing MODIS.
+hu12.df %>% filter(is.na(cat_elev_MEAN))
+
+hu12.df <- hu12.df %>% 
+  filter(!is.na(cat_elev_MEAN))
 
 ```
+
+Add in summer precipitation that was downloaded for all outlet catchment points in the air temperature script.
+
+```{r add in daymet precipitation for outlets}
+
+hu12_dm <- read_csv("data_preparation/HUC12_cat_pts_daymet_2001-19.csv") %>% 
+  as_tibble()
+
+#get rid of attributes, which are affecting merge below
+attr(hu12_dm, "spec")
+attr(hu12_dm, "spec") <- NULL
+str(hu12_dm)
+
+hu12_prp <- hu12_dm %>%
+  filter(measurement %in% c("prcp..mm.day.")) %>% 
+  mutate(sampleDate = as.Date(paste(year, yday), format = "%Y %j")) %>% 
+  filter(month(sampleDate) %in% 6:8) %>% 
+  rename(cat_ID_con = site, Year = year) %>% 
+  group_by(cat_ID_con, Year) %>% 
+  summarize(summer_precip = sum(value)) %>% 
+  ungroup()
+
+
+hu12.df <- left_join(hu12.df, hu12_prp) %>% 
+  mutate(HUC12 = as.character(HUC12))
+
+
+summary(hu12.df)
+```
+
+Add in snow index.
+
+```{r snow index}
+hu12.df %>% 
+  ggplot(aes(y = wtd_lcld_jd, x = wtd_slope_MEAN)) +
+  geom_point() +
+  geom_smooth()
+
+ess_hu12 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN, dat = hu12.df, random = ~1|Year)
+ess_hu12$coefficients$fixed 
+
+ess_hu12_ints <- ess_hu12$coefficients$random$Year %>% as_tibble(rownames = "Year") %>% 
+  rename(intercept = `(Intercept)`) %>% 
+  mutate(Year = as.numeric(Year))
+
+hu12.df <- hu12.df %>% 
+  left_join(ess_hu12_ints) %>% 
+  mutate(snow_tc = intercept + (wtd_lcld_jd - 1.814789 * wtd_slope_MEAN))
+```
+
+We have a lot more variation in changes in snow from 2012 to 2015 than in the BB dataset.
+
+```{r TS predictions}
+hu12.df <- hu12.df %>% 
+  mutate(preds = predict(brt_step, newdata = hu12.df)) 
+
+summary(hu12.df) 
+
+hu12.df %>% 
+  ggplot(aes(x = preds, color = Year)) +
+  geom_freqpoly() +
+  facet_wrap(~Year)
+
+#this is a totally different result than Tim had where
+# there were larger diffs in high sloped watersheds
+hu12.df %>% 
+  # filter(dist_coast_km > 50) %>% 
+  group_by(HUC12, wtd_slope_MEAN, dist_coast_km) %>%
+  summarize(min_snow = min(wtd_lcld_jd),
+            max_snow = max(wtd_lcld_jd),
+            snow_diff = max_snow - min_snow) %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = snow_diff, size = dist_coast_km)) +
+  geom_point()
+
+
+hu12.df %>% 
+  group_by(HUC12) %>%
+  filter(Year %in% c(2012, 2015)) %>%
+  select(HUC12, wtd_lcld_jd, Year, wtd_slope_MEAN) %>% 
+  pivot_wider(names_from = Year, values_from = wtd_lcld_jd) %>% 
+  mutate(snow_diff = `2012` - `2015`) %>% 
+  ggplot(aes(y = snow_diff, x = wtd_slope_MEAN)) + 
+  geom_point()
+
+# all of these are on islands in PWS, but on the very front towards the open North Pacific
+# maybe they stayed really cold in spring 2012 so had snow for a very long time and/or
+# 2015 was a bit abnormal for them too so snow stayed longer.
+hu12.df %>% 
+  group_by(HUC12) %>%
+  filter(Year %in% c(2012, 2015)) %>%
+  select(HUC12, wtd_lcld_jd, Year, wtd_slope_MEAN) %>% 
+  pivot_wider(names_from = Year, values_from = wtd_lcld_jd) %>% 
+  mutate(snow_diff = `2012` - `2015`) %>% 
+  filter(snow_diff > 90)
+
+```
+
+Data frames of predicted TS differences comparing 2012/2015 and the highest and lowest snowpack years from 2001-2019.
+
+```{r}
+hu12.df %>% 
+  filter(Year %in% c(2012, 2015)) %>%
+  select(HUC12, Year, preds) %>% 
+  pivot_wider(names_from = Year, values_from = preds) %>% 
+  mutate(ts_diff = `2012` - `2015`) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = ts_diff))
+
+bind_rows(hu12.df %>% 
+            group_by(HUC12) %>% 
+            slice_min(preds, with_ties = FALSE) %>% 
+            mutate(snow_year = "min"),
+          hu12.df %>% 
+            group_by(HUC12) %>% 
+            slice_max(preds, with_ties = FALSE) %>% 
+            mutate(snow_year = "max")) %>% 
+  select(HUC12, snow_year, preds) %>%
+  pivot_wider(names_from = snow_year, values_from = preds) %>% 
+  mutate(ts_diff = max - min) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = ts_diff))
+  
+  
+  
+```
+
+
+
+
+```{r map of TS}
+hu12 <- st_read("T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", layer = "AKSSF_awcHuc12s")
+
+hu12 <- left_join(hu12, hu12.df %>% 
+                    filter(Year %in% c(2012, 2015)) %>% 
+                    select(HUC12, Year, preds, Region)) %>% 
+  filter(!is.na(preds))
+
+ggplot() +
+  geom_sf(data = hu12, aes(fill = preds), color = NA) +
+  facet_wrap(~Year)
+
+hu12_2 <- left_join(hu12, bind_rows(hu12.df %>% 
+  group_by(HUC12) %>% 
+  slice_min(preds) %>% 
+    mutate(snow_year = "min"),
+  hu12.df %>% 
+  group_by(HUC12) %>% 
+  slice_max(preds) %>% 
+    mutate(snow_year = "max")) %>% 
+    select(HUC12, snow_year, Year, preds, Region)) %>% 
+  filter(!is.na(preds))
+
+ggplot() +
+  geom_sf(data = hu12_2, aes(fill = preds), color = NA) +
+  facet_wrap(~snow_year)
+  
+```
+
+How do TS vary for different salmon species by low and high snow? 
+
+```{r}
+hu12.snow <- bind_rows(hu12.df %>% 
+            group_by(HUC12) %>% 
+            slice_min(snow_tc, with_ties = FALSE) %>% 
+            mutate(snow_year = "min"),
+          hu12.df %>% 
+            group_by(HUC12) %>% 
+            slice_max(snow_tc, with_ties = FALSE) %>% 
+            mutate(snow_year = "max")) %>% 
+  ungroup()
+
+hu12.snow %>% 
+  group_by(snow_year, Region) %>% 
+  count(Year) %>% 
+  ggplot(aes(x = Year, y = n, color = snow_year)) +
+  geom_point() + 
+  scale_x_continuous(breaks = seq(2001, 2019, by= 2)) +
+  facet_wrap(~ Region, ncol = 1, scales = "free_y")
+
+hu12.snow %>% 
+  mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Sockeye = case_when(grepl("S_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Chum = case_when(grepl("CH_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Pink = case_when(grepl("P_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Coho = case_when(grepl("CO_", sp_ls) ~ 1,
+                          TRUE ~ 0)) %>% 
+  pivot_longer(cols = Chinook:Coho, names_to = "species") %>%
+  filter(value == 1) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = preds, color = species)) +
+  facet_grid(rows = vars(Region), cols = vars(snow_year))
+
+hu12.snow %>% 
+  mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Sockeye = case_when(grepl("S_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Chum = case_when(grepl("CH_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Pink = case_when(grepl("P_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Coho = case_when(grepl("CO_", sp_ls) ~ 1,
+                             TRUE ~ 0)) %>% 
+  pivot_longer(cols = Chinook:Coho, names_to = "species") %>%
+  filter(value == 1) %>% 
+  group_by(species) %>% 
+  summarize(mean_ts = mean(preds),
+            sd_ts = sd(preds))
+
+hu12.df %>% 
+  count(sp_ls) %>% 
+  mutate(species = case_hgrepl("CO_", sp_ls)) %>% 
+  summarize(sum(coho))
+  
+```
+
+
+
+
 
 Double checked that values for all covariates are roughly in same ranges as in mod_dat -- they look fine, could probably make a figure showing histograms for both sets of covariates for team, but I don't think this is a problem, it seems no other variables have any effects of magnitude besides watershed slope.
 

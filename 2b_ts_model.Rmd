@@ -91,6 +91,7 @@ mod_dat <- mod_dat %>%
 
 ```
 
+4/24/22 Note: Updating everything with new DFA results from Tim created in March 2022. Working with TS from two models - one with and one without daylength. Not using this model script right now because using a boosted regression tree for spatial analysis. Script 2a creates the model data frame and 2c is the brt model.
 
 # Mixed effects model
 

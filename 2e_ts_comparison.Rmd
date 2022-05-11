@@ -1,0 +1,101 @@
+---
+title: "2e_ts_comparison"
+output: html_document
+date: '2022-05-10'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+
+```{r read in model data frame}
+dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
+
+```
+
+
+# Comparison to Bristol Bay results   
+
+Downloaded Tim's TS from Bristol Bay L&O paper to explore if the TS are very different when we add a lot more sites to each annual DFA model.
+
+* Tim has alegnagik bear creek in his dataset, drop nerka bear so no merging problems
+* fix other site names so they match, lynxcold, silversalmon, and k3
+
+```{r merge results}
+bb_results <- read_csv("DFA/StreamGeomorphologyAndClimate.csv")
+
+bb_results %>% count(Stream) %>% arrange(Stream)
+bb_results %>% distinct(Year)
+
+ts_compare <- dat %>% 
+  filter(Region == "Bristol Bay", grepl("UW", Site), Year %in% 2011:2016, !(Site %in% "UW_Nerka Bear Creek")) %>%
+  mutate(short = strsplit(Site, " ") %>% map(., 2) %>% unlist(),
+         Stream = case_when(short == "K-3" ~ "K3",
+                            short == "Silver" ~ "SilverSalmon",
+                            grepl("Lynx Creek Cold", Site) ~ "LynxCold",
+                            TRUE ~ short)) %>% 
+  left_join(bb_results)
+
+
+#9 missing TS from L&O paper
+ts_compare %>% 
+  filter(is.na(TempSensitivity)) %>% 
+  distinct(Stream)
+```
+
+Using TS from air only model since that would match what Tim did and plotting, calculating correlation, and exploring absolute differences since there are a few sites that seem to be outliers (much higher TS in new analysis). Tim's TS is consistently higher than the new results, but generally strongly correlated (r = 0.8).
+
+```{r compare TS}
+ts_compare %>% 
+  select(Stream, Year, TempSens_Air, TempSens_Air.DayLen, TempSensitivity) %>% 
+  ggplot(aes(x = TempSens_Air, y = TempSensitivity)) +
+  geom_point() +
+  geom_abline(aes(intercept = 0, slope = 1))
+
+ts_compare %>% 
+  select(Stream, Year, TempSens_Air, TempSens_Air.DayLen, TempSensitivity) %>% 
+  summarize(cor(TempSens_Air, TempSensitivity, use = "pairwise.complete.obs"))
+
+ts_compare %>% 
+  select(Stream, Year, TempSens_Air, TempSens_Air.DayLen, TempSensitivity) %>% 
+  mutate(diff = abs(TempSens_Air - TempSensitivity)) %>% 
+  arrange(desc(diff))
+```
+
+Compare some of the geomorphic predictors -- these should be pretty close.
+
+* slope looks really tight - no major differences.
+* snow is definitely not matching up.
+
+```{r slope}
+ts_compare %>% 
+  select(Stream, Year, WatershedSlope, wtd_slope_MEAN) %>% 
+  ggplot(aes(x = WatershedSlope, y = wtd_slope_MEAN)) +
+  geom_point() +
+  geom_abline(aes(intercept = 0, slope = 1))
+
+ts_compare %>% 
+  mutate(slope_diff = WatershedSlope - wtd_slope_MEAN) %>% 
+  arrange(desc(slope_diff))
+```
+
+
+
+```{r snow}
+ts_compare %>% 
+  select(Stream, Year, snow_tc, SnowResidual) %>% 
+  ggplot(aes(x = snow_tc, y = SnowResidual)) +
+  geom_point()
+
+ts_compare %>% 
+  select(Stream, Year, snow_tc, SnowResidual) %>% 
+  summarize(cor(snow_tc, SnowResidual, use = "pairwise.complete.obs"))
+
+
+ts_compare %>% arrange(wtd_area_sqKM) %>% select(Stream, Year, wtd_area_sqKM, SnowResidual, snow_ind, wtd_lcld_jd) 
+
+
+```

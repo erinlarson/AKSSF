@@ -4,3 +4,5 @@ formatted_data
 data_CIK.html
 CIK_trend_analysis.html
 daymet
+HUC12_cat_pts_daymet_2011-19.csv
+site_daymet_2011-19.csv

@@ -19,6 +19,8 @@ library(tictoc)
 # if(!require(devtools)){install.packages("devtools")}
 # devtools::install_github("bluegreen-labs/daymetr")
 library("daymetr")
+
+select <- dplyr::select
 ```
 
 
@@ -156,6 +158,77 @@ dm_batch %>%
 
 
 ```
+
+# Get precipitation for HUC12 outlets
+
+Get locations (lat/long) for centroids from catchments that have highest flow accumulation in each HUC12 over our prediction domain. This is currently being run for Cook Inlet, Copper River, and PWS. Save as csv for use with daymetr download function. Summer precipitation was one covariate in our model that we'll need to predict or create scenarios for.
+
+
+```{r read in catchement centroids and save csv}
+
+cat_pts <- st_read("T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", layer = "AKSSF_awcHuc12_outlet_cats_points")
+cat_pts <- bind_cols(cat_pts %>% st_drop_geometry(), 
+          st_transform(cat_pts, crs = 4326) %>% st_coordinates() %>% as.data.frame())
+
+cat_pts_sf <- st_as_sf(cat_pts, coords = c("X", "Y"))
+
+ggplot() +
+  geom_sf(data = cat_pts_sf)
+  
+
+write.csv(cat_pts %>% select(cat_ID_con, Latitude = Y, Longitude = X), 
+          file = paste0("HUC12_cat_pts", Sys.Date(), ".csv"),
+          row.names = FALSE, col.names = TRUE, quote = FALSE)
+```
+
+
+Downloading daymet data for all points and the 10 years in our dataset. For now, only plan to predict for the years used in the model. 
+
+Old code for original run, use output to fix 3 missing sites and create new point file for extracting daymet below.
+
+```{r daymet for all outlet points, eval = FALSE}
+dm_outlets <- download_daymet_batch(file_location = "HUC12_cat_pts2022-04-25.csv",
+                      start = 2001,
+                      end = 2019,
+                      simplify = TRUE,
+                      silent = TRUE)
+
+
+write_csv(dm_outlets, "HUC12_cat_pts_daymet_2011-19.csv")
+
+```
+
+Note: 3 sites are outside daymet area, I believe because they are on the coast. Adjust them slightly so we can extract daily precipitation for them. 
+
+```{r}
+dm_outlets <- read_csv("HUC12_cat_pts_daymet_2011-19.csv")
+
+#3 don't match and are all a little west into the ocean, try shifting east a bit
+missing <- anti_join(cat_pts %>% rename(site = cat_ID_con), dm_outlets %>% distinct(site)) %>% pull(site)
+
+write.csv(cat_pts %>% select(cat_ID_con, Latitude = Y, Longitude = X) %>% 
+            mutate(Longitude = case_when(cat_ID_con == "Copper_River_75003900084262" ~ Longitude + 0.05,
+                                         cat_ID_con %in% c("Cook_Inlet_75004300002688",
+                                                           "Prince_William_Sound_92151") ~ Longitude + 0.02,
+                                         TRUE ~ Longitude)),
+          file = paste0("HUC12_cat_pts_fix3", Sys.Date(), ".csv"),
+          row.names = FALSE, col.names = TRUE, quote = FALSE)
+
+#seem to be well within study area, but must be too close to coast, looks like daymet is only  on land.
+ggplot() +
+  geom_sf(data = cat_pts_sf) +  
+  geom_sf(data = cat_pts_sf %>% filter(cat_ID_con %in% missing), color = "red", size = 2) 
+
+dm_out_fix3 <- download_daymet_batch(file_location = "HUC12_cat_pts_fix32022-05-10.csv",
+                      start = 2001,
+                      end = 2019,
+                      simplify = TRUE,
+                      silent = TRUE)
+
+write_csv(dm_out_fix3, "HUC12_cat_pts_daymet_2001-19.csv")
+
+```
+
 
 # try feddata library
 

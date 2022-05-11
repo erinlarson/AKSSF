@@ -126,7 +126,7 @@ lcld.long <- lcld.df %>%
   select(-metric)
 
 #dput(colnames(sites.df))
-site_keep_cols <- c("SiteID","region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+site_keep_cols <- c("SiteID", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
                     "Area_km2","area_diff","size_diff", "lat", "lon",
                     'str_ord','str_slope', "dist_coast_km", "ds_dist_outlet")
 
@@ -134,7 +134,7 @@ sites.df <- sites.df %>%
   mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
   size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
                         TRUE~'No Change')) %>% 
-  subset(select = site_keep_cols )
+  select(all_of(site_keep_cols), ts_id = ts_id_dm)
 
 #don't keep ds_dist_outlet bc it is incorrect for some sites/networks
 # sites.df %>% 
@@ -142,7 +142,7 @@ sites.df <- sites.df %>%
 #   geom_point()
   
 #dput(colnames(cov.df.raw))
-wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope_MAX",
+wtd_keep_cols <- c("cat_ID_con", "cat_ID", "cat_slope_MIN", "cat_slope_MAX",
   "cat_slope_MEAN", "cat_slope_STD", "cat_slope_SUM", "cat_elev_MIN", 
   "cat_elev_MAX", "cat_elev_MEAN", "cat_elev_STD", "wtd_elev_MIN",
   "wtd_elev_MAX", "wtd_elev_MEAN", "wtd_elev_STD", "wtd_slope_MIN",
@@ -152,16 +152,16 @@ wtd_keep_cols <- c("cat_ID_con", "cat_ID", "region", "cat_slope_MIN", "cat_slope
 
 cov.df <- cov.df.raw %>%
   mutate(wtd_area_sqKM = wtd_elev_AREA *1e-6) %>% 
-  subset(select = wtd_keep_cols )
+  select(all_of(wtd_keep_cols))
 
 # Convert na to 0
 cov.df[is.na(cov.df)] <- 0
 
-cov.all <- left_join(sites.df %>% select(SiteID, cat_ID_con, Region = region, str_ord, str_slope, dist_coast_km),
+cov.all <- left_join(sites.df %>% select(SiteID, ts_id, cat_ID_con, str_ord, str_slope, dist_coast_km),
                      cov.df)
 
 cov.all <- left_join(cov.all, lcld.long)
-# summary(cov.all)
+summary(cov.all)
 
 ```
 
@@ -204,6 +204,10 @@ cov.all %>%
   ggplot() +
   geom_freqpoly(aes(x = wtd_lcld_jd, after_stat(density), color = Region)) +
   facet_wrap(~Year)
+
+
+#egegik is here, but something is happening w merge.
+cov.all %>% distinct(SiteID) %>% arrange(SiteID) 
 ```
 
 ## Combine SiteIDs 
@@ -281,33 +285,15 @@ temp_dat %>%
   filter(sum_complete == 0)
 ```
 
-Use merge table to join on SiteIDs. One site in responses without spatial data - Egegik River, checking with Dustin on that one. fws_580223156504200 with data for 2015-2018.
+
+Sent the merge table to Dustin and he added the ts site ids (ts_id_dm) to the spatial data so now everything is merging correctly. Still need to filter the TS SiteIDs sent to Tim to lower case and remove 2020 data since we didn't have snow metrics for that year.
 
 ```{r create model data frame, include = FALSE}
 
-siteid_join <- read_csv("data_preparation/SiteID_join_spatial_to_temperature.csv")
-md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
-
-cov.all <- cov.all %>% mutate(cov_id = tolower(SiteID),
-                   Region = gsub("_", " ", Region)) 
-
-dfa_ts %>% 
-  mutate(site_lower = tolower(SiteID)) %>% 
-  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>%
-  filter(Year %in% 2011:2019) %>% 
-  select(-Region) %>% 
-  left_join(cov.all %>% select(-SiteID)) %>% 
-  filter(is.na(str_ord)) 
-
-md %>% filter(Site == "fws_580223156504200")
-
 mod_dat <- dfa_ts %>% 
   mutate(site_lower = tolower(SiteID)) %>% 
-  left_join(siteid_join, by = c("site_lower" = "ts_id")) %>%
   filter(Year %in% 2011:2019) %>% 
-  select(-Region) %>% 
-  left_join(cov.all %>% select(-SiteID)) %>% 
-  filter(!is.na(str_ord))
+  left_join(cov.all %>% select(-SiteID), by = c("site_lower" = "ts_id", "Year" = "Year")) 
 
 ```
 
@@ -336,7 +322,7 @@ precip <- daymet %>%
   group_by(Site, Year) %>% 
   summarize(summer_precip = sum(value))
 
-mod_dat <- left_join(mod_dat %>% rename(Site = SiteID) %>% select(-site_lower, -X1, -cov_id, -region), precip) 
+mod_dat <- left_join(mod_dat %>% rename(Site = SiteID) %>% select(-site_lower), precip) 
 summary(mod_dat)
 
 rm(daymet)
@@ -349,7 +335,7 @@ rm(daymet)
 
 ## Response
 
-Look at sites with lots of negative TS as a check. original list of sites using just air temperature and no daylength is much different than model with both in it. For now, leave all sites. Note that some of the lake affected sites may be very difficult to model TS for since lake temperatures can change so quickly.
+Look at sites with lots of negative TS as a check. original list of sites using just air temperature and no daylength is much different than model with both in it. For now, leave all sites. Note that some of the lake affected sites may be very difficult to model TS for since lake temperatures can change so quickly. Also note that we have some of Luca's sites in this data frame that he suggested would be difficult to model in a landscape context because of local hydrologic inputs. We could revisit the final list of sites we have from him and see if some should be dropped. Possibly this could be done with the cross-validation in the final model --- take some time to look over sites that are extreme outliers in that step (e.g. high rmse).
 
 ```{r negative ts values}
 
@@ -368,17 +354,17 @@ left_join(mod_dat, md %>% select(Site, Waterbody_name, SourceName)) %>%
 
 ```
 
-what about other sites in Luca's dataset? We kept some that are not ones he originally flagged to include in a landscape analysis.
+what about other sites in Luca's dataset? We kept some that are not ones he originally flagged to include in a landscape analysis. (see comment above)
 
 * middle fork 18 mile
 * 24.9 mile creek
 * ibeck lower side channel
 * eagle creek
-* pigot bay spawn channel - remove?
-* rude river side channel - remove?
+* pigot bay spawn channel 
+* rude river side channel 
 
 
-Any outliers in TS? The only major one is the very negative value at Karluk River.
+Any outliers in TS? 
 
 ```{r ts boxplot by region}
 mod_dat %>% 
@@ -413,13 +399,12 @@ mod_dat %>%
   theme_bw()
 
 ```
-# STOPPED HERE 4/22/22. NOTE THAT I AM NOT USING SCRIPTS B AND D EITHER SO MAYBE DELETE THOSE OR NOTE ON TOP.
 
 ## Covariates 
 
 Checking outliers and collinearity. Drop those with high correlation.
 
-Check slopes first. A couple of outliers -- one for stream slope and two for minimum catchment slope. We checked the min catchment slopes and they are accurate, streams in very steep watersheds. One of those also had the high stream slope. Note that the mean, min, max statistics for slope and elevation by watershed are all highly correlated so just go with means for now and recheck using r and vif.
+Check slopes first. A couple of outliers -- one for stream slope and two for minimum catchment slope. We checked the max catchment slopes and they are accurate, streams in very steep watersheds. One of those also had the high stream slope. Note that the mean, min, max statistics for slope and elevation by watershed are all highly correlated so just go with means for now and recheck using r and vif.
 
 Keep:
 
@@ -456,77 +441,126 @@ panel.hist <- function(x, ...)
 }
 
 #slope and aspect
-mod_dat2 %>% 
+mod_dat %>% 
   select(str_slope, cat_slope_MIN:cat_slope_STD, wtd_slope_MIN:wtd_slope_STD, wtd_north_per) %>% 
   pairs(upper.panel = panel.cor)
 
 #elevation, area, and distance to coast
-mod_dat2 %>% 
+mod_dat %>% 
   select(cat_elev_MIN:cat_elev_STD, wtd_elev_MIN:wtd_elev_STD, wtd_area_sqKM, dist_coast_km) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
 #landcover and snow date
-mod_dat2 %>% 
-  select(wtd_wet_per:summer_precip) %>% 
+mod_dat %>% 
+  select(wtd_wet_per:summer_precip, snow_tc, cat_elev_MEAN, wtd_slope_MEAN) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
 
 ```
 
 
-Correlations for all covariates in list above. All r < 0.7, which is good.
+Correlations for all covariates in list above. All r < 0.7, which is good. Mean catchment elevation is correlated to mean watershed elevation and distance to coast (r = 0.64)
 
 ```{r pair plot for 13 cov}
-mod_dat2 %>% 
+mod_dat %>% 
   select(str_slope, cat_elev_MEAN, cat_slope_MEAN, wtd_north_per,
          wtd_elev_MEAN, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
-         wtd_wet_per, wtd_glacier_per, wtd_lake_per, wtd_lcld_jd, summer_precip) %>% 
+         wtd_wet_per, wtd_glacier_per, wtd_lake_per, snow_tc, summer_precip) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+```
+
+All VIF < 5.
+
+```{r vif for 13 cov}
+
+lm1 <- mod_dat %>% 
+  select(str_slope, cat_elev_MEAN, cat_slope_MEAN, wtd_north_per,
+         wtd_elev_MEAN, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+         wtd_wet_per, wtd_glacier_per, wtd_lake_per, wtd_lcld_jd, summer_precip, TempSens_Air) %>% 
+  lm(TempSens_Air ~ ., data = .)
+
+vif(lm1)
 ```
 
 MODIS lcld as a function of watershed slope (Fig 2C in Tim's paper).
 
 ```{r lcld versus watershed slope}
-mod_dat2 %>% 
+mod_dat %>% 
   ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ I(x^2))
 ```
 
-Generate snow index as residuals of model of lcld as a function of watershed slope (per Tim's paper). Compare squared watershed slope versus linear model using AIC.
+Generate snow index as residuals of model of lcld as a function of watershed slope (per Tim's paper). Compare squared watershed slope versus linear model using AIC. Linear model preferred - delta AIC = 19.
 
 ```{r snow index}
-ess_lme1 <- lme(wtd_lcld_jd ~ I(wtd_slope_MEAN^2), dat = mod_dat2, random = ~1|Year)
-ess_lme2 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN, dat = mod_dat2, random = ~1|Year)
-AIC(ess_lme1, ess_lme2)
+mod_dat %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(color = "red", formula = y ~ x^2)
 
-ess_lme_resid <- resid(ess_lme1, level = 1)
 
-mod_dat2 <- mod_dat2 %>% 
-  mutate(snow_ind = ess_lme_resid)
+ess_lme1 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN, dat = mod_dat, random = ~1|Year)
+ess_lme2 <- lme(wtd_lcld_jd ~ I(wtd_slope_MEAN^2), dat = mod_dat, random = ~1|Year)
+
+ess_lme3 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN + wtd_north_per, dat = mod_dat, random = ~1|Year)
+
+AIC(ess_lme1, ess_lme2, ess_lme3)
+
+ess_lme_resid <- residuals(ess_lme1, level = 1) 
+attributes(ess_lme_resid) <- NULL
+str(ess_lme_resid)
+
+ess_lme_resid2 <- residuals(ess_lme2, level = 1) 
+attributes(ess_lme_resid) <- NULL
+str(ess_lme_resid)
+
+ess_lme1_ints <- ess_lme1$coefficients$random$Year %>% as_tibble(rownames = "Year") %>% 
+  rename(intercept = `(Intercept)`) %>% 
+  mutate(Year = as.numeric(Year))
+
+mod_dat <- mod_dat %>% 
+  left_join(ess_lme1_ints) %>% 
+  mutate(snow_ind = ess_lme_resid,
+         snow_ind_sq = ess_lme_resid2,
+         snow_tc = intercept + (wtd_lcld_jd - 1.783443 * wtd_slope_MEAN))
 
 #check that snow index is now not correlated to watershed slope.
-mod_dat2 %>% 
-  ggplot(aes(x = wtd_slope_MEAN, y = snow_ind)) +
+mod_dat %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = snow_tc)) +
   geom_point() +
   geom_smooth(method = "lm")
+
+mod_dat %>% 
+  ggplot(aes(x = snow_ind, y = snow_tc)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+
+mod_dat %>% 
+  filter(grepl("Hansen", Site)) %>% 
+  select(Year, wtd_slope_MEAN, wtd_lcld_jd, snow_ind, snow_tc) %>% 
+  arrange(Year)
+
 
 ```
 
 
 Logit transformation of glacier and lake cover because both are percentages and have large outliers. Log transform watershed area, stream slope, catchment elevation and slope, and summer precip. Transformation for slope needs minimum value because one 0 (following methods in mccune and grace 2002).
 
+First checking skewness, looking for abs skew < 1 in continuous covariates.
+
 
 ```{r covariate transformations}
 
-#looking for abs skew < 1 in cont covariates.
-mod_dat2 %>% 
+mod_dat %>% 
   select(str_slope, cat_elev_MEAN, cat_slope_MEAN, wtd_north_per,
          wtd_elev_MEAN, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
          wtd_wet_per, wtd_glacier_per, wtd_lake_per, snow_ind, summer_precip) %>% 
   apply(., 2, function(x) skewness(x))
 
-mod_dat2 %>%
+mod_dat %>%
   distinct(str_slope) %>%
   arrange(str_slope)
 
@@ -534,7 +568,7 @@ min_slope = 0.0000100000
 c_slope = as.integer(log10(min_slope))
 d_slope = 10^c_slope
 
-mod_dat2 <- mod_dat2 %>% 
+mod_dat <- mod_dat %>% 
   mutate(log_area = log10(wtd_area_sqKM),
          log_slope = log10(str_slope + d_slope) - c_slope,
          asrt_glac = asin(sqrt(wtd_glacier_per/100)),
@@ -546,14 +580,16 @@ mod_dat2 <- mod_dat2 %>%
          log_cat_slope = log10(cat_slope_MEAN),
          log_precip = log10(summer_precip))
 
-mod_dat2 %>% 
+#does this change pairwise correlations? NO
+mod_dat %>% 
   select(log_slope, log_cat_elev, log_cat_slope, wtd_north_per,
          wtd_elev_MEAN, wtd_slope_MEAN, log_area, dist_coast_km,
          snow_ind, asrt_glac, asrt_lake, asrt_wet, glac_10, log_precip) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
 
-mod_dat2 %>% 
+#glacier cover still skewed, but shouldn't be a problem with ML.
+mod_dat %>% 
   select(log_slope, log_cat_elev, log_cat_slope, wtd_north_per,
          wtd_elev_MEAN, wtd_slope_MEAN, log_area, dist_coast_km,
          snow_ind, asrt_glac, asrt_lake, asrt_wet, glac_10, log_precip) %>% 
@@ -565,10 +601,10 @@ mod_dat2 %>%
 Still one site in Bristol Bay -- Egegik River -- with very high lake cover not fixed by logit transformation. ~37%, next highest is 17%.
 
 ```{r lake outlier}
-mod_dat2 %>% filter(asrt_lake > .5)
+mod_dat %>% filter(asrt_lake > .5)
 
 md %>% 
-  filter(SiteID == "fws_580223156504200")
+  filter(Site == "fws_580223156504200")
 
 ```
 
@@ -576,46 +612,39 @@ md %>%
 Set up a basic model to get VIF. 
 
 ```{r vif for 14 cov}
-lm1 <- lm(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+lm1 <- lm(TempSens_Air ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
          wtd_elev_MEAN + wtd_slope_MEAN + log_area + dist_coast_km + 
-         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + log_precip, data = mod_dat2)
+         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + log_precip, data = mod_dat)
 
 vif(lm1)
 ```
 
-Remove mean watershed elevation now all vif < 3 or close to it. Wtd slope is highest at 3.17 and the only one above 3.
+Remove mean watershed elevation now all vif < 3 or close to it. cat elev is highest at 3.12 and the only one above 3.
 
 ```{r vif 13 cov}
-lm2 <- lm(TempSens ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
+lm2 <- lm(TempSens_Air ~ log_slope + log_cat_elev + log_cat_slope + wtd_north_per +
          wtd_slope_MEAN + log_area + dist_coast_km + 
-         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + log_precip, data = mod_dat2)
+         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + log_precip, data = mod_dat)
 
 
 vif(lm2)
-```
-
-Try removing either catchment elevation or slope and see if VIF for watershed slope gets a little lower.
-
-Removing catchment slope brings the VIF for watershed slope from 3.1 to 2.8, whereas removing catchment elevation doesn't do much at all to VIF for watershed slope.
-
-```{r vif 12 cova}
-lm3 <- lm(TempSens ~ log_slope + log_cat_elev + wtd_north_per +
-         wtd_slope_MEAN + log_area + dist_coast_km + 
-         asrt_wet + asrt_glac + asrt_lake + glac_10 + snow_ind + log_precip, data = mod_dat2)
-
-
-vif(lm3)
 ```
 
 Save model data frame with snow index and covariate transformations.
 
 ```{r save mod_dat data frame}
 
-saveRDS(mod_dat2, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
+saveRDS(mod_dat, paste("data_preparation/final_data/model_data", Sys.Date(), ".rds", sep = ""))
 
 
 ```
 
+
+
+
+# EVERYTHING BELOW NOT RUN
+
+4/25/22 Note: reran all the above with new DFA TS from models with and without daylength. Added in the snow index and the transformations although moving forward with a BRT model in script 2c so not actually needed. These were originally setup for the multiple regression models, but decided to pursue ML method instead. All covariates have pairwise correlations < 0.7 and VIF < 5.
 
 ## Cook Inlet sites
 
