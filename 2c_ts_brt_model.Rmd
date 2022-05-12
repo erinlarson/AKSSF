@@ -121,6 +121,7 @@ brt_step_dl <- gbm.step(gbm.y = 1, gbm.x = 2:14,
                      keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
 
 saveRDS(brt_step_dl, paste("output/brt_dfa1tr_AirDL", Sys.Date(), ".rds", sep = ""))
+
 ```
 
 
@@ -173,6 +174,9 @@ brt_step_dl2 <- gbm.step(gbm.y = 1, gbm.x = brt_stepdl_simp$pred.list[[7]],
                      keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
 
 saveRDS(brt_step_dl2, paste("output/brt_dfa1tr_AirDL_simp", Sys.Date(), ".rds", sep = ""))
+
+brt_step_dl2 <- readRDS("output/brt_dfa1tr_AirDL_simp2022-05-11.rds")
+
 ```
 
 
@@ -189,13 +193,13 @@ brt_int$rank.list
 int_vars <- c("summer_precip", "wtd_slope_MEAN")
 
 pd_precip_slope <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
-              n.trees = 5200, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
 pd_precip_slope
 
 
 int_vars <- c("snow_tc", "wtd_slope_MEAN")
 pd_snow_slope <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
-              n.trees = 5200, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
 pd_snow_slope
 ```
 
@@ -523,8 +527,9 @@ hu12_prp <- hu12_dm %>%
 hu12.df <- left_join(hu12.df, hu12_prp) %>% 
   mutate(HUC12 = as.character(HUC12))
 
-
 summary(hu12.df)
+
+rm(hu12_dm)
 ```
 
 Add in snow index.
@@ -547,8 +552,16 @@ hu12.df <- hu12.df %>%
   mutate(snow_tc = intercept + (wtd_lcld_jd - 1.814789 * wtd_slope_MEAN))
 ```
 
+
+Save predictions data frame.
+
+```{r}
+saveRDS(hu12.df, "output/hu12_covars.rds")
+```
+
+
 Comparing snowpack across hucs from 2012 to 2015 versus high versus low snow across all years.
-We have a lot more variation in changes in snow from 2012 to 2015 than in the BB dataset. When we inspect high versus low snow years and slope, there isn't the same relationship. The largest differences 
+We have a lot more variation in changes in snow from 2012 to 2015 than in the BB dataset. 
 
 
 ```{r}
@@ -587,10 +600,10 @@ hu12.df %>%
 
 Create predictions using both models for all years and use to create scenarios.
 
-```{r TS predictions}
+```{r TS predictions, eval = FALSE}
 hu12.df <- hu12.df %>% 
   mutate(preds_air = predict(brt_step, newdata = hu12.df),
-         preds_airDL = predict(brt_step_dl, newdata = hu12.df)) 
+         preds_airDL = predict(brt_step_dl2, newdata = hu12.df)) 
 
 summary(hu12.df) 
 
@@ -610,6 +623,10 @@ hu12.df %>%
 Data frames of predicted TS differences comparing 2012/2015 and the highest and lowest snowpack years from 2001-2019.
 
 ```{r}
+hu12.df <- hu12.df %>% 
+  mutate(preds_airDL = predict(brt_step_dl2, newdata = hu12.df)) 
+
+
 hu12.df %>% 
   filter(Year %in% c(2012, 2015)) %>%
   ggplot(aes(x = preds_airDL, color = as.factor(Year))) +
@@ -642,44 +659,99 @@ bind_rows(hu12.df %>%
 ```
 
 
+Exploring patterns in prediction for snow and precipitation - similar to interation plot from model.
+
+```{r}
+#select a site of high slope and see if there is a difference.
+hu12.df %>% 
+  # filter(HUC12 == "190205040206") %>% 
+  ggplot(aes(size = snow_tc, y = preds_airDL, x = summer_precip)) +
+  geom_point()
+
+hu12.df %>% 
+  # filter(HUC12 == "190205040206") %>% 
+  ggplot(aes(y = wtd_slope_MEAN, color = preds_airDL, x = summer_precip)) +
+  geom_point() +
+  scale_color_distiller(type = "div")
+
+hu12.df %>% 
+  # filter(HUC12 == "190205040206") %>% 
+  ggplot(aes(y = wtd_slope_MEAN, color = preds_airDL, x = snow_tc)) +
+  geom_point() +
+  scale_color_distiller(type = "div")
+```
 
 
-```{r maps of TS}
+
+
+```{r TS maps low and hi snow}
 hu12 <- st_read("T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", layer = "AKSSF_awcHuc12s")
 
+hu12_snow <- bind_rows(hu12.df %>% 
+                         group_by(HUC12) %>% 
+                         slice_min(wtd_lcld_jd) %>% 
+                         mutate(snow_year = "min"),
+                       hu12.df %>% 
+                         group_by(HUC12) %>% 
+                         slice_max(wtd_lcld_jd) %>% 
+                         mutate(snow_year = "max")) %>% 
+  select(HUC12, snow_year, Year, preds_airDL, Region)
 
-hu12_snow <- left_join(hu12, 
-                       bind_rows(hu12.df %>% 
-                                   group_by(HUC12) %>% 
-                                   slice_min(wtd_lcld_jd) %>% 
-                                   mutate(snow_year = "min"),
-                                 hu12.df %>% 
-                                   group_by(HUC12) %>% 
-                                   slice_max(wtd_lcld_jd) %>% 
-                                   mutate(snow_year = "max")) %>% 
-                         select(HUC12, snow_year, Year, preds_airDL, Region)) %>% 
+
+hu12_snow_sf <- left_join(hu12, hu12_snow) %>% 
   filter(!is.na(preds_airDL)) 
 
 ggplot() +
-  geom_sf(data = hu12_snow, aes(fill = preds_airDL), color = NA) +
+  geom_sf(data = hu12_snow_sf, aes(fill = preds_airDL), color = NA) +
   facet_wrap(~snow_year)
+```
 
-hu12_precip <- left_join(hu12, 
-                       bind_rows(hu12.df %>% 
-                                   group_by(HUC12) %>% 
-                                   slice_min(summer_precip) %>% 
-                                   mutate(precip_year = "min"),
-                                 hu12.df %>% 
-                                   group_by(HUC12) %>% 
-                                   slice_max(summer_precip) %>% 
-                                   mutate(precip_year = "max")) %>% 
-                         select(HUC12, precip_year, Year, preds_airDL, Region)) %>% 
+This confirms map of differences below, higher TS under low precipitation, which indicates that in rainier summers, there is higher flow and lower TS. But, this doesn't look right when we look at the interaction between precip and slope -- TS tends to increase under higher precip.
+
+```{r TS maps low and high precip}
+
+hu12_precip <- bind_rows(hu12.df %>% 
+                           group_by(HUC12) %>% 
+                           slice_min(summer_precip) %>% 
+                           mutate(precip_year = "min"),
+                         hu12.df %>% 
+                           group_by(HUC12) %>% 
+                           slice_max(summer_precip) %>% 
+                           mutate(precip_year = "max")) %>% 
+  select(HUC12, precip_year, Year, preds_airDL, Region) 
+
+hu12_precip_sf <- left_join(hu12, hu12_precip) %>%  
   filter(!is.na(preds_airDL)) 
 
 ggplot() +
-  geom_sf(data = hu12_precip, aes(fill = preds_airDL), color = NA) +
-  facet_wrap(~precip_year)
+  geom_sf(data = hu12_precip_sf, aes(fill = preds_airDL), color = NA) +
+  facet_wrap(~precip_year) +
+  scale_fill_continuous(type = "viridis")
+```
 
+Combined plot of change for both snow and precip.
+
+```{r TS map for both snow and precip scenarios}
+
+hu12_scens <- left_join(hu12, bind_rows(hu12_precip %>% 
+                            rename(type = precip_year) %>% 
+                            mutate(scenario = "Precipitation"),
+                          hu12_snow %>% 
+                            rename(type = snow_year) %>% 
+                            mutate(scenario = "Snowpack")) %>% 
+            mutate(type = case_when(type == "min" ~ "Low",
+                                    type == "max" ~ "High"))) %>% 
+  filter(!is.na(preds_airDL))
+
+ggplot() +
+  geom_sf(data = hu12_scens, aes(fill = preds_airDL), color = NA) +
+  facet_grid(vars(type), vars(scenario)) +
+  scale_fill_continuous(type = "viridis")
+```
+
+
+
+```{r TS maps change in TS as snow and precip increase}
 snow_prp_diffs <- left_join(
   bind_rows(
     hu12.df %>% 
@@ -705,7 +777,7 @@ snow_prp_diffs <- left_join(
       mutate(precip_year = "max")) %>%
     select(preds_airDL, precip_year, HUC12) %>% 
     pivot_wider(names_from = precip_year, values_from = preds_airDL) %>% 
-    mutate(precip_diff = min - max) %>% 
+    mutate(precip_diff = max - min) %>% 
     select(HUC12, precip_diff)) %>% 
   pivot_longer(cols = ends_with("diff"), names_to = "diff", values_to = "value") %>% 
   mutate(diff = case_when(diff == "precip_diff" ~ "Precipitation",
@@ -724,7 +796,7 @@ ggplot() +
   scale_fill_brewer(palette = "RdBu", drop = FALSE) +
   theme(legend.position = "right") +
   labs(fill = expression(paste(Delta, tau)),
-       title = expression(paste("Decrease in ", tau, " when precipitation or snowpack increases")))
+       title = expression(paste("Change in ", tau, " when precipitation or snowpack increases")))
   
 ```
 
