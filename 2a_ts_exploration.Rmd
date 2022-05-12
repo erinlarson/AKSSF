@@ -537,6 +537,11 @@ mod_dat %>%
   geom_point() +
   geom_smooth(method = "lm")
 
+mod_dat %>% 
+  ggplot(aes(x = wtd_lcld_jd, y = snow_tc)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
 
 mod_dat %>% 
   filter(grepl("Hansen", Site)) %>% 
