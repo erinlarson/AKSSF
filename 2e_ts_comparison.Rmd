@@ -8,6 +8,9 @@ date: '2022-05-10'
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(dismo)
+
+select <- dplyr::select
 ```
 
 
@@ -96,6 +99,85 @@ ts_compare %>%
 
 
 ts_compare %>% arrange(wtd_area_sqKM) %>% select(Stream, Year, wtd_area_sqKM, SnowResidual, snow_ind, wtd_lcld_jd) 
+```
 
+
+```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
+bb_dat <- ts_compare %>%
+  group_by(Site) %>% 
+  mutate(count = n()) %>% 
+  filter(count > 2, !is.na(TempSensitivity)) %>% 
+  ungroup()
+
+bb_dat %>% 
+  select(wtd_slope_MEAN, snow_tc, SnowResidual, TempSensitivity, TempSens_Air.DayLen) %>% 
+  pairs(upper.panel = panel.cor)
 
 ```
+
+
+
+```{r bb brt}
+
+bb_dat %>% distinct(Site) #27
+
+brt_in_bb <- bb_dat %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens_Air.DayLen, str_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip)
+
+
+brt_bb <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
+                     data = brt_in_bb,
+                     tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+```
+
+```{r explore bb brt}
+summary(brt_bb)
+
+gbm.plot(brt_bb, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+brt_bb_simp <- gbm.simplify(brt_bb) #this takes a long time to run.
+
+brt_bb_int <- gbm.interactions(brt_bb) #identifies interactions
+brt_bb_int$rank.list
+
+int_vars <- c("summer_precip", "wtd_slope_MEAN")
+
+pd_precip_slope <- pdp::partial(brt_bb, pred.var = int_vars, 
+              n.trees = 1000, train = brt_in_bb, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_precip_slope
+
+
+int_vars <- c("snow_tc", "wtd_slope_MEAN")
+pd_snow_slope <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
+              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope
+
+```
+
+

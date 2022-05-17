@@ -10,6 +10,7 @@ library(tidyverse)
 library(ggfortify)
 library(lubridate)
 library(readxl)
+library(NbClust)
 ```
 
 # Read in final dataset
@@ -18,7 +19,7 @@ Read in new daily dataset that has daily min and max from UW data - received fro
 
 * remove nps newhalen for 2015, obvious air temperatures when compared to other years.
 
-```{r}
+```{r read in dailies}
 tr_dat <- readRDS("data_preparation/final_data/daily_dat_forTR_2022-02-08.rds") %>% 
   mutate(Year = year(sampleDate))
 
@@ -33,7 +34,7 @@ tr_dat <- tr_dat %>%
 
 tr_dat %>% 
   distinct(SiteID, year(sampleDate)) %>% 
-  count(SiteID) #%>% 
+  count(SiteID) %>% 
   summarize(sum(n))
 
 ```
@@ -56,7 +57,7 @@ sites_complete_summers <- tr_dat %>%
 sites_complete_summers %>% 
   ungroup() %>% 
   distinct(SiteID, year(sampleDate)) %>% 
-  count(SiteID) #%>% 
+  count(SiteID) %>% 
   summarize(sum(n))
 
 nrow(tr_dat %>% distinct(SiteID, Year)) - nrow(sites_complete_summers %>% distinct(SiteID, Year))
@@ -83,7 +84,9 @@ Add in the regions and thermal sensitivity from the model data frame, but note t
 Add in the filter that removes most of the Deshka sites so they don't overwhelm the summaries.
 
 ```{r add regions and ts}
-# metrics <- read_rds("output/metrics_2021-11-15.rds")
+#fix merge so region comes from md not mod_dat
+metrics <- read_rds("output/metrics_2022-05-11.rds") %>% 
+  select(-Region, -TempSens_Air, -TempSens_Air.DayLen, -subset1, -deshka)
 
 mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds") #saved from combining response and covariates in 2c.
 
@@ -93,8 +96,8 @@ left_join(metrics, mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSen
 
 
 metrics2 <- left_join(metrics, 
-                      mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen, Region)) %>% 
-  left_join(md %>% select(SiteID = Site, subset1, deshka))
+                      mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen)) %>% 
+  left_join(md %>% select(SiteID = Site, subset1, deshka, Region))
 
 
 ```
@@ -103,6 +106,8 @@ Save metrics data frame with the regions and subset1 on there.
 ```{r save metrics}
 
 saveRDS(metrics2, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
+
+metrics2 <- readRDS("output/metrics_2022-05-11.rds")
 
 ```
 
@@ -115,19 +120,22 @@ Convert the metrics long form so can add a group name.
 
 ```{r add metric group name}
 mets_lg <- metrics2 %>% 
-  pivot_longer(cols = MA7d_DAT:TempSens, names_to = "metric", values_to = "value") %>% 
+  pivot_longer(cols = MA7d_DAT:TempSens_Air.DayLen, names_to = "metric", values_to = "value") %>% 
   mutate(group = case_when(grepl("SIGMA|MxDIFF|SD|CV|RANGE", metric) ~ "Variability",
                            grepl("dur", metric) ~ "Duration",
                            grepl("SUM", metric) ~ "Frequency",
                            grepl("jd", metric) ~ "Timing",
-                           metric == "TempSens" ~ "Sensitivity",
+                           grepl("TempSens", metric) ~ "Sensitivity",
                            TRUE ~ "Magnitude")) 
 
+#great, fixed!
+mets_lg %>% 
+  filter(is.na(Region))
 ```
 
 Pairplots of different metrics by group. Good way to see outliers and correlations.
 
-```{r}
+```{r pairplots}
 panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
 {
     usr <- par("usr"); on.exit(par(usr))
@@ -275,7 +283,7 @@ Obvious outlier on duration 20, but also check multiple outliers for 18. All of 
 * remove newhalen river 2015.
 
 
-```{r}
+```{r duration 18 outliers}
 mets_lg %>% 
   filter(metric == "dur20") %>% 
   arrange(desc(value))
@@ -394,33 +402,12 @@ mod_dat %>%
 
 # Reduced list of metrics
 
-```{r}
-panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(0, 1, 0, 1))
-    r <- abs(cor(x, y, use = "complete.obs"))
-    txt <- format(c(r, 0.123456789), digits = digits)[1]
-    txt <- paste0(prefix, txt)
-    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
-    text(0.5, 0.5, txt, cex = cex.cor * r)
-}
-
-panel.hist <- function(x, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(usr[1:2], 0, 1.5) )
-    h <- hist(x, plot = FALSE)
-    breaks <- h$breaks; nB <- length(breaks)
-    y <- h$counts; y <- y/max(y)
-    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
-}
-
+```{r pairplots by group}
 mets_lg %>% 
-  filter(group %in% c("Magnitude", "Timing")|metric == "TempSens")  %>%
+  filter(group %in% c("Magnitude", "Timing", "Sensitivity"))  %>%
   select(-group) %>% 
   pivot_wider(names_from = metric, values_from = value) %>%
-  select(MA7d_DAT:TempSens) %>% 
+  select(MA7d_DAT:TempSens_Air.DayLen) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
 mets_lg %>% 
@@ -459,59 +446,165 @@ Others to consider that aren't r > 0.8 with metrics above:
 
 
 
-```{r}
+```{r list of 12 metrics}
 mets_12 <- c("MA7d_DMT", "RANGE_MAX", "SIGMA_DMT", "SUM_13_DMT", "SUM_18_DMT", "dur13mx", "dur18mx",
-             "MxDMT_jd", "MA7d_DMT_jd", "NDNT", "TempSens", "MnDAT", "RANGE_MN", "MxDMT")
+             "MxDMT_jd", "MA7d_DMT_jd", "NDNT", "TempSens_Air.DayLen", "MnDAT")
 
 mets_lg %>% 
   # distinct(metric)
-  filter(metric %in% mets_12)  %>%
+  filter(metric %in% mets_12) %>%
   select(-group) %>% 
   pivot_wider(names_from = metric, values_from = value) %>%
-  select(MA7d_DMT:TempSens) %>% 
+  select(MA7d_DMT:TempSens_Air.DayLen) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+```
+
+Note that panel.cor function is using complete observations so this is a minimized dataset when we include TS. For TS, only 2011-2019 (at least in the model frame because MODIS ended in 19, Tim ran 20 as well). And we removed Deshka sites in 2017-2019 that were flooding the analysis. This is probably a good thing to use the same sites and and years that we are using for the next analysis. 
+
+* 305 sites if we include TS
+* 420 sites if we exclude TS
+* 355 sites after removing extra deshka sites (subset 1), 1548 years
+
+Do Thermal regime analysis with all 420 sites and simply add pairwise correlation between TS and these 11 metrics as a result.
+
+```{r count of sites}
+mets_lg %>% 
+  filter(is.na(value)) %>% 
+  count(metric, Year)
 
 mets_lg %>% 
-  distinct(Site, Year) %>% 
-  count(Site) %>% 
-  arrange(desc(n))
+  filter(subset1 == 1) %>%
+  distinct(SiteID, Year)
+  distinct(SiteID, Region) %>% 
+  count(Region) %>% 
+  summarize(sum(n))
+
+
 
 mets_lg %>% 
-  filter(metric %in% mets_11, Site == "CIK_6") %>% 
-  select(-group) %>% 
-  pivot_wider(names_from = metric, values_from = value) %>% 
-  arrange(TempSens) %>% 
-  select(MA7d_DMT:TempSens) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
-
-mets_lg %>% 
-  filter(metric %in% mets_11)  %>%
+  # distinct(metric)
+  filter(metric %in% mets_12) %>%
   select(-group) %>% 
   pivot_wider(names_from = metric, values_from = value) %>%
-  select(TempSens, Region, RANGE_MAX) %>% 
-  filter(!is.na(TempSens)) %>% 
-  ggplot(aes(x = TempSens, y = RANGE_MAX)) +
-  geom_point() +
-  facet_wrap(~Region)
-  
-
+  # filter(!is.na(TempSens_Air.DayLen)) %>% 
+  distinct(SiteID) #down to 305
 ```
 
 
-```{r}
-mets10_scwd <- mets_lg %>% 
-  filter(metric %in% mets_10) %>% 
-  group_by(metric) %>% 
+```{r cluster analysis}
+
+#get rid of deshka sites that overload analysis.
+mets_lg %>% 
+  distinct(SiteID, subset1) %>% 
+  count(subset1)
+
+
+mets11_scwd <- mets_lg %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>% 
+  mutate(metric_lab = case_when(metric == "MA7d_DMT" ~ "MWMT",
+                                metric == "RANGE_MAX" ~ "Range",
+                                metric == "SIGMA_DMT" ~ "Var.",
+                                metric == "SUM_13_DMT" ~ "Sum 13",
+                                metric == "SUM_18_DMT" ~ "Sum 18",
+                                metric == "dur13mx" ~ "Dur. 13",
+                                metric == "dur18mx" ~ "Dur. 18",
+                                metric == "MxDMT_jd" ~ "Tim. Max. Daily",
+                                metric == "MA7d_DMT_jd" ~ "Tim. MWMT",
+                                metric == "NDNT" ~ "Min. Temp.",
+                                metric == "MnDAT" ~ "Mean Temp.")) %>% 
+  group_by(metric_lab) %>% 
   mutate(value_sc = scale(value)) %>% 
-  select(Site, Year, metric, value_sc) %>% 
-  pivot_wider(names_from = metric, values_from = value_sc)
+  select(Region, SiteID, Year, metric_lab, value_sc) %>% 
+  pivot_wider(names_from = metric_lab, values_from = value_sc)
 
-summary(mets10_scwd)
+summary(mets11_scwd)
 
-mets10_dist <- dist(mets10_scwd %>% select(-Site, -Year))
+mets11_dist <- dist(mets11_scwd %>% select(-SiteID, -Year, -Region))
 
-hclust(mets10_dist, method = "ward.D2") %>% plot()
+mets11_clust <- hclust(mets11_dist, method = "ward.D2") 
 
+
+bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
+  # count(group, Region) %>% 
+  ggplot(aes(x = as.factor(group), fill = Region)) +
+  # geom_col(position = position_dodge()) +
+  geom_bar(position = "fill")
+
+bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
+  count(group, Region) %>%
+  group_by(Region) %>% 
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = as.factor(group), y = percent, fill = Region)) +
+  geom_col(position = position_dodge()) 
+
+
+
+
+
+bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 3)) %>% 
+  count(group, Region) %>% 
+  ggplot(aes(x = as.factor(group), y = n, fill = Region)) +
+  geom_col(position = position_dodge())
+
+temp_groups <- bind_cols(mets11_scwd %>% select(SiteID), grp4 = cutree(mets11_clust, k = 4), grp6 = cutree(mets11_clust, k = 6), grp3 = cutree(mets11_clust, k = 3))
+
+temp_groups %>% count(grp6) %>% mutate(percent = n/sum(n))
+
+
+#boxplots of metrics by thermal regime
+left_join(mets_lg, temp_groups) %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>%  
+  mutate(metricf = factor(metric, levels = c("MA7d_DMT",
+                                             "MnDAT",
+                                             "MxDMT_jd",
+                                             "MA7d_DMT_jd",
+                                             "SUM_13_DMT",
+                                             "SUM_18_DMT",
+                                             "dur13mx",
+                                             "dur18mx",
+                                             "NDNT",
+                                             "RANGE_MAX",
+                                             "SIGMA_DMT"),
+                          labels = c("MWMT",
+                                     "Mean Temp.",
+                                     "Timing Max.Daily Temp.",
+                                     "Timing MWMT ",
+                                     expression("Days > 13°C"),
+                                     expression("Days > 18°C"),
+                                     "Duration 13°C",
+                                     "Duration 18°C",
+                                     "Min. Temp.",
+                                     "Max. Daily Range",
+                                     "Variance")))  %>% 
+  ggplot(aes(x = as.factor(grp6), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metricf, scales = "free") +
+  theme_bw() +
+  labs(x = "Stream Thermal Regimes") +
+  theme(axis.title.y = element_blank())
+
+ggsave("output/tr 6 group boxplots.jpeg", width = 6.5, height = 5.5)
+
+#percentage of thermal regimes by region
+bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
+  count(group, Region) %>%
+  group_by(Region) %>% 
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = Region, fill = as.factor(group), y = percent)) +
+  geom_col() +
+  theme_bw() +
+  labs(y = "Percent", fill = "Stream Thermal Regimes") +
+  theme(legend.position = "bottom")
+
+ggsave("output/tr by region.jpeg", width = 6.5, height = 5.5)
+
+```
+
+Choosing the number of groups using nbclust package.
+
+```{r choosing cluster solution}
+
+nbclust1 <- NbClust(data = mets11_scwd %>% select(-SiteID, -Year, -Region), min.nc = 2, max.nc = 10, method = "ward.D2", index = "all")
 
 ```
 
@@ -519,30 +612,152 @@ hclust(mets10_dist, method = "ward.D2") %>% plot()
 
 pca
 
-```{r}
+```{r pca}
 
-data.frame(mets = names(metrics))
-
-
-metrics_in <- metrics %>% 
-  filter(year > 2009) %>% 
-  select(-SiteID, -year, -SUM_20, -DUR_mx20, -SUM_18, -DUR_mx18, -Jul, -Aug, -Sep, -Jun) 
-
-metrics_env <- left_join(metrics %>% filter(year > 2009) %>% select(SiteID, year), 
-                         md %>% distinct(SiteID, SourceName, Waterbody_name, Waterbody_type, Name, HUC8, Region)) %>%
-  mutate(yearf = as.factor(year))
+# metrics_in <- metrics %>% 
+#   filter(year > 2009) %>% 
+#   select(-SiteID, -year, -SUM_20, -DUR_mx20, -SUM_18, -DUR_mx18, -Jul, -Aug, -Sep, -Jun) 
+# 
+# metrics_env <- left_join(metrics %>% filter(year > 2009) %>% select(SiteID, year), 
+#                          md %>% distinct(SiteID, SourceName, Waterbody_name, Waterbody_type, Name, HUC8, Region)) %>%
+#   mutate(yearf = as.factor(year))
+# 
 
 
-pc1 <- prcomp(metrics_in, scale. = TRUE) 
+mets11_env <- mets11_scwd %>% 
+  select(Region, SiteID, Year) %>% 
+  mutate(Yearf = factor(Year))
+
+pc1 <- prcomp(mets11_scwd %>% select(-Region, -SiteID, -Year)) 
+
+pc2 <- princomp(mets11_scwd %>% select(-Region, -SiteID, -Year), cor = TRUE) 
 
 biplot(pc1)
+biplot(pc2)
 
-autoplot(pc1, data = metrics_env, colour = 'Region', labels = TRUE, loadings.label = TRUE,
-         frame = TRUE, frame.type = "t", frame.colour = 'Region')
 
-autoplot(pc1, data = metrics_env, colour = 'yearf', labels = TRUE, loadings.label = TRUE,
-         frame = TRUE, frame.type = "t", frame.colour = 'yearf')
+#loadings only to describe correlations
+autoplot(pc1, data = mets11_env, labels = TRUE, loadings.label = TRUE, 
+         loadings.label.repel = TRUE, colour = "grey") +
+  theme_bw()
 
-pc1.scores <- scores(pc1)
+
+#region ellipses
+autoplot(pc1, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
+         loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black",
+         frame = TRUE, frame.type = "t", frame.colour = 'Region', frame.alpha = 0) +
+  theme_bw()
+
+
+autoplot(pc2, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
+         loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black",
+         frame = TRUE, frame.type = "t", frame.colour = 'Region', frame.alpha = 0) +
+  theme_bw()
+ggsave("output/pca with regions.jpeg", width = 6.5, height = 4.5)
+
+
+#point color by year
+autoplot(pc1, data = mets11_env, colour = 'Year', labels = TRUE, loadings.label = TRUE) + 
+  scale_color_continuous(type = "viridis")
+
 ```
+
+Boxplots of different metrics by region to explore univariate differences. Also did a dotplot because it is interesting how similar the distributions are for some metrics -- e.g. timing of max temperatures is well distributed across sites.
+
+```{r boxplots}
+mets_lg %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>%  
+  mutate(region_lab = case_when(Region == "Bristol Bay" ~ "BB",
+                                Region == "Cook Inlet" ~ "CI",
+                                grepl("Prince", Region) ~ "PWS",
+                                Region == "Copper" ~ "CR",
+                                Region == "Kodiak" ~ "K"),
+         metricf = factor(metric, levels = c("MA7d_DMT",
+                                             "MnDAT",
+                                             "NDNT",
+                                             "MxDMT_jd",
+                                             "MA7d_DMT_jd",
+                                             "SUM_13_DMT",
+                                             "SUM_18_DMT",
+                                             "dur13mx",
+                                             "dur18mx",
+                                             "RANGE_MAX",
+                                             "SIGMA_DMT"),
+                          labels = c("atop('MWMT','(°C)')",
+                                     "atop('Mean Temp.', '(°C)')",
+                                     "Min.~Summer~Temp.~(degree~C)",
+                                     "Timing~Max.~Daily~Temp.~(julian~day)",
+                                     "Timing~MWMT~(julian~day)",
+                                     "atop('Day > 13°C')",
+                                     "Days~18~degree~C~(Count)",
+                                     "Duration~13~degree~C~(days)",
+                                     "Duration~18~degree~C~(days)",
+                                     "Max.~Daily~Range~(degree~C)",
+                                     "Variance~degree~C^2"))) %>% 
+  # distinct(metric, metricf) %>% 
+  ggplot(aes(x = region_lab, y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metricf, scales = "free", labeller = label_parsed)
+  theme_bw()
+  theme(axis.text.x = element_text(angle = 75, hjust = 1))
+  
+  
+  mets_lg %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>%  
+  mutate(region_lab = case_when(Region == "Bristol Bay" ~ "BB",
+                                Region == "Cook Inlet" ~ "CI",
+                                grepl("Prince", Region) ~ "PWS",
+                                Region == "Copper" ~ "CR",
+                                Region == "Kodiak" ~ "K"),
+         metricf = factor(metric, levels = c("MA7d_DMT",
+                                             "MnDAT",
+                                             "MxDMT_jd",
+                                             "MA7d_DMT_jd",
+                                             "SUM_13_DMT",
+                                             "SUM_18_DMT",
+                                             "dur13mx",
+                                             "dur18mx",
+                                             "NDNT",
+                                             "RANGE_MAX",
+                                             "SIGMA_DMT"),
+                          labels = c("MWMT",
+                                     "Mean Temp.",
+                                     "Timing Max.Daily Temp.",
+                                     "Timing MWMT ",
+                                     expression("Days > 13°C"),
+                                     expression("Days > 18°C"),
+                                     "Duration 13°C",
+                                     "Duration 18°C",
+                                     "Min. Temp.",
+                                     "Max. Daily Range",
+                                     "Variance"))) %>% 
+  # distinct(metric, metricf) %>% 
+  ggplot(aes(x = region_lab, y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metricf, scales = "free_y") +
+  theme_bw() +
+  theme(axis.title = element_blank()) 
+    
+
+ggsave("output/metrics boxplot.jpeg", width = 6.5, height = 5.5)
+
+```
+
+
+```{r dotplot}
+
+#dotplot 
+mets_lg %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>%  
+  filter(metric == "MA7d_DMT_jd") %>% 
+  ggplot(aes(x = value, y = fct_reorder(SiteID, value))) +
+  geom_point() +
+  facet_wrap(~Region) +
+  theme(axis.text.y = element_blank())
+
+
+```
+
+
+
 

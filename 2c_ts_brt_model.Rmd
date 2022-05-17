@@ -310,6 +310,11 @@ brt_out <- brt_in_dl %>%
          cv.preds = brt_step_dl2$fold.fit)
 summary(brt_out)
 
+brt_out <- brt_in_dl %>% 
+  mutate(preds = predict(brt_step_dl2),
+         cv.preds = brt_step$fold.fit)
+summary(brt_out)
+
 
 brt_out %>% 
   # mutate(Region = gsub("_", " ", Region)) %>% 
@@ -338,22 +343,24 @@ brt_out %>%
 OP plot for internal xval predictions, all data together.
 
 ```{r internal cv predictions single plot}
+brt_out %>% summary()
+
 
 brt_out %>% 
   ggplot(aes(x = cv.preds, y = TempSens_Air.DayLen)) +
   geom_point() +
   geom_smooth(method = "lm") +
   geom_abline(aes(slope = 1, intercept = 0)) +
-  coord_cartesian(xlim = c(-0.7, 1.5), ylim = c(-0.7, 1.5)) +
-  stat_regline_equation(label.x = -0.6, label.y = 1.2,
+  coord_cartesian(xlim = c(-0.2, 0.9), ylim = c(-0.2, 0.9)) +
+  stat_regline_equation(label.x = -0.15, label.y = 0.7,
                         aes(label = ..eq.label..)) +
-  stat_regline_equation(label.x = -0.65, label.y = 0.9,
+  stat_regline_equation(label.x = -0.15, label.y = 0.8,
                         aes(label = ..adj.rr.label..)) +
   theme_bw() +
   labs(y = "Observed Thermal Sensitivity",x = "Predicted Thermal Sensitivity") +
-  theme(text = element_text(size = 18))
+  theme(text = element_text(size = 14))
 
-# ggsave("output/presentation_figs/brt OP single plot.jpeg", width = 10, height = 8)
+ggsave("output/brt OP single plot.jpeg", width = 6, height = 4)
 ```
 
 
@@ -532,6 +539,30 @@ summary(hu12.df)
 rm(hu12_dm)
 ```
 
+Check some precip values against the data extracted for the model - looks fine.
+
+```{r}
+dat %>% 
+  filter(grepl("Moose 2 Upstream", Site))
+#17 = 287, 18 = 380, 19 = 86
+
+hu12.df %>% filter(HUC12 == "190205050702", Year %in% c(2017, 2018, 2019))
+#17 = 288, 18 = 345, 19 = 92
+
+
+dat %>% 
+  filter(grepl("Jackpot", Site))
+#14 = 1243, 15 = 628, 16 = 874, 17 = 886 
+
+hu12.df %>% filter(HUC12 == "190202012501", Year %in% c(2014,  2015, 2016, 2017))
+#14 = 1211, 15 = 613, 16 = 844, 17 = 845 
+
+
+```
+
+
+
+
 Add in snow index.
 
 ```{r snow index}
@@ -557,6 +588,8 @@ Save predictions data frame.
 
 ```{r}
 saveRDS(hu12.df, "output/hu12_covars.rds")
+
+hu12.df <- readRDS("output/hu12_covars.rds")
 ```
 
 
@@ -731,24 +764,58 @@ ggplot() +
 
 Combined plot of change for both snow and precip.
 
+
+
 ```{r TS map for both snow and precip scenarios}
 
-hu12_scens <- left_join(hu12, bind_rows(hu12_precip %>% 
-                            rename(type = precip_year) %>% 
-                            mutate(scenario = "Precipitation"),
-                          hu12_snow %>% 
-                            rename(type = snow_year) %>% 
-                            mutate(scenario = "Snowpack")) %>% 
-            mutate(type = case_when(type == "min" ~ "Low",
-                                    type == "max" ~ "High"))) %>% 
+
+hu12_scens <- bind_rows(hu12_precip %>% 
+                          rename(type = precip_year) %>% 
+                          mutate(scenario = "Precipitation"),
+                        hu12_snow %>% 
+                          rename(type = snow_year) %>% 
+                          mutate(scenario = "Snowpack")) %>% 
+  mutate(type = case_when(type == "min" ~ "Low",
+                          type == "max" ~ "High"))
+
+
+hu12_scens %>% arrange(HUC12)
+
+hu12_scens_sp <- left_join(hu12, hu12_scens) %>% 
   filter(!is.na(preds_airDL))
 
 ggplot() +
-  geom_sf(data = hu12_scens, aes(fill = preds_airDL), color = NA) +
+  geom_sf(data = hu12_scens_sp, aes(fill = preds_airDL), color = NA) +
   facet_grid(vars(type), vars(scenario)) +
-  scale_fill_continuous(type = "viridis")
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() +
+  labs(fill = expression(paste(tau)))
+
+ggsave("output/mapped tau under 4 scens.jpeg", width = 6.5, height = 6)
+
 ```
 
+
+
+```{r figure of mean tau for regions under different scenarios}
+
+hu12_scens %>%
+  st_drop_geometry() %>%
+  mutate(Region = gsub("_", " ", Region)) %>% 
+  group_by(Region, scenario, type) %>% 
+  summarize(mean = mean(preds_airDL),
+            sd = sd(preds_airDL)) %>% 
+  ggplot(aes(x = Region, y = mean, color = type)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.2, position = position_dodge(width = 0.5)) +
+  facet_wrap(~scenario) +
+  labs(y = expression(paste("mean ", tau)), color = "Scenario") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 75, hjust = 1), text = element_text(size = 14))
+
+ggsave("output/mean tau under 4 scens.jpeg", width = 6, height = 4)
+       
+```
 
 
 ```{r TS maps change in TS as snow and precip increase}
@@ -800,42 +867,33 @@ ggplot() +
   
 ```
 
-Create a data frame with scenarios for low and high snowpack for each salmon stream. Add in species and life stage information as new columns and save a csv for Dustin in output folder so he can add to the web mapper.
+Create a data frame with scenarios for snow and precipitation for each salmon stream. Add in species and life stage information as new columns and save a csv for Dustin in output folder so he can add to the web mapper.
 
-```{r snow scenarios}
-hu12.snow <- bind_rows(hu12.df %>% 
-            group_by(HUC12) %>% 
-            slice_min(wtd_lcld_jd, with_ties = FALSE) %>% 
-            mutate(snow_year = "min"),
-          hu12.df %>% 
-            group_by(HUC12) %>% 
-            slice_max(wtd_lcld_jd, with_ties = FALSE) %>% 
-            mutate(snow_year = "max")) %>% 
-  ungroup()
+```{r save prediction scenarios for web map}
+hu12_spls <- left_join(hu12.df %>% distinct(HUC12, sp_ls), hu12_scens) %>%
+  mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Sockeye = case_when(grepl("S_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Chum = case_when(grepl("CH_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Pink = case_when(grepl("P_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Coho = case_when(grepl("CO_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Spawning = case_when(grepl("_s", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Rearing = case_when(grepl("_r", sp_ls) ~ 1,
+                          TRUE ~ 0))
 
+hu12_spls
 
-
-hu12.snow %>% 
-  select(HUC12, preds, snow_year) %>% 
-  pivot_wider(names_from = snow_year, values_from = preds) %>% 
-  mutate(diff = min - max) %>% 
-  arrange(diff) %>% 
-  count(diff > 0)
-
-
-hu12 <- left_join(hu12, hu12.snow %>% 
-  select(HUC12, preds, snow_year) %>% 
-  pivot_wider(names_from = snow_year, values_from = preds) %>% 
-  mutate(diff = max - min,
-         error = case_when(diff > 0 ~ 1,
-                           TRUE ~ 0)) %>% 
-  select(HUC12, diff, error)) %>% 
-  filter(!is.na(diff))
-
-ggplot() +
-  geom_sf(data = hu12, aes(fill = diff, color = as.factor(error))) 
+write_csv(hu12_spls, paste0("output/scenarios_byhu12_spls_", Sys.Date(), ".csv"))
+  
+```
 
 
+```{r}
 
 #figure showing count of high or low snow by year for all huc12 outlets.
 hu12.snow %>% 

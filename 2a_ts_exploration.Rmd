@@ -65,10 +65,15 @@ Trends
 
 ```{r trends by year}
 
-dfa_trends %>% 
-  ggplot(aes(x = DOY, y = trend, color = model)) +
+dfa_trends %>%
+  filter(!Year == 2020) %>% 
+  mutate(Model = case_when(model == "Trend_Air" ~ "Air Only",
+                           model == "Trend_Air.DayLen" ~ "Air + Daylength")) %>% 
+  ggplot(aes(x = DOY, y = trend, color = Model)) +
   geom_line() +
-  facet_wrap(~Year)
+  facet_wrap(~Year) +
+  theme_bw() +
+  labs(y = "Trend", x = "Day of Year")
 
 ```
 
@@ -91,18 +96,48 @@ left_join(dfa_ts, dfa_loads) %>%
 
 Frequency plots of thermal sensitivities by year and region.
 
-```{r}
-dfa_ts %>% 
-  ggplot(aes(TempSens_Air)) +
-  geom_freqpoly(aes(color = Region)) +
-  facet_wrap(~Year)
+```{r ts figure by model type}
 
 dfa_ts %>% 
-  ggplot(aes(TempSens_Air.DayLen)) +
-  geom_freqpoly(aes(color = Region)) +
-  facet_wrap(~Year)
+  pivot_longer(cols = starts_with("Temp")) %>%
+  mutate(Model = case_when(name == "TempSens_Air" ~ "Air Only",
+                           name == "TempSens_Air.DayLen" ~ "Air + Daylength")) %>% 
+  ggplot(aes(x = value, color = Model)) +
+  geom_freqpoly() +
+  # facet_wrap(~Region) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = expression(paste(tau)), y = "Count")
 
-# ggsave("output/ts_region_year.jpeg", width = 9, units = "in")
+ggsave("output/ts by model type.jpeg", width = 4, height = 4)
+
+```
+
+```{r ts figure by region}
+
+dfa_ts %>%
+  mutate(Region = case_when(Region == "Copper" ~ "Copper River",
+                            TRUE ~ Region)) %>% 
+  group_by(Region) %>% 
+  mutate(med = median(TempSens_Air.DayLen),
+         med_pos = case_when(Region == "Cook Inlet" ~ 55,
+                             Region == "Bristol Bay" ~ 50,
+                             Region == "Copper River" ~ 45,
+                             Region == "Kodiak" ~ 40,
+                             Region == "Prince William Sound" ~ 35),
+         med_lab = paste(Region, round(med, 2), sep = " = ")) %>% 
+  ggplot() +
+  geom_freqpoly(aes(x = TempSens_Air.DayLen, color = Region), show.legend = FALSE) +
+  # geom_vline(aes(xintercept = med, color = Region), linetype = 2, size = 1, show.legend = FALSE) +
+  geom_text(aes(x = 0.8, y = med_pos, label = med_lab, color = Region), show.legend = FALSE, check_overlap = TRUE) +
+  theme_bw() +
+  theme(legend.position = "bottom", text = element_text(size = 14)) +
+  labs(y = "Count", x = expression(paste(tau))) +
+  guides(color=guide_legend(nrow=2,byrow=TRUE))
+
+
+ggsave("output/ts by Region.jpeg", width = 5, height = 4)
+
 ```
 
 
@@ -455,6 +490,9 @@ mod_dat %>%
   select(wtd_wet_per:summer_precip, snow_tc, cat_elev_MEAN, wtd_slope_MEAN) %>% 
   pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
+mod_dat %>% 
+  select(wtd_wet_per, snow_tc,wtd_lcld_jd, cat_elev_MEAN, wtd_elev_MEAN, dist_coast_km, wtd_slope_MEAN) %>% 
+  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
 
 ```
 
