@@ -1,0 +1,136 @@
+---
+title: "2g_bb_model_comparison"
+output: 
+  html_document:
+    code_folding: hide
+date: "2022-10-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(lubridate)
+library(ggpubr)
+library(nlme)
+library(e1071)
+library(car)
+library(readxl)
+library(gridExtra)
+```
+
+This data frame has all of the Bristol Bay covariates and final responses from both analyses (Cline et al 2020 data archived on zenodo) and this analysis. The data frame shows where there were some missing data in the UW database compared to what was done in 2020. ~180 site years in 2020 and missing 24 summers of data when I requested the raw data from the UW database so I could get daily min, mean, and max.
+
+```{r}
+bb_dat <- readRDS("output/combined_bb_data.rds")
+
+bb_dat %>% 
+  count(Stream,uw, Site) %>% 
+  arrange(Stream)
+
+# bb_dat %>% filter(is.na(wtd_slope_MIN)) %>% nrow()
+```
+
+See below for different models I tested for the snow residuals: one with watershed slope only, watershed slope squared, and watershed slope + watershed aspect. All models had a random intercept for year. Simple model with just watershed slope had the lowest AIC (delta ~ 5).
+
+I calculated the snow index per the paper, by adding the difference between the observed value and the slope coefficient * slope values, then adding these to the year intercepts. The year intercepts varied from -24 to + 23 and the difference in the observed to predicted snow data ranged from 60 to 147 (not including an intercept term for predicted data), which is why the residuals I calculated are almost all positive. The raw residuals are centered around 0 and range from -77 to 92, but they don't correlate to the snow index archived on zenodo (see below).
+
+The main difference I see in the paper formula and the calculation for raw residuals is that the year intercept term is outside the function for subtracting fitted from observed values. 
+
+
+```{r}
+
+dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
+
+
+dat %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_lcld_jd)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(color = "red", method = "lm",  formula = y ~ I(x^2))
+
+
+ess_lme1 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN, dat = dat, random = ~1|Year)
+ess_lme2 <- lme(wtd_lcld_jd ~ I(wtd_slope_MEAN^2), dat = dat, random = ~1|Year)
+ess_lme3 <- lme(wtd_lcld_jd ~ wtd_slope_MEAN + wtd_north_per, dat = dat, random = ~1|Year)
+
+AIC(ess_lme1, ess_lme2, ess_lme3)
+
+ess_lme_resid <- residuals(ess_lme1, level = 1) 
+attributes(ess_lme_resid) <- NULL
+str(ess_lme_resid)
+summary(ess_lme_resid)
+
+ess_lme_resid2 <- residuals(ess_lme2, level = 1) 
+attributes(ess_lme_resid) <- NULL
+str(ess_lme_resid)
+
+ess_lme1_ints <- ess_lme1$coefficients$random$Year %>% as_tibble(rownames = "Year") %>% 
+  rename(intercept = `(Intercept)`) %>% 
+  mutate(Year = as.numeric(Year))
+
+ess_lme1_ints
+summary(ess_lme1)
+
+dat %>% mutate(snow_diff = wtd_lcld_jd - 1.78344* wtd_slope_MEAN) %>% 
+  select(snow_diff) %>% summary()
+
+#not run: but see equation below for calculating snow_tc based on formula in paper
+# dat <- dat %>% 
+#   left_join(ess_lme1_ints) %>% 
+#   mutate(snow_ind = ess_lme_resid,
+#          snow_ind_sq = ess_lme_resid2,
+#          snow_tc = intercept + (wtd_lcld_jd - 1.783443 * wtd_slope_MEAN))
+```
+
+These plots show some comparisons between the data on zenodo and for this analysis. All variables on x axis are from zenodo and y are from this analysis.
+
+* watershed slopes are very close, r = 0.98. I would expect some differences due to different DEMs and different watershed polygons.
+* SnowResiduals from zenodo have a pretty good fit to the snow index I calculated following the formula in the paper, although the ranges are different, r = 0.92.
+* Snow residuals from zenodo do not match the raw residuals (using the innermost level of groupings, so adding the year intercept term) for either models with slope (linear or squared).
+* the thermal sensitivities using only air temperatures in the DFA model match pretty good, r = 0.8. The correlation decreases a bit when we compare to the air + daylength model, which is to be expected.
+
+
+```{r}
+p1 <- bb_dat %>% 
+  ggplot(aes(x = WatershedSlope, y = wtd_slope_MEAN)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor()
+
+p2 <- bb_dat %>% 
+  ggplot(aes(x = SnowResidual, y = snow_tc)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor()
+
+p3 <- bb_dat %>% 
+  ggplot(aes(x = SnowResidual, y = snow_ind)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor() +
+  labs(y = "lme1 residuals")
+
+p4 <- bb_dat %>% 
+  ggplot(aes(x = SnowResidual, y = snow_ind_sq)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor() +
+  labs(y = "lme2 residuals")
+
+p5 <- bb_dat %>% 
+  ggplot(aes(x = TempSensitivity, y = TempSens_Air)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor()
+
+p6 <- bb_dat %>% 
+  ggplot(aes(x = TempSensitivity, y = TempSens_Air.DayLen)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor()
+
+grid.arrange(p1, p2, p3, p4, p5, p6, nrow = 2)
+
+```
+

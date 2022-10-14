@@ -69,7 +69,31 @@ brt_in_dl <- dat %>%
                              wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
                              wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip, Region)
 
+
+
 ```
+
+Save a copy of the final TS along with 13 covariates for Dustin to add to the mapper. Include lat/long from md file so he can plot.
+
+```{r save copy of TS and covariates for zenodo}
+
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+
+dat %>% 
+  mutate(Region = as.factor(Region)) %>%
+  complete(Site, Year) %>% 
+  left_join(md %>% select(Site, Latitude, Longitude)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(SiteID = Site, Year, TempSens_Air.DayLen, str_slope, 
+                cat_elev_MEAN, cat_slope_MEAN, wtd_north_per, 
+                wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                wtd_glacier_per, wtd_lake_per, wtd_wet_per, 
+                wtd_lcld_jd, summer_precip, Region, Latitude, Longitude) %>% 
+  write_csv(., file = "data_preparation/final_data/zenodo1/tempSitesSens.csv")
+
+```
+
+
 
 Interactions are all really weak, < 0.5 so they don't indicate any interaction in the perspectives plot. 
 
@@ -97,6 +121,10 @@ brt_step <- gbm.step(gbm.y = 1, gbm.x = 2:14,
                      keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
 
 saveRDS(brt_step, paste("output/brt_dfa1tr_air", Sys.Date(), ".rds", sep = ""))
+
+brt_step <- readRDS("output/brt_dfa1tr_air2022-05-10.rds")
+
+
 ```
 
 
@@ -122,6 +150,8 @@ brt_step_dl <- gbm.step(gbm.y = 1, gbm.x = 2:14,
 
 saveRDS(brt_step_dl, paste("output/brt_dfa1tr_AirDL", Sys.Date(), ".rds", sep = ""))
 
+
+brt_step_dl <- readRDS("output/brt_dfa1tr_AirDL2022-05-10.rds")
 ```
 
 
@@ -692,7 +722,7 @@ bind_rows(hu12.df %>%
 ```
 
 
-Exploring patterns in prediction for snow and precipitation - similar to interation plot from model.
+Exploring patterns in prediction for snow and precipitation - similar to interaction plot from model.
 
 ```{r}
 #select a site of high slope and see if there is a difference.
@@ -892,20 +922,14 @@ write_csv(hu12_spls, paste0("output/scenarios_byhu12_spls_", Sys.Date(), ".csv")
   
 ```
 
-
-```{r}
-
-#figure showing count of high or low snow by year for all huc12 outlets.
-hu12.snow %>% 
-  group_by(snow_year, Region) %>% 
-  count(Year) %>% 
-  ggplot(aes(x = Year, y = n, color = snow_year)) +
-  geom_point() + 
-  scale_x_continuous(breaks = seq(2001, 2019, by= 2)) +
-  facet_wrap(~ Region, ncol = 1, scales = "free_y")
-
-#add in species and life stage columns
-hu12.snow.splsWd <- hu12.snow %>% 
+```{r tau scenarios for zenodo}
+hu12_spls <- left_join(hu12_scens %>% 
+                         mutate(Scenario = paste(type, scenario, sep = " ")) %>% 
+                         select(Region, HUC12, Year, Scenario, TempSens = preds_airDL), 
+                       hu12.df %>% select(HUC12, sp_ls, dist_coast_km,
+                                                      wtd_area_sqKM:wtd_wet_per, 
+                                                      wtd_lcld_jd, Year, 
+                                                      summer_precip)) %>%
   mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
                              TRUE ~ 0),
          Sockeye = case_when(grepl("S_", sp_ls) ~ 1,
@@ -919,24 +943,50 @@ hu12.snow.splsWd <- hu12.snow %>%
          Spawning = case_when(grepl("_s", sp_ls) ~ 1,
                           TRUE ~ 0),
          Rearing = case_when(grepl("_r", sp_ls) ~ 1,
-                          TRUE ~ 0)) 
+                          TRUE ~ 0)) %>% 
+  select(-sp_ls)
 
-hu12.snow.splsWd %>% 
-  write_csv(paste0("output/snow_scenarios_byhu12_spls_", Sys.Date(), ".csv"))
+hu12_spls
 
-hu12.snow.splsWd %>% 
-  select()
-  pivot_longer(cols = Chinook:Coho, names_to = "species") %>%
-  filter(value == 1) %>% 
-  group_by(species) %>% 
-  summarize(mean_ts = mean(preds),
-            sd_ts = sd(preds))
-
-hu12.df %>% 
-  count(sp_ls) %>% 
-  mutate(species = case_hgrepl("CO_", sp_ls)) %>% 
-  summarize(sum(coho))
+write_csv(hu12_spls, "data_preparation/final_data/zenodo1/tempScensSens.csv")
   
+```
+
+```
+
+
+```{r tau figure by species and life stage}
+
+#figure showing count of high or low snow by year for all huc12 outlets.
+hu12_snow %>% 
+  group_by(snow_year, Region) %>% 
+  count(Year) %>% 
+  ggplot(aes(x = Year, y = n, color = snow_year)) +
+  geom_point() + 
+  scale_x_continuous(breaks = seq(2001, 2019, by= 2)) +
+  facet_wrap(~ Region, ncol = 1, scales = "free_y")
+
+
+
+hu12_spls %>% 
+  pivot_longer(cols = Chinook:Rearing, names_to = "species") %>%
+  mutate(species = factor(species, levels = c("Chinook", "Coho", "Sockeye", "Chum", "Pink", "Spawning", "Rearing"))) %>% 
+  filter(value == 1) %>% 
+  group_by(species, scenario, type) %>% 
+  summarize(mean_ts = round(mean(preds_airDL), 2),
+            sd_ts = round(sd(preds_airDL), 2)) %>% 
+  ggplot(aes(x = species, y = mean_ts, color = type)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = mean_ts - sd_ts, ymax = mean_ts + sd_ts), width = 0.3,
+                position = position_dodge(width = 0.5)) +
+  facet_wrap(~scenario) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 75, hjust = 1),
+        axis.title.x = element_blank()) +
+  labs(y = expression(paste("Mean ", tau)), color = "Scenario")
+  
+ggsave("output/mean tau by scens for species and life stages.jpeg", width = 6, height = 4)
+
 ```
 
 
@@ -1105,3 +1155,77 @@ awc_hu12 %>%
   summarize(quantile(tot_len, probs = 0.07))
 ```
 
+
+
+# Kenai and Copper predictions
+
+Select the lowermost huc12 outlet for each river basin, get it's watershed, intersect with all huc12 salmon outlets to get HUC12 for each watershed. Alternatively, do an intersection with huc12 outlet points to get list of HUC12s and then use that to filter the HUC12 layer and predictions.
+
+Kenai River outlet = 190203021809 (note this watershed is incorrect, it grabbed a small trib to the lower kenai to the north)
+190203021806 (one upstream)
+Copper River outlet = 190201041203
+
+```{r kenai and copper spatial data}
+
+#watersheds
+
+wtds <- st_read("T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", 
+                layer = "AKSSF_awcHuc12_Watersheds_Merge")
+
+hu12pts <- st_read("T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", 
+                layer = "AKSSF_awcHuc12_outlet_cats_points")
+
+wtds2 <- wtds %>% filter(HUC12 %in% c("190203021806", "190201041203")) %>% 
+  select(region, HUC12, cat_ID_con, NHDPlusID)
+
+
+#spatial intersect of watersheds with huc12
+
+
+hu12pts %>% 
+  mutate(intersection = as.integer(st_intersects(geometry, wtds2)),
+         area = if_else(is.na(intersection), '', wtds2$region[intersection]))
+
+ken_cop_huc12 <- st_intersects(wtds2, hu12pts)
+
+ken_cop_huc12 <- hu12pts[ken_cop_huc12 %>% unlist(),]$HUC12
+
+ken_strms <- st_read(dsn = "W:\\GIS\\AKSSF Southcentral\\AKSSF Southcentral.gdb", 
+                     layer = "kenai_named_streams")
+
+cop_strms <- st_read(dsn = "W:\\GIS\\AKSSF Southcentral\\AKSSF Southcentral.gdb", 
+                     layer = "copper_named_streams")
+
+st_crs(ken_strms) == st_crs(wtds2)
+```
+
+
+```{r kenai scenarios}
+ggplot() +
+  geom_sf(data = hu12_scens_sp %>% filter(HUC12 %in% ken_cop_huc12, region == "Cook_Inlet"), 
+                                          aes(fill = preds_airDL), color = NA) +
+  geom_sf(data = wtds2 %>% filter(region == "Cook_Inlet"), fill = NA) + 
+  geom_sf(data = ken_strms, color = "gray") + 
+  facet_grid(vars(type), vars(scenario)) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() +
+  labs(fill = expression(paste(tau)))
+
+
+```
+
+
+```{r copper scenarios}
+ggplot() +
+  geom_sf(data = hu12_scens_sp %>% filter(HUC12 %in% ken_cop_huc12, region == "Copper_River"), 
+                                          aes(fill = preds_airDL), color = NA) +
+  geom_sf(data = wtds2 %>% filter(region == "Copper_River"), fill = NA) + 
+  geom_sf(data = cop_strms, color = "gray") + 
+  facet_grid(vars(type), vars(scenario)) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() +
+  labs(fill = expression(paste(tau)))
+
+ggsave("output/copper scenarios.jpeg", width = 8, height = 7)
+
+```

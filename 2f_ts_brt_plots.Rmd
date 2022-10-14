@@ -1,0 +1,135 @@
+---
+title: "BRT model interpretation"
+output: 
+  html_document:
+    code_folding: hide
+    fig_width: 10
+    fig_height: 10
+date: "2022-10-13"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dismo)
+library(gbm)
+library(pdp)
+# library(ggpubr)
+library(tidyverse)
+# library(sf)
+# library(gridExtra)
+# library(lubridate)
+# library(nlme)
+
+select <- dplyr::select
+```
+
+# Full Air + DL model
+
+Read in model.
+
+``` {r model and data}
+brt_step_dl <- readRDS("output/brt_dfa1tr_AirDL2022-05-10.rds")
+
+dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
+
+brt_in_dl <- dat %>% 
+  mutate(Region = as.factor(Region)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens_Air.DayLen, str_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip, Region)
+
+```
+
+
+```{r full model plots}
+
+brt_varRI <- summary(brt_step_dl, plotit = FALSE)
+
+ggplot(aes(x = rel.inf, y = fct_reorder(var, rel.inf)), data = brt_varRI) +
+  geom_col()
+
+
+gbm.plot(brt_step_dl, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+# brt_simplify <- gbm.simplify(brt_step) #this takes a long time to run.
+
+brt_int_dl <- gbm.interactions(brt_step_dl) #identifies interactions
+brt_int_dl$rank.list
+
+#this plot is crashing r
+# int_vars <- c("snow_tc", "wtd_slope_MEAN")
+# pd_snow_slope <- pdp::partial(brt_step_dl, pred.var = int_vars, 
+#               n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+# pd_snow_slope
+
+
+# gbm.perspec(brt_step_dl, x = 11, y =5) #plots interactions, but I can't get this to show anything
+
+#error
+# interact.gbm(brt_step, data = brt_in, n.trees = 200)
+```
+
+## Simplified air + DL model
+
+fitting final gbm model with a fixed number of 6150 trees for TempSens_Air.DayLen
+
+mean total deviance = 0.028 
+mean residual deviance = 0.006 
+ 
+estimated cv deviance = 0.014 ; se = 0.001 
+ 
+training data correlation = 0.894 
+cv correlation =  0.705 ; se = 0.019 
+ 
+elapsed time -  0.94 minutes
+
+
+```{r simplified model}
+# brt_step_simp <- gbm.simplify(brt_step)
+# brt_stepdl_simp <- gbm.simplify(brt_step_dl)
+
+# brt_step_dl2 <- gbm.step(gbm.y = 1, gbm.x = brt_stepdl_simp$pred.list[[7]], 
+#                      data = brt_in_dl,
+#                      tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+#                      n.folds = 10, family = "gaussian", max.trees = 30000,
+#                      keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+# 
+# saveRDS(brt_step_dl2, paste("output/brt_dfa1tr_AirDL_simp", Sys.Date(), ".rds", sep = ""))
+
+brt_step_dl2 <- readRDS("output/brt_dfa1tr_AirDL_simp2022-05-11.rds")
+
+brt2_varRI <- summary(brt_step_dl2, plotit = FALSE)
+
+ggplot(aes(x = rel.inf, y = fct_reorder(var, rel.inf)), data = brt2_varRI) +
+  geom_col()
+
+
+```
+
+
+```{r simple model interactions}
+gbm.plot(brt_step_dl2, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+brt_int <- gbm.interactions(brt_step_dl2) #identifies interactions
+brt_int$rank.list
+```
+
+
+
+```{r brt interaction}
+int_vars <- c("summer_precip", "wtd_slope_MEAN")
+
+pd_precip_slope <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
+              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_precip_slope
+
+
+int_vars <- c("snow_tc", "wtd_slope_MEAN")
+pd_snow_slope2 <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
+              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope2
+```
+
