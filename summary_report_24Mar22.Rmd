@@ -43,19 +43,30 @@ This report summarizes the new thermal sensitivity results with an interaction b
 Common trends across the four different models. There were four columns in the original data frame so I'm assuming that 'NA.' might be the interaction model. The trends are similar across the models and years except for the air temperature only model, which deviates in the fall in 2012, 2015, and 2019.
 
 ```{r read in new results}
-load("DFA/output_17Mar22/DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
+load("DFA/output_17Mar22/DFA_copy_DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
 
 md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
 mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
 
 sp_dat <- mod_dat %>% 
-  select(SiteID, str_ord:log_precip) %>%
+  select(Region, SiteID = Site, Year, str_ord:log_precip) %>%
   distinct() %>% 
-  left_join(md %>% select(SiteID = Site, Waterbody_name))
+  left_join(md %>% select(SiteID = Site, Waterbody_name)) %>% 
+  mutate(SiteID = tolower(SiteID))
+
+#check that all sites in Tim's output have spatial data. Note that he dropped a lot of sites so use a left join.
+left_join(TempSens_Interaction_Subset1 %>%
+            filter(!Year == 2020) %>% 
+            distinct(SiteID) %>% 
+            mutate(SiteID = tolower(SiteID)),
+          md %>% 
+            mutate(SiteID = tolower(Site))) %>% 
+  filter(is.na(Latitude)) #good looks like everything is matching up.
 
 ts_doy <- TempSens_Interaction_Subset1 %>%
-  left_join(sp_dat) %>% 
-  filter(!is.na(region))
+  mutate(SiteID = tolower(SiteID)) %>% 
+  filter(!Year == 2020) %>% 
+  left_join(sp_dat) 
 
 ts_site <- GlobalResults_DayLen_Subset1 %>%
   select(SiteID, Year, contains("Sens")) %>% 
@@ -118,11 +129,10 @@ Exploration of how TS changes by day in the interaction model, first plot is pat
 
 ```{r ts by day all sites}
 ts_doy %>% 
-  filter(!is.na(region)) %>% 
   # filter(Year %in% c(2012, 2015, 2019)) %>% 
   ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
   geom_line() +
-  facet_grid(vars(Year), vars(region))
+  facet_grid(vars(Year), vars(Region))
 
 ```
 
