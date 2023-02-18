@@ -28,6 +28,12 @@ Update this with TS created by Tim on 3/17/22. Model data frame created in scrip
 ```{r read in model data frame}
 dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
 
+
+dat %>% 
+  filter(grepl("UW", Site)) %>% 
+  distinct(Site, Year) %>% 
+  group_by(Site) %>% 
+  summarize(years = toString(Year))
 ```
 
 

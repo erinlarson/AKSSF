@@ -17,6 +17,8 @@ library(e1071)
 library(car)
 library(readxl)
 library(gridExtra)
+library(dismo)
+library(GGally)
 ```
 
 This data frame has all of the Bristol Bay covariates and final responses from both analyses (Cline et al 2020 data archived on zenodo) and this analysis. The data frame shows where there were some missing data in the UW database compared to what was done in 2020. ~180 site years in 2020 and missing 24 summers of data when I requested the raw data from the UW database so I could get daily min, mean, and max.
@@ -30,6 +32,8 @@ bb_dat %>%
 
 # bb_dat %>% filter(is.na(wtd_slope_MIN)) %>% nrow()
 ```
+
+# Snow residuals and other covariates
 
 See below for different models I tested for the snow residuals: one with watershed slope only, watershed slope squared, and watershed slope + watershed aspect. All models had a random intercept for year. Simple model with just watershed slope had the lowest AIC (delta ~ 5).
 
@@ -132,5 +136,117 @@ p6 <- bb_dat %>%
 
 grid.arrange(p1, p2, p3, p4, p5, p6, nrow = 2)
 
+
+```
+
+Compare two snow residuals against year.
+
+```{r}
+bb_dat %>% 
+  ggplot(aes(y = SnowResidual, x = Year)) +
+  geom_point()
+
+bb_dat %>% 
+  ggplot(aes(y = snow_tc, x = Year)) +
+  geom_point()
+
+```
+
+
+
+# Model comparison
+
+Run the BRT model on the UW Bristol Bay sites only and see if snow comes out as a more important predictor.
+
+```{r}
+bbBRT_in <- bb_dat %>% 
+  filter(!is.na(str_slope)) %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSens_Air, str_slope, cat_elev_MEAN, cat_slope_MEAN, 
+                             wtd_north_per, wtd_slope_MEAN, wtd_area_sqKM, dist_coast_km,
+                             wtd_glacier_per, wtd_lake_per, wtd_wet_per, snow_tc, summer_precip)
+
+ggpairs(bbBRT_in, progress = FALSE)
+
+```
+
+
+```{r}
+bbBRT_step <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
+                     data = bbBRT_in,
+                     tree.complexity = 2, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+
+gbm.plot(bbBRT_step, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+bbBRT_int <- gbm.interactions(bbBRT_step) #identifies interactions
+bbBRT_int$rank.list
+
+int_vars <- c("snow_tc", "wtd_slope_MEAN")
+pd_snow_slope <- pdp::partial(bbBRT_step, pred.var = int_vars, 
+              n.trees = 600, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope
+
+
+int_vars <- c("summer_precip", "wtd_slope_MEAN")
+pd_prp_slope <- pdp::partial(bbBRT_step, pred.var = int_vars, 
+              n.trees = 600, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_prp_slope
+
+int_vars <- c("summer_precip", "wtd_lake_per")
+pd_prp_lake <- pdp::partial(bbBRT_step, pred.var = int_vars, 
+              n.trees = 600, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_prp_lake
+
+bbBRT_in %>% 
+  ggplot(aes(x = wtd_slope_MEAN)) +
+  geom_histogram()
+
+```
+
+```{r}
+bbBRT_step_simp <- gbm.simplify(bbBRT_step)
+
+bbBRT_step2 <- gbm.step(gbm.y = 1, gbm.x = bbBRT_step_simp$pred.list[[9]], 
+                     data = bbBRT_in,
+                     tree.complexity = 2, learning.rate = 0.005, bag.fraction = 0.5,
+                     n.folds = 10, family = "gaussian", max.trees = 30000,
+                     keep.fold.models = TRUE, keep.fold.vector = TRUE, keep.fold.fit = TRUE)
+
+gbm.plot(bbBRT_step2, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+bbBRT_int2 <- gbm.interactions(bbBRT_step2) #identifies interactions
+bbBRT_int2$rank.list
+
+int_vars <- c("summer_precip", "wtd_slope_MEAN")
+
+pd_precip_slope2 <- pdp::partial(bbBRT_step2, pred.var = int_vars, 
+              n.trees = 1000, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_precip_slope2
+
+int_vars <- c("summer_precip", "snow_tc")
+
+pd_precip_snow <- pdp::partial(bbBRT_step2, pred.var = int_vars, 
+              n.trees = 1000, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_precip_snow
+
+int_vars <- c("snow_tc", "wtd_slope_MEAN")
+pd_snow_slope2 <- pdp::partial(bbBRT_step2, pred.var = int_vars, 
+              n.trees = 600, train = bbBRT_in, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope2
+
+```
+
+
+Since an important goal of this project is to examine how tau varies across these regions, compare x-validation accuracy of two models.
+
+```{r}
+lme1 <- lme(data = bb_dat %>% filter(!is.na(wtd_slope_MEAN)), TempSens_Air ~ wtd_slope_MEAN + snow_tc + wtd_north_per + summer_precip + wtd_north_per*snow_tc + summer_precip*wtd_slope_MEAN + summer_precip*snow_tc + wtd_slope_MEAN*snow_tc, random = ~1|Stream)
+
+summary(lme1)
+
+predict(lme1)
 ```
 

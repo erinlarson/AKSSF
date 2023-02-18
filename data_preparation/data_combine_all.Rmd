@@ -10,22 +10,23 @@ knitr::opts_knit$set(root.dir = normalizePath(".."))
 
 # load packages
 library(googledrive)
+# library(googlesheets4)
 library(lubridate)
 library(readr)
 library(hms)
-library(ggmap)
+# library(ggmap)
 library(sf)
 library(stars)
 # library(leaflet)
 # library(osmdata)
 library(broom)
-library(caTools)
+# library(caTools)
 library(tidyverse)
 library(daymetr)
 
 # install.packages("devtools")
 # devtools::install_github("yutannihilation/ggsflabel")
-library(ggsflabel)
+# library(ggsflabel)
 
 ```
 
@@ -192,6 +193,12 @@ ddat <- ddat %>%
 
 summary(ddat)
 
+
+ddat %>% 
+  filter(grepl("UW", SiteID)) %>% 
+  distinct(SiteID, year = year(sampleDate)) %>% 
+  group_by(SiteID) %>% 
+  summarize(toString(year))
 ```
 
 Clean up daily file for analysis. Some USGS data is missing the mean daily temperatures or minimum daily temperatures. Tim Cline's data only have the mean daily temperatures -- they were downloaded as summary data from Zenodo.
