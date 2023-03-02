@@ -1,0 +1,216 @@
+---
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+title: "AKSSF Temperature Data Summary"
+output:
+  html_document: 
+    df_print: paged
+    fig_width: 10
+    fig_height: 10
+    fig_caption: yes
+    code_folding: hide
+    toc: true
+    number_sections: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+editor_options: 
+  chunk_output_type: inline
+---
+
+Document last updated `r Sys.time()` by Rebecca Shaftel (rsshaftel@alaska.edu). 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(ggpubr)
+library(kableExtra)
+library(rpart)
+library(tidyverse)
+library(ggrepel)
+library(ggpubr)
+```
+
+This report summarizes the new thermal sensitivity results with an interaction between air temperature and daylength. Tim redid the DFA comparing models with air temperature only, daylength only, air temperature + daylength, and air temperature x daylength (interaction). The model with the interaction term had the lowest AIC. These are single trend models using subset 1 (removed some Deshka sites).
+
+# New DFA results
+
+Common trends across the four different models. There were four columns in the original data frame so I'm assuming that 'NA.' might be the interaction model. The trends are similar across the models and years except for the air temperature only model, which deviates in the fall in 2012, 2015, and 2019.
+
+```{r read in new results}
+load("DFA/output_17Mar22/DFA_copy_DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
+
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
+
+sp_dat <- mod_dat %>% 
+  select(Region, SiteID = Site, Year, str_ord:log_precip) %>%
+  distinct() %>% 
+  left_join(md %>% select(SiteID = Site, Waterbody_name)) %>% 
+  mutate(SiteID = tolower(SiteID))
+
+#check that all sites in Tim's output have spatial data. Note that he dropped a lot of sites so use a left join.
+left_join(TempSens_Interaction_Subset1 %>%
+            filter(!Year == 2020) %>% 
+            distinct(SiteID) %>% 
+            mutate(SiteID = tolower(SiteID)),
+          md %>% 
+            mutate(SiteID = tolower(Site))) %>% 
+  filter(is.na(Latitude)) #good looks like everything is matching up.
+
+ts_doy <- TempSens_Interaction_Subset1 %>%
+  mutate(SiteID = tolower(SiteID)) %>% 
+  filter(!Year == 2020) %>% 
+  left_join(sp_dat) 
+
+ts_site <- GlobalResults_DayLen_Subset1 %>%
+  select(SiteID, Year, contains("Sens")) %>% 
+  pivot_longer(cols = contains(c("Sens"))) %>% 
+  distinct() %>% 
+  mutate(parameter = strsplit(name, "_") %>% sapply("[", 1),
+         model = strsplit(name, "_") %>% sapply("[", 2),
+         ts_type = case_when(grepl("Z", parameter) ~ "z-score",
+                             TRUE ~ "raw"),
+         covariate = gsub("Z", "", parameter)) 
+
+```
+
+
+```{r common trends}
+
+GlobalTrends_DayLen_Subset1 %>%
+  pivot_longer(cols = Trend_Air:NA., names_to = "model", values_to = "trend") %>% 
+  ggplot(aes(x = DOY, y = trend, color = model)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+```
+
+Comparison of sensitivities using a mean TS for each site and year in interaction model. Using the mean values, there are not really any differences in the distributions of raw TS by adding the interaction term. (Note I don't have the raw daylength sensitivities for the interaction model, which would also vary by day, but I don't think we're as interested in this term.)
+
+```{r temp sens mean value}
+
+ts_doy %>% 
+  group_by(SiteID, Year) %>% 
+  summarize(value = mean(TempSens_Int)) %>% 
+  mutate(parameter = "TempSens",
+         model = "Air.DayLen.Int",
+         ts_type = "raw",
+         covariate = "TempSens") %>% 
+  bind_rows(ts_site) %>% 
+  ggplot(aes(x = value, color = model)) +
+  geom_freqpoly() +
+  facet_wrap(~ ts_type + covariate, scales = "free") 
+```
+
+Using the maximum thermal sensitivities from each site and year in the interaction model leads to a shift in the distribution towards higher TS.
+
+```{r temp sens max value}
+
+ts_doy %>% 
+  group_by(SiteID, Year) %>% 
+  summarize(value = max(TempSens_Int)) %>% 
+  mutate(parameter = "TempSens",
+         model = "Air.DayLen.Int",
+         ts_type = "raw",
+         covariate = "TempSens") %>% 
+  bind_rows(ts_site) %>% 
+  ggplot(aes(x = value, color = model)) +
+  geom_freqpoly() +
+  facet_wrap(~ ts_type + covariate, scales = "free") 
+```
+
+Exploration of how TS changes by day in the interaction model, first plot is patterns by region and year. 
+
+```{r ts by day all sites}
+ts_doy %>% 
+  # filter(Year %in% c(2012, 2015, 2019)) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  facet_grid(vars(Year), vars(Region))
+
+```
+
+Exploration of some patterns for streams in Cook Inlet. Most common patterns are stable TS over the summer and decreasing TS in the fall, although some sites with increasing TS in the fall --- low flows? 2016/2018 generally had higher than normal summer precipitation. Since rain is most common later in summer, possibly that explains the lower TS at the end of the summer. 
+
+```{r ts by day cook inlet sites}
+ts_doy %>% 
+  filter(grepl("Anchor|Chester|Campbell|Wasilla|Willow", Waterbody_name) | Waterbody_name == "Kroto (Deshka) Creek") %>%
+  ggplot(aes(x = DOY, y = TempSens_Int, color = Waterbody_name)) +
+  geom_line() +
+  facet_wrap(~Year)
+
+```
+
+Can also explore patterns of changing sensitivities depending on site type. Sites with > 5% glacier cover. No real patterns here, very different across sites and years, could partially be due to different sites in different years.
+
+```{r ts for glacier sites}
+ts_doy %>% 
+  filter(wtd_glacier_per > 5) %>% 
+  mutate(Glacier_cover = round(wtd_glacier_per, 1)) %>% 
+  distinct(SiteID, Waterbody_name, Glacier_cover) %>% 
+  arrange(desc(Glacier_cover)) %>% 
+  kable()
+
+ts_doy %>% 
+  filter(wtd_glacier_per > 5) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID, color = wtd_glacier_per)) +
+  geom_line() +
+  facet_wrap(~Year)
+```
+
+Sites with mean watershed slope > 20% (top quartile of sites) and < 7% (bottom quartile of sites). The y axes are fixed so they are generally comparable. Interesting pattern in 2018 in the flat watersheds that matches the Cook Inlet sites.
+
+```{r ts by mean watershed slope}
+# sens_doy %>% summary()
+
+ts_doy %>% 
+  filter(wtd_slope_MEAN > 20) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  scale_y_continuous(limits = c(-1, 1)) +
+  facet_wrap(~Year) +
+  labs(title = "Steep watersheds (mean slope > 20%)")
+
+ts_doy %>% 
+  filter(wtd_slope_MEAN < 7) %>% 
+  ggplot(aes(x = DOY, y = TempSens_Int, group = SiteID)) +
+  geom_line() +
+  scale_y_continuous(limits = c(-1, 1)) +
+  facet_wrap(~Year) +
+  labs(title = "Flat watersheds (mean slope < 7%)")
+```
+
+Exploration of how covariates relate to Thermal Sensitivities from interaction model.
+
+```{r}
+ts_doy %>%
+  group_by(SiteID, Year, wtd_slope_MEAN, asrt_glac, log_area, 
+         snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip) %>%
+  summarize(meants = mean(TempSens_Int),
+            maxts = max(TempSens_Int)) %>% 
+  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>%  
+  ggplot(aes(x = value, y = meants)) +
+  geom_point() +
+  facet_wrap(~vars, scales = "free_x") +
+  labs("Mean summer thermal sensitivity")
+
+ts_doy %>%
+  group_by(SiteID, Year, wtd_slope_MEAN, asrt_glac, log_area, 
+         snow_ind, cat_elev_MEAN, asrt_lake, asrt_wet, wtd_north_per, summer_precip) %>%
+  summarize(meants = mean(TempSens_Int),
+            maxts = max(TempSens_Int)) %>% 
+  pivot_longer(cols = wtd_slope_MEAN:summer_precip, names_to = "vars", values_to = "value") %>%  
+  ggplot(aes(x = value, y = maxts)) +
+  geom_point() +
+  facet_wrap(~vars, scales = "free_x") +
+  labs("Max summer thermal sensitivity")
+```
+
+
+

@@ -11,11 +11,36 @@ library(ggfortify)
 library(lubridate)
 library(readxl)
 library(NbClust)
+library(gridExtra)
+library(sf)
+library(fpc)
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y, use = "complete.obs"))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+panel.hist <- function(x, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(usr[1:2], 0, 1.5) )
+    h <- hist(x, plot = FALSE)
+    breaks <- h$breaks; nB <- length(breaks)
+    y <- h$counts; y <- y/max(y)
+    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+
 ```
 
 # Read in final dataset
 
-Read in new daily dataset that has daily min and max from UW data - received from Jackie and QAed in SWSHP repo. Note that this won't exactly match the sites and dates in the DFA analysis. There we some sites and years Jackie didn't have data for, some dates got removed so summer data may not be complete, and there were also some missing min and max for USGS sites.
+Read in new daily dataset that has daily min and max from UW data - received from Jackie and QAed in SWSHP repo. Note that this won't exactly match the sites and dates in the DFA analysis. There were some sites and years Jackie didn't have data for, some dates got removed so summer data may not be complete, and there were also some missing min and max for USGS sites.
 
 * remove nps newhalen for 2015, obvious air temperatures when compared to other years.
 
@@ -52,11 +77,12 @@ sites_complete_summers <- tr_dat %>%
   filter(month(sampleDate) %in% 6:8) %>% 
   group_by(SiteID, Year) %>% 
   mutate(percent_complete = sum(month(sampleDate) %in% 6:8)/92) %>%
-  filter(percent_complete >= 0.8)
+  filter(percent_complete >= 0.8) %>% 
+  ungroup()
 
 sites_complete_summers %>% 
   ungroup() %>% 
-  distinct(SiteID, year(sampleDate)) %>% 
+  distinct(SiteID, year(sampleDate)) %>% summary() 
   count(SiteID) %>% 
   summarize(sum(n))
 
@@ -79,9 +105,38 @@ metrics <- sites_complete_summers %>%
 
 ```
 
+Save a copy of the daily min mean and max (sites with complete summers) for archiving on Zenodo. Just saving siteid, date, daily min, max, and mean. Source name and other information should be in metadata file.
 
-Add in the regions and thermal sensitivity from the model data frame, but note that TS is from 2011-2019, whereas the metrics dataset is all sites and years with complete summer time series.
-Add in the filter that removes most of the Deshka sites so they don't overwhelm the summaries.
+* metadata is for 420 sites with at least one complete summer of data. Note that I also removed the extra deshka sites when actually comparing thermal regimes.
+* dailies is also for 420 sites.
+
+Sensitivities will be for fewer sites with data from 2011-2019 and also removing extra deshka sites.
+
+```{r save metadata and dailies datasets}
+
+sites_complete_summers %>% ungroup() %>% distinct(SourceName)
+
+md420 <- left_join(sites_complete_summers %>% distinct(SiteID),
+                   md,
+                   by = c("SiteID" = "Site"))
+  
+write_csv(md420 %>% 
+            mutate(SiteID = tolower(SiteID)) %>%
+            select(SiteID, Agency_ID:Waterbody_name, Region), 
+          file = "data_preparation/final_data/zenodo1/tempSitesMetadata.csv")
+
+write_csv(sites_complete_summers %>% 
+            mutate(SiteID = tolower(SiteID)) %>%
+            select(SiteID:maxDT),
+          file = "data_preparation/final_data/zenodo1/dailyTemps.csv")
+
+
+```
+
+
+
+Add in the thermal sensitivity from the model data frame, but note that TS is from 2011-2019, whereas the metrics dataset is all sites and years with complete summer time series.
+Add in the region filter that removes most of the Deshka sites (subset1) so they don't overwhelm the summaries.
 
 ```{r add regions and ts}
 #fix merge so region comes from md not mod_dat
@@ -92,22 +147,76 @@ mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds") #save
 
 left_join(metrics, mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen, Region)) %>% 
   filter(is.na(TempSens_Air)) %>% 
-  count(Year) #mostly before 2011 or 2020, also quite a few from removing deshka sites in 2017-2019
-
+  count(Year)  #mostly before 2011 or 2020, also quite a few from removing deshka sites in 2017-2019
 
 metrics2 <- left_join(metrics, 
                       mod_dat %>% select(SiteID = Site, Year, TempSens_Air, TempSens_Air.DayLen)) %>% 
   left_join(md %>% select(SiteID = Site, subset1, deshka, Region))
 
+metrics2 %>% filter(is.na(Region)) %>% distinct(SiteID)
 
 ```
+
+Add in species and life stage information from Dustin's point dataset in the AKSSF geodatabase.
+
+```{r add in species and life stages to sites}
+
+#just want attributes, not geometry
+sites_spls <- st_read(dsn = "T:\\Aquatic\\AKSSF\\AKSSF_Hydrography.gdb", 
+                      layer = "AKSSF_all_sites_sj_merge") %>% 
+  st_drop_geometry() %>% 
+  distinct(SiteID, sp_ls)
+
+#problem with siteid merge, bring in the data frame that fixes spatial
+# site ids so they match the data
+left_join(metrics2 %>% distinct(SiteID), sites_spls %>% 
+          distinct(SiteID) %>% mutate(spls = 1)) 
+
+site_join <- readRDS("data_preparation/spatial_ts_IDjoin.rds") %>% 
+  distinct(SiteID, ts_id)
+
+#great, no missing ids.
+left_join(sites_spls, site_join) %>% 
+  distinct(SiteID, ts_id) %>% 
+  filter(is.na(ts_id))
+
+sites_spls <- left_join(sites_spls, site_join)
+
+metrics3 <- left_join(metrics2 %>% mutate(SiteID = tolower(SiteID)), 
+          sites_spls %>% rename(spatial_SiteID = SiteID), by = c("SiteID" = "ts_id")) 
+
+
+metrics3 <- metrics3 %>% 
+   mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Sockeye = case_when(grepl("S_", sp_ls) ~ 1,
+                             TRUE ~ 0),
+         Chum = case_when(grepl("CH_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Pink = case_when(grepl("P_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Coho = case_when(grepl("CO_", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Spawning = case_when(grepl("_s", sp_ls) ~ 1,
+                          TRUE ~ 0),
+         Rearing = case_when(grepl("_r", sp_ls) ~ 1,
+                          TRUE ~ 0))
+```
+
+
+
 Save metrics data frame with the regions and subset1 on there.
 
 ```{r save metrics}
 
-saveRDS(metrics2, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
+saveRDS(metrics3, paste("output/metrics_", Sys.Date(), ".rds", sep = ""))
 
-metrics2 <- readRDS("output/metrics_2022-05-11.rds")
+metrics3 <- readRDS("output/metrics_2022-05-26.rds")
+
+#save a copy of the metrics for the zenodo entry.
+metrics2 %>% 
+  select(SiteID:Jun) %>% 
+  write_csv(file = "data_preparation/final_data/zenodo1/tempMetrics.csv")
 
 ```
 
@@ -119,7 +228,7 @@ metrics2 <- readRDS("output/metrics_2022-05-11.rds")
 Convert the metrics long form so can add a group name.
 
 ```{r add metric group name}
-mets_lg <- metrics2 %>% 
+mets_lg <- metrics3 %>% 
   pivot_longer(cols = MA7d_DAT:TempSens_Air.DayLen, names_to = "metric", values_to = "value") %>% 
   mutate(group = case_when(grepl("SIGMA|MxDIFF|SD|CV|RANGE", metric) ~ "Variability",
                            grepl("dur", metric) ~ "Duration",
@@ -136,26 +245,6 @@ mets_lg %>%
 Pairplots of different metrics by group. Good way to see outliers and correlations.
 
 ```{r pairplots}
-panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(0, 1, 0, 1))
-    r <- abs(cor(x, y, use = "complete.obs"))
-    txt <- format(c(r, 0.123456789), digits = digits)[1]
-    txt <- paste0(prefix, txt)
-    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
-    text(0.5, 0.5, txt, cex = cex.cor * r)
-}
-
-panel.hist <- function(x, ...)
-{
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(usr[1:2], 0, 1.5) )
-    h <- hist(x, plot = FALSE)
-    breaks <- h$breaks; nB <- length(breaks)
-    y <- h$counts; y <- y/max(y)
-    rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
-}
 
 mets_lg %>% 
   filter(group %in% c("Magnitude", "Timing"))  %>%
@@ -280,7 +369,7 @@ metrics2 %>%
 
 Obvious outlier on duration 20, but also check multiple outliers for 18. All of them seem valid, except for the Newhalen.
 
-* remove newhalen river 2015.
+* remove newhalen river 2015 -- note this has been done at top of this script.
 
 
 ```{r duration 18 outliers}
@@ -385,13 +474,32 @@ dev.off()
 
 Observations: 
 
-* kdk_eftrv01 2016 looks buried.
-* USFS_Ibeck Creek-Low has really large daily variation in 2016/2017, but not 18/19. This doesn't match with snow or precip.
-* USFS_Little Martin River looks buried for half of 2012 and 2018.
-* USFS_Power Creek looks buried for parts of 2016, 2018, and 2019.
-* UW_Nerka Sam Creek possible air temp in July 2013.
-* UW_Aleknagik Big Whitefish looks buried in 2012, but also other years with low daily range.
+* kdk_eftrv01 2016 looks buried, very muted compared to 3 other years of data.
+* USFS_Ibeck Creek-Low has really large daily variation in 2016/2017 on the order of 10-15C per day, but not 18/19. This doesn't match with snow or precip. Drop this site.
+* USFS_Little Martin River looks buried for half of 2012 and 2018, 2011 looks like some periods of air temps, drop those years, others look ok.
+* USFS_Power Creek looks buried for parts of 2013, 2016, 2017, 2018, and 2019. Still 4 years with good data, drop those years.
+* UW_Nerka Sam Creek possible air temp in July 2013. Drop that date.
+* UW_Aleknagik Big Whitefish looks buried in 2012. 2013 and 2016 also have very low daily range compared to 2011 and 2015. Drop this site?
+* usgs_15209700 - drop site, 1 year of data and all temps below 1!
 
+Some USFS sites with very stable or strange temp patterns:
+* solf lake fish pass very low daily range, but yet still gets relatively warm, lake outlet?
+
+* maybe send Luca a list of sites with these dailies and ask him if there are some to remove? Or go through locations and remove those that are super stable (all gw), or are closely associated with lake outlets.
+
+* review USFS and NPS site locations and remove any that are in lakes or lake outlets.
+
+
+```{r}
+sites_complete_summers %>%
+  group_by(SourceName, SiteID) %>% 
+  summarize(years = toString(Year))
+
+sites_complete_summers %>%
+  distinct(SourceName, SiteID, Year) %>% 
+  pivot
+  write_csv("output/site_review_TRAnalysis.csv")
+```
 
 
 ```{r}
@@ -450,13 +558,20 @@ Others to consider that aren't r > 0.8 with metrics above:
 mets_12 <- c("MA7d_DMT", "RANGE_MAX", "SIGMA_DMT", "SUM_13_DMT", "SUM_18_DMT", "dur13mx", "dur18mx",
              "MxDMT_jd", "MA7d_DMT_jd", "NDNT", "TempSens_Air.DayLen", "MnDAT")
 
+oldw <- getOption("warn")
+options(warn = -1)
+
+
 mets_lg %>% 
   # distinct(metric)
   filter(metric %in% mets_12) %>%
   select(-group) %>% 
   pivot_wider(names_from = metric, values_from = value) %>%
   select(MA7d_DMT:TempSens_Air.DayLen) %>% 
-  pairs(upper.panel = panel.cor, diag.panel = panel.hist)
+  pairs(., upper.panel = panel.cor, diag.panel = panel.hist)
+
+options(warn = oldw)
+
 ```
 
 Note that panel.cor function is using complete observations so this is a minimized dataset when we include TS. For TS, only 2011-2019 (at least in the model frame because MODIS ended in 19, Tim ran 20 as well). And we removed Deshka sites in 2017-2019 that were flooding the analysis. This is probably a good thing to use the same sites and and years that we are using for the next analysis. 
@@ -465,6 +580,26 @@ Note that panel.cor function is using complete observations so this is a minimiz
 * 420 sites if we exclude TS
 * 355 sites after removing extra deshka sites (subset 1), 1548 years
 
+# Thermal regimes without TS
+
+```{r read in data for analysis}
+metrics3 <- readRDS("output/metrics_2022-05-26.rds")
+
+mets_lg <- metrics3 %>% 
+  pivot_longer(cols = MA7d_DAT:TempSens_Air.DayLen, names_to = "metric", values_to = "value") %>% 
+  mutate(group = case_when(grepl("SIGMA|MxDIFF|SD|CV|RANGE", metric) ~ "Variability",
+                           grepl("dur", metric) ~ "Duration",
+                           grepl("SUM", metric) ~ "Frequency",
+                           grepl("jd", metric) ~ "Timing",
+                           grepl("TempSens", metric) ~ "Sensitivity",
+                           TRUE ~ "Magnitude")) 
+
+mets_12 <- c("MA7d_DMT", "RANGE_MAX", "SIGMA_DMT", "SUM_13_DMT", "SUM_18_DMT", "dur13mx", "dur18mx",
+             "MxDMT_jd", "MA7d_DMT_jd", "NDNT", "TempSens_Air.DayLen", "MnDAT")
+
+```
+
+
 Do Thermal regime analysis with all 420 sites and simply add pairwise correlation between TS and these 11 metrics as a result.
 
 ```{r count of sites}
@@ -472,32 +607,25 @@ mets_lg %>%
   filter(is.na(value)) %>% 
   count(metric, Year)
 
+mets_lg %>% distinct(metric)
+
 mets_lg %>% 
   filter(subset1 == 1) %>%
-  distinct(SiteID, Year)
-  distinct(SiteID, Region) %>% 
-  count(Region) %>% 
-  summarize(sum(n))
-
-
+  distinct(SiteID, Year) %>% 
+  count(SiteID)
 
 mets_lg %>% 
-  # distinct(metric)
-  filter(metric %in% mets_12) %>%
+  filter(metric %in% mets_12) %>% 
   select(-group) %>% 
   pivot_wider(names_from = metric, values_from = value) %>%
-  # filter(!is.na(TempSens_Air.DayLen)) %>% 
+  filter(!is.na(TempSens_Air.DayLen)) %>% 
   distinct(SiteID) #down to 305
 ```
 
 
-```{r cluster analysis}
+```{r scaled metrics}
 
-#get rid of deshka sites that overload analysis.
-mets_lg %>% 
-  distinct(SiteID, subset1) %>% 
-  count(subset1)
-
+#get rid of deshka sites that overload analysis and don't use TS
 
 mets11_scwd <- mets_lg %>%
   filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>% 
@@ -514,14 +642,24 @@ mets11_scwd <- mets_lg %>%
                                 metric == "MnDAT" ~ "Mean Temp.")) %>% 
   group_by(metric_lab) %>% 
   mutate(value_sc = scale(value)) %>% 
-  select(Region, SiteID, Year, metric_lab, value_sc) %>% 
+  select(Region, SiteID, Year, Chinook, Coho, Sockeye, Pink, Chum, Spawning, Rearing, metric_lab, value_sc) %>% 
   pivot_wider(names_from = metric_lab, values_from = value_sc)
 
 summary(mets11_scwd)
 
-mets11_dist <- dist(mets11_scwd %>% select(-SiteID, -Year, -Region))
+```
+
+```{r cluster analysis}
+
+mets11_dist <- dist(mets11_scwd %>% select(MWMT:`Tim. MWMT`))
 
 mets11_clust <- hclust(mets11_dist, method = "ward.D2") 
+
+mets11_tr <- bind_cols(mets11_scwd, 
+                       cutree(mets11_clust, k = 3:10) %>% 
+                         as_tibble() %>% 
+                         rename_with(.fn = ~ paste0("grp_", .x)))
+
 
 
 bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
@@ -545,11 +683,6 @@ bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 3)) %>%
   count(group, Region) %>% 
   ggplot(aes(x = as.factor(group), y = n, fill = Region)) +
   geom_col(position = position_dodge())
-
-temp_groups <- bind_cols(mets11_scwd %>% select(SiteID), grp4 = cutree(mets11_clust, k = 4), grp6 = cutree(mets11_clust, k = 6), grp3 = cutree(mets11_clust, k = 3))
-
-temp_groups %>% count(grp6) %>% mutate(percent = n/sum(n))
-
 
 #boxplots of metrics by thermal regime
 left_join(mets_lg, temp_groups) %>%
@@ -586,11 +719,11 @@ left_join(mets_lg, temp_groups) %>%
 ggsave("output/tr 6 group boxplots.jpeg", width = 6.5, height = 5.5)
 
 #percentage of thermal regimes by region
-bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
-  count(group, Region) %>%
+mets11_tr %>% 
+  count(grp_6, Region) %>%
   group_by(Region) %>% 
   mutate(percent = n/sum(n)) %>% 
-  ggplot(aes(x = Region, fill = as.factor(group), y = percent)) +
+  ggplot(aes(x = Region, fill = as.factor(grp_6), y = percent)) +
   geom_col() +
   theme_bw() +
   labs(y = "Percent", fill = "Stream Thermal Regimes") +
@@ -598,13 +731,27 @@ bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>%
 
 ggsave("output/tr by region.jpeg", width = 6.5, height = 5.5)
 
+
+#median values of metrics by group
+left_join(mets_lg, temp_groups) %>%
+  filter(subset1 == 1, metric %in% mets_12, !metric == "TempSens_Air.DayLen") %>%  
+  group_by(grp6, metric) %>% 
+  summarize(med = median(value)) %>% 
+  pivot_wider(names_from = metric, values_from = med)
+
+#save TR for Dean
+mets11_tr %>% 
+  select(Region, SiteID, Year, grp_6) %>% 
+  write_csv("output/Thermal_regimes_May22.csv")
+  
+
 ```
 
 Choosing the number of groups using nbclust package.
 
 ```{r choosing cluster solution}
 
-nbclust1 <- NbClust(data = mets11_scwd %>% select(-SiteID, -Year, -Region), min.nc = 2, max.nc = 10, method = "ward.D2", index = "all")
+nbclust1 <- NbClust(data = mets11_scwd %>% select(-(Region:Rearing)), min.nc = 2, max.nc = 10, method = "ward.D2", index = "all")
 
 ```
 
@@ -625,12 +772,14 @@ pca
 
 
 mets11_env <- mets11_scwd %>% 
-  select(Region, SiteID, Year) %>% 
-  mutate(Yearf = factor(Year))
+  select(Region:Rearing) %>% 
+  mutate(Yearf = factor(Year),
+         spf = factor(Spawning),
+         chf = factor(Chinook))
 
-pc1 <- prcomp(mets11_scwd %>% select(-Region, -SiteID, -Year)) 
+pc1 <- prcomp(mets11_scwd %>% select(-(Region:Rearing))) 
 
-pc2 <- princomp(mets11_scwd %>% select(-Region, -SiteID, -Year), cor = TRUE) 
+pc2 <- princomp(mets11_scwd %>% select(-(Region:Rearing)), cor = TRUE) 
 
 biplot(pc1)
 biplot(pc2)
@@ -643,17 +792,23 @@ autoplot(pc1, data = mets11_env, labels = TRUE, loadings.label = TRUE,
 
 
 #region ellipses
-autoplot(pc1, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
+autoplot(pc2, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
          loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black",
          frame = TRUE, frame.type = "t", frame.colour = 'Region', frame.alpha = 0) +
   theme_bw()
 
 
 autoplot(pc2, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
-         loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black",
-         frame = TRUE, frame.type = "t", frame.colour = 'Region', frame.alpha = 0) +
+         loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black") +
   theme_bw()
+
 ggsave("output/pca with regions.jpeg", width = 6.5, height = 4.5)
+
+
+autoplot(pc2, data = mets11_env, colour = "chf", labels = TRUE, loadings.label = TRUE, 
+         loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black") +
+  theme_bw()
+
 
 
 #point color by year
@@ -743,6 +898,47 @@ ggsave("output/metrics boxplot.jpeg", width = 6.5, height = 5.5)
 
 ```
 
+```{r metrics by species}
+
+ch1 <- mets_lg %>%
+  filter(subset1 == 1, metric %in% c("MA7d_DMT", "MA7d_DMT_jd", "SUM_13_DMT", "SIGMA_DMT")) %>%  
+  ggplot(aes(x = as.factor(Chinook), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metric, scales = "free_y", ncol = 1) +
+  theme_bw() +
+  theme(axis.title = element_blank()) 
+
+co1 <- mets_lg %>%
+  filter(subset1 == 1, metric %in% c("MA7d_DMT", "MA7d_DMT_jd", "SUM_13_DMT", "SIGMA_DMT")) %>%  
+  ggplot(aes(x = as.factor(Coho), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metric, scales = "free_y", ncol = 1) +
+  theme_bw() +
+  theme(axis.title = element_blank()) 
+
+so1 <- mets_lg %>%
+  filter(subset1 == 1, metric %in% c("MA7d_DMT", "MA7d_DMT_jd", "SUM_13_DMT", "SIGMA_DMT")) %>%  
+  ggplot(aes(x = as.factor(Sockeye), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metric, scales = "free_y", ncol = 1) +
+  theme_bw() +
+  theme(axis.title = element_blank()) 
+
+pi1 <- mets_lg %>%
+  filter(subset1 == 1, metric %in% c("MA7d_DMT", "MA7d_DMT_jd", "SUM_13_DMT", "SIGMA_DMT")) %>%  
+  ggplot(aes(x = as.factor(Pink), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metric, scales = "free_y", ncol = 1) +
+  theme_bw() +
+  theme(axis.title = element_blank()) 
+
+
+grid.arrange(ch1, co1, so1, pi1, ncol = 4)
+
+```
+
+
+
 
 ```{r dotplot}
 
@@ -758,6 +954,181 @@ mets_lg %>%
 
 ```
 
+Look at sites 
+
+```{r}
+mets_lg %>% 
+  filter(Year > 2000, metric == "MA7d_DAT") %>% 
+  group_by(SiteID) %>% 
+  mutate(yrct = n()) %>% 
+  filter(yrct > 14) %>% 
+  ggplot(aes(x = Year, y = value, color = SiteID)) +
+  geom_line(show.legend = FALSE)
+
+left_join(mets_lg, md %>% mutate(SiteID = tolower(Site)) %>% select(SiteID, Waterbody_name)) %>% 
+  filter(Year > 2000, metric == "MnDAT") %>% 
+  group_by(SiteID, Waterbody_name) %>% 
+  mutate(yrct = n()) %>% 
+  filter(yrct > 13) %>% 
+  ggplot(aes(x = Year, y = value, color = Waterbody_name)) +
+  geom_line()
+
+```
 
 
+# Thermal regimes WITH TS
+
+Run Thermal regime analysis with only 305 sites that we calculated TS for (2011-2019).
+
+```{r scaled metrics}
+
+#by including TS we also get rid of extra deshka sites that overload analysis.
+
+siteyear_keep <- mets_lg %>% 
+  filter(metric == "TempSens_Air.DayLen", !is.na(value)) %>%
+  distinct(SiteID, Year)
+
+mets12_scwd <- left_join(siteyear_keep, mets_lg) %>%
+  filter(metric %in% mets_12) %>% 
+  mutate(metric_lab = case_when(metric == "MA7d_DMT" ~ "MWMT",
+                                metric == "RANGE_MAX" ~ "Range",
+                                metric == "SIGMA_DMT" ~ "Var.",
+                                metric == "SUM_13_DMT" ~ "Sum 13",
+                                metric == "SUM_18_DMT" ~ "Sum 18",
+                                metric == "dur13mx" ~ "Dur. 13",
+                                metric == "dur18mx" ~ "Dur. 18",
+                                metric == "MxDMT_jd" ~ "Tim. Max. Daily",
+                                metric == "MA7d_DMT_jd" ~ "Tim. MWMT",
+                                metric == "NDNT" ~ "Min. Temp.",
+                                metric == "MnDAT" ~ "Mean Temp.",
+                                metric == "TempSens_Air.DayLen" ~ "Sensitivity")) %>% 
+  group_by(metric_lab) %>% 
+  mutate(value_sc = scale(value)) %>% 
+  select(Region, SiteID, Year, Chinook, Coho, Sockeye, Pink, Chum, Spawning, Rearing, metric_lab, value_sc) %>% 
+  pivot_wider(names_from = metric_lab, values_from = value_sc)
+
+summary(mets12_scwd)
+
+```
+
+```{r cluster analysis}
+
+mets12_dist <- dist(mets12_scwd %>% select(MWMT:Sensitivity))
+
+mets12_clust <- hclust(mets12_dist, method = "ward.D2") 
+
+mets12_tr <- bind_cols(mets12_scwd, 
+                       cutree(mets12_clust, k = 3:10) %>% 
+                         as_tibble() %>% 
+                         rename_with(.fn = ~ paste0("grp_", .x)))
+
+plot(mets12_clust)
+
+```
+
+Choosing the number of groups using nbclust package, which can run 30 metrics. Also using clusterboot from fpc package, which evaluates cluster stability. 
+
+```{r choosing cluster solution}
+
+nbclust2 <- NbClust(data = mets12_scwd %>% select(-(Region:Rearing)), min.nc = 2, max.nc = 10, 
+                    method = "ward.D2", index = "all")
+
+```
+
+```{r cluster stability}
+cb_results <- list()
+for(i in 2:10) {
+  cb <- clusterboot(data = mets12_scwd %>% select(MWMT:Sensitivity) %>% as.data.frame(),
+                    distances = FALSE, clustermethod = hclustCBI, method = "ward.D2", k = i)
+  cb_results[[i]] <- cb$bootmean
+  plotcluster(mets12_scwd %>% select(MWMT:Sensitivity) %>% as.data.frame(), cb$partition)
+}
+
+#2 groups has the highest mean stability
+lapply(cb_results, mean)
+cb_results[[3]]
+```
+
+
+```{r plots of tr}
+
+mets12_tr %>% 
+  ggplot(aes(x = as.factor(grp_6), fill = Region)) +
+  geom_bar(position = "fill")
+
+mets12_tr %>% 
+  ggplot(aes(x = Region, fill = as.factor(grp_6))) +
+  geom_bar(position = "fill")
+
+mets12_tr %>% 
+  count(group, Region) %>%
+  group_by(Region) %>% 
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = as.factor(grp_6), y = percent, fill = Region)) +
+  geom_col(position = position_dodge()) 
+
+mets12_tr %>% 
+  count(group, Region) %>%
+  group_by(Region) %>% 
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = as.factor(grp_6), y = percent, fill = Region)) +
+  geom_col(position = position_dodge()) 
+
+#boxplots of metrics by thermal regime
+left_join(mets12_tr %>% select(SiteID, Year, grp_3:grp_10), mets_lg) %>%
+  filter(metric %in% mets_12) %>%  
+  mutate(metricf = factor(metric, levels = c("MA7d_DMT",
+                                             "MnDAT",
+                                             "MxDMT_jd",
+                                             "MA7d_DMT_jd",
+                                             "SUM_13_DMT",
+                                             "SUM_18_DMT",
+                                             "dur13mx",
+                                             "dur18mx",
+                                             "NDNT",
+                                             "RANGE_MAX",
+                                             "SIGMA_DMT",
+                                             "TempSens_Air.DayLen"),
+                          labels = c("MWMT",
+                                     "Mean Temp.",
+                                     "Timing Max.Daily Temp.",
+                                     "Timing MWMT ",
+                                     expression("Days > 13°C"),
+                                     expression("Days > 18°C"),
+                                     "Duration 13°C",
+                                     "Duration 18°C",
+                                     "Min. Temp.",
+                                     "Max. Daily Range",
+                                     "Variance",
+                                     "Sensitivity")))  %>% 
+  ggplot(aes(x = as.factor(grp_6), y = value)) +
+  geom_boxplot(position = position_dodge()) +
+  facet_wrap(~metricf, scales = "free") +
+  theme_bw() +
+  labs(x = "Stream Thermal Regimes") +
+  theme(axis.title.y = element_blank())
+
+# ggsave("output/tr 6 group boxplots.jpeg", width = 6.5, height = 5.5)
+
+#percentage of thermal regimes by region
+mets12_tr %>% 
+  count(grp_6, Region) %>%
+  group_by(Region) %>% 
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = Region, fill = as.factor(grp_6), y = percent)) +
+  geom_col() +
+  theme_bw() +
+  labs(y = "Percent", fill = "Stream Thermal Regimes") +
+  theme(legend.position = "bottom")
+
+# ggsave("output/tr by region.jpeg", width = 6.5, height = 5.5)
+
+```
+
+
+# TR for CIK sites in Cook Inlet
+
+```{r}
+
+```
 

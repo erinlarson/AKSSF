@@ -174,9 +174,79 @@ pd_precip_slope
 
 
 int_vars <- c("snow_tc", "wtd_slope_MEAN")
-pd_snow_slope <- pdp::partial(brt_step_dl2, pred.var = int_vars, 
-              n.trees = 6150, train = brt_in_dl, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope <- pdp::partial(brt_bb, pred.var = int_vars, 
+              n.trees = 1000, train = brt_in_bb, plot = TRUE, chull = TRUE, rug = TRUE)
 pd_snow_slope
+
+int_vars <- c("snow_tc", "wtd_wet_per")
+pd_snow_wet <- pdp::partial(brt_bb, pred.var = int_vars, 
+              n.trees = 1000, train = brt_in_bb, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_wet
+
+
+```
+
+```{r bb brt tim cline data}
+bb_results
+
+brt_in_tc <- bb_results %>% 
+  as.data.frame() %>% 
+  dplyr::select(TempSensitivity, WatershedSlope, PcntNorthFacing,
+                             SnowResidual, CumulativeSummerPrecip)
+
+
+brt_tc <- gbm.step(gbm.y = 1, gbm.x = 2:5, 
+                   data = brt_in_tc,
+                   tree.complexity = 5, learning.rate = 0.005, bag.fraction = 0.5,
+                   n.folds = 10, family = "gaussian", max.trees = 30000,
+                   keep.fold.models = TRUE, keep.fold.vector = TRUE, 
+                   keep.fold.fit = TRUE)
+
+
+gbm.plot(brt_tc, smooth = TRUE, n.plots = 13) #plots of first order relationships
+
+brt_tc_simp <- gbm.simplify(brt_tc) 
+
+brt_tc_int <- gbm.interactions(brt_tc) #identifies interactions
+brt_tc_int$rank.list
+
+int_vars <- c("SnowResidual", "WatershedSlope")
+
+pd_snow_slope <- pdp::partial(brt_tc, pred.var = int_vars, 
+              n.trees = 1000, train = brt_in_tc, plot = TRUE, chull = TRUE, rug = TRUE)
+pd_snow_slope
+
+```
+
+Try predictions and evaluate effect size of snow for this model. This doesn't work because the scale of Tim's covariates is totally different than mine...they are correlated though. Possibly he transformed them somehow.
+
+```{r}
+hu12.df <- readRDS("output/hu12_covars.rds")
+
+brt_tc_preds <- hu12.df %>% 
+  mutate(WatershedSlope = wtd_slope_MEAN, 
+         PcntNorthFacing = wtd_north_per,
+         SnowResidual = snow_tc, 
+         CumulativeSummerPrecip = summer_precip) %>% 
+  select(HUC12, WatershedSlope, PcntNorthFacing, wtd_lcld_jd, SnowResidual, CumulativeSummerPrecip)
+
+         
+brt_tc_preds <- brt_tc_preds %>% 
+  mutate(preds = predict(brt_tc, newdata = brt_tc_preds))
+
+
+
+bind_rows(brt_tc_preds %>% 
+            group_by(HUC12) %>% 
+            slice_min(wtd_lcld_jd, with_ties = FALSE) %>% 
+            mutate(snow_year = "min"),
+          brt_tc_preds %>% 
+            group_by(HUC12) %>% 
+            slice_max(wtd_lcld_jd, with_ties = FALSE) %>% 
+            mutate(snow_year = "max")) %>%
+  arrange(HUC12)
+  ggplot(aes(x = preds_tc, color = snow_year)) +
+  geom_freqpoly() 
 
 ```
 

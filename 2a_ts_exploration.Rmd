@@ -21,12 +21,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(sf)
-library(tmap)
+# library(tmap)
 library(lubridate)
 library(ggpubr)
 library(nlme)
 library(e1071)
 library(car)
+library(readxl)
+library(gridExtra)
 ```
 
 
@@ -161,12 +163,12 @@ lcld.long <- lcld.df %>%
   select(-metric)
 
 #dput(colnames(sites.df))
-site_keep_cols <- c("SiteID", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
+site_keep_cols <- c("SiteID", "Region", "cat_ID_con", "site_max_acc", "site_acc_sqKm",
                     "Area_km2","area_diff","size_diff", "lat", "lon",
                     'str_ord','str_slope', "dist_coast_km", "ds_dist_outlet")
 
 sites.df <- sites.df %>% 
-  mutate( region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
+  mutate( Region = sub("_$","",gsub('[[:digit:]"]+', '', cat_ID_con)),
   size_diff =  case_when(area_diff >0~'Larger', area_diff <0~'Smaller',
                         TRUE~'No Change')) %>% 
   select(all_of(site_keep_cols), ts_id = ts_id_dm)
@@ -192,11 +194,13 @@ cov.df <- cov.df.raw %>%
 # Convert na to 0
 cov.df[is.na(cov.df)] <- 0
 
-cov.all <- left_join(sites.df %>% select(SiteID, ts_id, cat_ID_con, str_ord, str_slope, dist_coast_km),
+cov.all <- left_join(sites.df %>% select(SiteID, Region, ts_id, cat_ID_con, str_ord, str_slope, dist_coast_km),
                      cov.df)
 
 cov.all <- left_join(cov.all, lcld.long)
 summary(cov.all)
+
+# saveRDS(cov.all %>% select(SiteID, ts_id), "data_preparation/spatial_ts_IDjoin.rds")
 
 ```
 
@@ -233,11 +237,12 @@ Comparing modis output with snowtel.
 cov.all %>% 
   group_by(Region, Year) %>% 
   summarize(meanlcld = mean(wtd_lcld_jd)) %>% 
-  pivot_wider(names_from = Year, values_from = meanlcld, names_sort = TRUE)
+  pivot_wider(names_from = Year, values_from = meanlcld, names_sort = TRUE) 
 
 cov.all %>% 
+  filter(Region == "Cook_Inlet") %>% 
   ggplot() +
-  geom_freqpoly(aes(x = wtd_lcld_jd, after_stat(density), color = Region)) +
+  geom_freqpoly(aes(x = wtd_lcld_jd, after_stat(density))) +
   facet_wrap(~Year)
 
 
@@ -328,7 +333,7 @@ Sent the merge table to Dustin and he added the ts site ids (ts_id_dm) to the sp
 mod_dat <- dfa_ts %>% 
   mutate(site_lower = tolower(SiteID)) %>% 
   filter(Year %in% 2011:2019) %>% 
-  left_join(cov.all %>% select(-SiteID), by = c("site_lower" = "ts_id", "Year" = "Year")) 
+  left_join(cov.all %>% select(-SiteID, -Region), by = c("site_lower" = "ts_id", "Year" = "Year")) 
 
 ```
 
@@ -344,7 +349,7 @@ daymet %>% distinct(measurement)
 
 #correct conversion is date2 bc date example below has Jan 1 as day 0!
 daymet %>% 
-  filter(year == 2006, 
+  filter(year == 2011, 
          yday == 152) %>% 
   mutate(date = as.Date(yday, origin = paste0(year, "-01-01")),
          date2 = as.Date(paste(year, yday), format = "%Y %j"))
@@ -374,11 +379,13 @@ Look at sites with lots of negative TS as a check. original list of sites using 
 
 ```{r negative ts values}
 
+md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
+
 left_join(mod_dat, md %>% select(Site, Waterbody_name, SourceName)) %>% 
   filter(TempSens_Air.DayLen < 0) %>% 
-  group_by(Site, Waterbody_name) %>%
+  group_by(Site, Waterbody_name, wtd_glacier_per) %>%
   summarize(n = n(), mean_ts = mean(TempSens_Air.DayLen)) %>% 
-  arrange(desc(n))
+  arrange(mean_ts)
 
   
 # drop_sites <- c("NPS_Hardenburg_Bay", "usgs_15258000", "usgs_15260001", "USFS_Middle Arm Eyak")
@@ -558,11 +565,49 @@ ess_lme1_ints <- ess_lme1$coefficients$random$Year %>% as_tibble(rownames = "Yea
   rename(intercept = `(Intercept)`) %>% 
   mutate(Year = as.numeric(Year))
 
-mod_dat <- mod_dat %>% 
+mod_dat %>% 
+  mutate(snow_tc = (wtd_lcld_jd - 1.783443 * wtd_slope_MEAN)) %>% 
+  summary(snow_tc)
+
+
+
+mod_dat2 <- mod_dat %>% 
   left_join(ess_lme1_ints) %>% 
   mutate(snow_ind = ess_lme_resid,
          snow_ind_sq = ess_lme_resid2,
          snow_tc = intercept + (wtd_lcld_jd - 1.783443 * wtd_slope_MEAN))
+```
+
+10/13/22 Checking snow index and Tim's snow covariate.
+
+```{r compare to TC data}
+tc_cov <- read_csv("S:/Stream Temperature Data/Tim Cline UW/StreamGeomorphologyAndClimate.csv")
+tc_site_merge <- read_csv("W:/Github/SWSHP-Bristol-Bay-Thermal-Diversity/output/UW_site_merge_rs.csv")
+
+tc_cov <- left_join(tc_cov, tc_site_merge, by = c("Stream" = "tc"))
+
+tc_cov %>% select(Stream, uw)
+
+tc_compare <- left_join(tc_cov, mod_dat2 %>% filter(grepl("UW", Site)) %>% mutate(uw = gsub("UW_", "", Site))) 
+
+left_join(tc_cov %>% filter(grepl("Teal", uw)), mod_dat2 %>% filter(grepl("UW", Site)) %>% mutate(uw = gsub("UW_", "", Site)) %>% filter(grepl("Teal", uw)))
+
+tc_cov %>% filter(grepl("Teal", uw)) 
+
+mod_dat2 %>% filter(grepl("Teal", Site)) 
+
+saveRDS(tc_compare, "output/combined_bb_data.rds")
+
+tc_compare %>% 
+  filter(is.na(wtd_slope_MEAN))  
+
+```
+
+
+
+
+```{r}
+
 
 #check that snow index is now not correlated to watershed slope.
 mod_dat %>% 

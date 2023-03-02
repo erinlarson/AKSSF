@@ -1,0 +1,421 @@
+SiteID,Agency_ID,SourceName,Contact_person,Contact_email,Contact_telephone,Latitude,Longitude,Waterbody_name,Region
+accs_akbb-011,AKBB-011,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,60.6895,-154.86369,Victoria Creek,Bristol Bay
+accs_akbb-020,AKBB-020,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,60.49564,-154.38715,Little Mulchatna River,Bristol Bay
+accs_akbb-028,AKBB-028,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,60.26358,-155.14171,Unnamed Tributary to Koksetna River,Bristol Bay
+accs_akbb-029,AKBB-029,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.69252,-155.74731,Kaskanak Creek,Bristol Bay
+accs_akbb-040,AKBB-040,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,60.44236,-155.20805,Chilchitna River,Bristol Bay
+accs_ilbig01,ilbig01,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.975,-154.846,Big Creek,Bristol Bay
+accs_iltaz02,iltaz02,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.93596,-154.81134,Tazimina River,Bristol Bay
+accs_iltnr19,iltnr19,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.90227,-154.89095,Tributary to Newhalen River,Bristol Bay
+accs_mubon10,mubon10,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,60.69262,-154.86514,Bonanza Creek,Bristol Bay
+accs_muekm23,muekm23,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.8254299999999,-155.3571,Tributary to Koktuli River 4,Bristol Bay
+accs_musfk01,musfk01,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.82923,-155.77438,South Fork Koktuli River,Bristol Bay
+accs_mussm15,mussm15,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.79815,-155.51123,Tributary to Koktuli River 3,Bristol Bay
+accs_mustu17,mustu17,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.70342,-156.30147,Stuyahok River,Bristol Bay
+accs_mutsk02,mutsk02,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.817,-155.764919999999,Tributary to Koktuli River 2,Bristol Bay
+accs_mutsk09,mutsk09,uaaAKNHP,Dan Bogan,dlbogan@uaa.alaska.edu,907-786-4964,59.81045,-155.61197,Tributary to Koktuli River 1,Bristol Bay
+kdk_ayarv01,kdk_ayarv01,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.192829,-154.534208,Ayakulik River near weir,Kodiak
+kdk_busrv01,kdk_busrv01,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.776773,-152.537638,Buskin River (Lake outlet),Kodiak
+kdk_doscr01,kdk_doscr01,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.12917,-154.00167,Dog Salmon Creek,Kodiak
+kdk_doscr02,kdk_doscr02,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.20293,-154.05913,Dog Salmon Creek,Kodiak
+kdk_karrv01,kdk_karrv01,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.56483,-154.38083,Karluk River,Kodiak
+kdk_olgcr01a,kdk_olgcr01a,akDFGComFish,Heather Finkle,heather.finkle@alaska.gov,907-486-1848,57.058351,-154.356615,Olga Creek,Kodiak
+apu10,NA,APU,John Hagan,NA,NA,59.77182401,-151.8340092,NA,Cook Inlet
+apu11,NA,APU,John Hagan,NA,NA,59.71146647,-151.6874863,NA,Cook Inlet
+apu12,NA,APU,John Hagan,NA,NA,59.77855,-151.818427,NA,Cook Inlet
+apu5,NA,APU,John Hagan,NA,NA,59.79417038,-151.7295868,NA,Cook Inlet
+ar2,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.718333,-151.64095,NA,Cook Inlet
+cik1,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.75755,-151.779133,NA,Cook Inlet
+cik2,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.794833,-151.72875,NA,Cook Inlet
+cik3,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.71,-151.6975,NA,Cook Inlet
+cik4,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.8095,-151.724883,NA,Cook Inlet
+cik6,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.7175,-151.64065,NA,Cook Inlet
+pj mid,NA,KBRR,Steve Baird,sjbaird@alaska.edu,907-235-1594,59.750653,-151.713357,NA,Cook Inlet
+star 171 lower,NA,KBRR,Steve Baird,sjbaird@alaska.edu,907-235-1594,59.844918,-151.78505,NA,Cook Inlet
+star 171 upper,NA,KBRR,Steve Baird,sjbaird@alaska.edu,907-235-1594,59.839438,-151.781433,NA,Cook Inlet
+cik_ben courtney creek,Ben Courtney Creek,CIK,Sue Mauger,NA,NA,59.272417,-156.357567,Ben Courtney Creek,Bristol Bay
+cik_big creek,Big Creek,CIK,Sue Mauger,NA,NA,59.975,-154.846,Big Creek,Bristol Bay
+cik_copper river,Copper River,CIK,Sue Mauger,NA,NA,59.50208,-154.46576,Copper River,Bristol Bay
+cik_gibraltar river,Gibraltar River,CIK,Sue Mauger,NA,NA,59.42944,-154.83261,Gibraltar Creek,Bristol Bay
+cik_napotoli creek,Napotoli Creek,CIK,Sue Mauger,NA,NA,59.75672,-157.41901,Napotoli Creek,Bristol Bay
+cik_neilson creek,Neilson Creek,CIK,Sue Mauger,NA,NA,59.1522,-158.63428,Neilson Creek,Bristol Bay
+cik_panaruqak creek,Panaruqak Creek,CIK,Sue Mauger,NA,NA,59.45447,-157.31436,Panaruqak Creek,Bristol Bay
+cik_roadhouse creek,Roadhouse Creek,CIK,Sue Mauger,NA,NA,59.7573,-154.8499,Roadhouse Creek,Bristol Bay
+cik_silver salmon creek,Silver Salmon Creek,CIK,Sue Mauger,NA,NA,59.22543,-158.67343,Silver Salmon Creek,Bristol Bay
+cik_sivanguq creek,Sivanguq Creek,CIK,Sue Mauger,NA,NA,59.72696,-157.33818,Sivanguq Creek,Bristol Bay
+cik_squaw creek,Squaw Creek,CIK,Sue Mauger,NA,NA,59.043,-158.54695,Squaw Creek,Bristol Bay
+cik_tunravik creek,Tunravik Creek,CIK,Sue Mauger,NA,NA,59.47933,-157.25899,Tunravik Creek,Bristol Bay
+cik_yellow creek,Yellow Creek,CIK,Sue Mauger,NA,NA,59.1947,-156.703333,Yellow Creek,Bristol Bay
+cik_0,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.510674,-149.031524,Bodenburg Creek,Cook Inlet
+cik_1,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.227,-149.831,Ship Creek,Cook Inlet
+cik_10,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.561,-151.123,Beaver Creek,Cook Inlet
+cik_11,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.489,-151.044,Soldotna Creek,Cook Inlet
+cik_12,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.483,-151.131,Slikok Creek,Cook Inlet
+cik_13,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.768,-151.103,Bishop Creek,Cook Inlet
+cik_14,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.773,-151.834,Anchor River,Cook Inlet
+cik_15,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.033,-151.671,Deep Creek,Cook Inlet
+cik_16,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.918,-149.643,Resurrection Creek,Cook Inlet
+cik_17,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.439,-150.208,Hidden Creek,Cook Inlet
+cik_18,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.343,-151.912,English Bay River,Cook Inlet
+cik_19,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.389,-151.68,Seldovia River,Cook Inlet
+cik_2,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.085,-149.823,Rabbit Creek,Cook Inlet
+cik_20,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.195,-151.009,Nikolai Creek,Cook Inlet
+cik_21,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.291,-150.985,Shantatalik Creek,Cook Inlet
+cik_22,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.493,-149.7,Quartz Creek,Cook Inlet
+cik_23,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.49,-150.86,Funny River,Cook Inlet
+cik_24,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.799,-151.056,Fox Creek,Cook Inlet
+cik_25,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.229,-150.441,Moose Creek,Cook Inlet
+cik_26,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.079631,-150.583145,Chijuk Creek,Cook Inlet
+cik_27,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.563,-149.824,Meadow Creek,Cook Inlet
+cik_28,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.74,-150.32,Kroto (Deshka) Creek,Cook Inlet
+cik_29,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.266,-150.184,Trapper Creek,Cook Inlet
+cik_3,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.205,-149.896,Chester Creek,Cook Inlet
+cik_30,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.81,-150.099,Little Willow Creek,Cook Inlet
+cik_31,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.525,-149.527,Cottonwood Creek,Cook Inlet
+cik_32,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.529,-148.933,Jim Creek,Cook Inlet
+cik_33,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.128,-150.019,Montana Creek,Cook Inlet
+cik_34,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.78,-150.161,Willow Creek,Cook Inlet
+cik_35,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.553,-149.314,Wasilla Creek,Cook Inlet
+cik_36,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.762,-150.034,Deception Creek,Cook Inlet
+cik_37,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.682,-149.043,"Moose Creek, Mat R.",Cook Inlet
+cik_38,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.438,-149.781,Fish Creek,Cook Inlet
+cik_39,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.627,-150.227,Troublesome Creek,Cook Inlet
+cik_4,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.14,-149.923,North Fork Campbell Creek,Cook Inlet
+cik_40,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.711584,-150.204067,Byers Creek,Cook Inlet
+cik_41,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,63.145,-149.421,East Fork Chulitna,Cook Inlet
+cik_42,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.44,-150.596,Alexander Creek,Cook Inlet
+cik_43,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.389,-151.081,Cache Creek,Cook Inlet
+cik_44,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.266,-150.884,Theodore Creek,Cook Inlet
+cik_45,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.101,-151.19,Chuitna River,Cook Inlet
+cik_46,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.981842,-152.678593,Silver Salmon Creek,Cook Inlet
+cik_47,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.209,-154.19,Chenik Creek,Cook Inlet
+cik_48,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.117,-154.279,McNeil River,Cook Inlet
+cik_5,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.557,-150.735,Moose River,Cook Inlet
+cik_6,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.049,-151.656,Ninilchik River,Cook Inlet
+cik_7,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.792,-151.012,Swanson River,Cook Inlet
+cik_8,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,59.851,-151.787,Stariski Creek,Cook Inlet
+cik_9,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,60.316,-151.284,Crooked Creek,Cook Inlet
+deshka 1 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.91509,-150.36992,Deshka,Cook Inlet
+deshka 1 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.91618,-150.36372,NA,Cook Inlet
+deshka 1 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.91666,-150.36363,Deshka,Cook Inlet
+deshka 2 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.90107,-150.38951,Deshka,Cook Inlet
+deshka 2 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.90963,-150.38155,NA,Cook Inlet
+deshka 2 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.90868,-150.38022,Deshka,Cook Inlet
+deshka 3 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.88017,-150.40428,Deshka,Cook Inlet
+deshka 3 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.88331,-150.39966,NA,Cook Inlet
+deshka 3 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.88324,-150.3981,Deshka,Cook Inlet
+deshka 4 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.84959,-150.37936,Deshka,Cook Inlet
+deshka 4 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.84845,-150.37198,NA,Cook Inlet
+deshka 4 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.84958,-150.37354,Deshka,Cook Inlet
+deshka 5 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.84231,-150.38889,Deshka,Cook Inlet
+deshka 5 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.84713,-150.38457,NA,Cook Inlet
+deshka 6 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.75955,-150.32738,Deshka,Cook Inlet
+deshka 6 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.76447,-150.34129,NA,Cook Inlet
+deshka 6 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,61.76771,-150.33998,Deshka,Cook Inlet
+kroto 1 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.3148,-150.64053,Kroto,Cook Inlet
+kroto 1 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.31635,-150.64258,NA,Cook Inlet
+kroto 1 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.31633,-150.6422,Kroto,Cook Inlet
+kroto 2 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30549,-150.60518,Kroto,Cook Inlet
+kroto 2 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30655881,-150.606124,NA,Cook Inlet
+kroto 2 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30666002,-150.6065927,Kroto,Cook Inlet
+kroto 3 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.28924,-150.61356,Kroto,Cook Inlet
+kroto 3 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.29147311,-150.61224,NA,Cook Inlet
+kroto 3 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.29153587,-150.6129381,Kroto,Cook Inlet
+kroto 4 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.24855734,-150.6536575,Kroto,Cook Inlet
+kroto 4 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.25067,-150.6561,NA,Cook Inlet
+kroto 4 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.25079345,-150.6548105,Kroto,Cook Inlet
+kroto 5 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.13039987,-150.5348995,Kroto,Cook Inlet
+kroto 6 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.06857,-150.44186,Kroto,Cook Inlet
+kroto 6 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.06969,-150.43944,NA,Cook Inlet
+kroto 6 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.07063,-150.43915,Kroto,Cook Inlet
+kroto 7 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.04287,-150.44885,Kroto,Cook Inlet
+kroto 7 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.04502,-150.4519,NA,Cook Inlet
+kroto 7 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.04499,-150.45149,Kroto,Cook Inlet
+kroto 8 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.00478,-150.44333,Kroto,Cook Inlet
+kroto 8 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.01013,-150.44281,NA,Cook Inlet
+kroto 8 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.01034,-150.44243,Kroto,Cook Inlet
+moose 1 top of study,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.31549,-150.44893,NA,Cook Inlet
+moose 2 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30132,-150.4413,Moose,Cook Inlet
+moose 2 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30220627,-150.4468194,NA,Cook Inlet
+moose 2 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.30224,-150.44025,Moose,Cook Inlet
+moose 3 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.25145684,-150.4480768,Moose,Cook Inlet
+moose 3 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.25184276,-150.4473519,NA,Cook Inlet
+moose 3 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.25173,-150.44373,Moose,Cook Inlet
+moose 4 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.23250156,-150.4476579,Moose,Cook Inlet
+moose 4 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.23273,-150.4489,NA,Cook Inlet
+moose 4 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.23301,-150.44843,Moose,Cook Inlet
+moose 5 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.20885,-150.44841,Moose,Cook Inlet
+moose 5 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.20873,-150.45067,NA,Cook Inlet
+moose 5 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.2089,-150.45032,Moose,Cook Inlet
+moose 6 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.18815,-150.39894,Moose,Cook Inlet
+moose 6 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.18897446,-150.3977686,NA,Cook Inlet
+moose 6 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.18975,-150.39915,Moose,Cook Inlet
+moose 7 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.17027,-150.38069,Moose,Cook Inlet
+moose 7 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.17122,-150.38116,NA,Cook Inlet
+moose 7 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.17121,-150.38185,Moose,Cook Inlet
+moose 8 downstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.16509,-150.36917,Moose,Cook Inlet
+moose 8 tributary,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.16716,-150.36737,NA,Cook Inlet
+moose 8 upstream,NA,CIK,Sue Mauger,sue@inletkeeper.org,907-235-4068,62.16753061,-150.3678221,Moose,Cook Inlet
+omct1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.23766,-150.44043,NA,Cook Inlet
+omct2,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.21274,-150.47425,NA,Cook Inlet
+omct3,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.20447,-150.47516,NA,Cook Inlet
+omct4,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.20446,-150.47171,NA,Cook Inlet
+owl1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.2038,-150.47296,NA,Cook Inlet
+pgc1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.32581,-150.52113,NA,Cook Inlet
+pgc2,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.32371,-150.51942,NA,Cook Inlet
+pgct1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.32595,-150.51945,NA,Cook Inlet
+pmc1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31732,-150.43816,NA,Cook Inlet
+pmc2,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31568,-150.44839,NA,Cook Inlet
+pmct1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.3197,-150.46306,NA,Cook Inlet
+pnc1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31244,-150.34724,NA,Cook Inlet
+pnct1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.309854,-150.368684,NA,Cook Inlet
+pnct2,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31055,-150.37402,NA,Cook Inlet
+pnct4,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31178,-150.39187,NA,Cook Inlet
+pwmc1,NA,fwsAnchorage,Daniel Rinella,daniel_rinella@fws.gov,970-891-3783,62.31956,-150.44353,NA,Cook Inlet
+fws_580223156504200,580223156504200,fwsAlaskaWRD,Meg Perdue,NA,NA,58.03972,-156.84583,Egegik River,Bristol Bay
+fws_gelo,GELO,fwsakTogiakNWR,Doug Holt,NA,NA,59.36705,-160.34961,Gechiak River,Bristol Bay
+fws_kulr,KULR,fwsakTogiakNWR,Doug Holt,NA,NA,59.038453,-159.775178,Kulukak River,Bristol Bay
+fws_malr,MALR,fwsakTogiakNWR,Doug Holt,NA,NA,58.929731,-160.847661,Matogak River,Bristol Bay
+fws_nclo,NCLO,fwsakTogiakNWR,Doug Holt,NA,NA,59.273435,-160.003203,Nichols Creek,Bristol Bay
+fws_newhalen river,Newhalen River,FWS - Alaska Region Office of Subsistence Management,Don Rivard,NA,NA,59.91904,-154.8859,Newhalen River,Bristol Bay
+fws_oslr,OSLR,fwsakTogiakNWR,Doug Holt,NA,NA,58.8785,-161.193066666667,Osviak River,Bristol Bay
+fws_oslr2,OSLR2,fwsakTogiakNWR,Doug Holt,NA,NA,58.878497,-161.193039,Osviak River,Bristol Bay
+fws_pulo,PULO,fwsakTogiakNWR,Doug Holt,NA,NA,59.292777,-159.923683,Pungokepuk Creek,Bristol Bay
+fws_pulr,PULR,fwsakTogiakNWR,Doug Holt,NA,NA,59.259683,-160.190949,Pungokepuk Creek,Bristol Bay
+fws_sllr,SLLR,fwsakTogiakNWR,Doug Holt,NA,NA,58.647972,-161.733603,Slug River,Bristol Bay
+fws_tolo,TOLO,fwsakTogiakNWR,Doug Holt,NA,NA,59.52945,-159.712756,Togiak River,Bristol Bay
+fws_tolr,TOLR,fwsakTogiakNWR,Doug Holt,NA,NA,59.26595,-159.146166666667,Weary River,Bristol Bay
+fws_welr,WELR,fwsakTogiakNWR,Doug Holt,NA,NA,59.2241333333333,-159.125116666667,Weary River,Bristol Bay
+fws_welr2,WELR2,fwsakTogiakNWR,Doug Holt,NA,NA,59.224131,-159.125008,Weary River,Bristol Bay
+571005154134600,NA,fwsAlaskaWRD,Meg Perdue,margaret_perdue@fws.gov,907-786-3421,57.166935,-154.2287,Akalura River,Kodiak
+571221154040300,NA,fwsAlaskaWRD,Meg Perdue,margaret_perdue@fws.gov,907-786-3421,57.2058669999999,-154.0676,Dog Salmon River,Kodiak
+571343154244900,NA,fwsAlaskaWRD,Meg Perdue,margaret_perdue@fws.gov,907-786-3421,57.2331829999999,-154.411967,Ayakulik River,Kodiak
+572656154082400,NA,fwsAlaskaWRD,Meg Perdue,margaret_perdue@fws.gov,907-786-3421,57.4488899999999,-154.139999999999,Karluk River,Kodiak
+fws_kdk_aforv01,kdk_aforv01,FWS - Alaska Region Office of Subsistence Management,Don Rivard,Donald_Rivard@fws.gov,907-786-3882,58.08164,-152.82883,Afognak River,Kodiak
+fws_kdk_busrv01,kdk_busrv01,FWS - Alaska Region Office of Subsistence Management,Don Rivard,Donald_Rivard@fws.gov,907-786-3882,57.75585,-152.5043,Buskin River,Kodiak
+fws_long lake creek,Long Lake Creek,FWS - Alaska Region Office of Subsistence Management,Don Rivard,Donald_Rivard@fws.gov,907-786-3882,61.3838,-143.28775,Long Lake Creek,Copper
+fws_tanada creek,Tanada Creek,FWS - Alaska Region Office of Subsistence Management,Don Rivard,Donald_Rivard@fws.gov,907-786-3882,62.61417,-143.7785,Tanada Creek,Copper
+kdk_akacr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.165445,-154.228271,Akalura Creek,Kodiak
+kdk_akacr02,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.164741,-154.228263,Akalura Creek,Kodiak
+kdk_ayarv03,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.238657,-154.404393,Ayakulik River,Kodiak
+kdk_cancr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.278472,-153.991389,Canyon Creek,Kodiak
+kdk_cancr02,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.27894,-153.98987,Canyon Creek,Kodiak
+kdk_cascr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.277025,-154.00857,Cascade Creek,Kodiak
+kdk_concr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.26502,-154.314969,Connecticut Creek,Kodiak
+kdk_eftrv01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.350552,-153.972391,East Fork Thumb River,Kodiak
+kdk_falcr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.275132,-153.9843171,Falls Creek,Kodiak
+kdk_meacr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.298815,-154.04315,Meadow Creek,Kodiak
+kdk_omarv01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.27664,-153.993612,O'Malley River,Kodiak
+kdk_pincr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.31556,-154.20729,Pinnell Creek,Kodiak
+kdk_pincr02,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.31226197,-154.204942,Pinnell Creek,Kodiak
+kdk_relrv01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.267623,-154.411204,Red Lake River,Kodiak
+kdk_soucr01,NA,fwsakKodiakNWR,Bill Pyle,Bill_Pyle@fws.gov,907-487-0228,57.230169,-154.26392,Southeast Creek,Kodiak
+bm1,LBC-WL-2015,UAF,Ben Meyer,NA,NA,60.56045,-151.125556,NA,Cook Inlet
+bm10,MRR-WL-2015,UAF,Ben Meyer,NA,NA,60.45025,-149.98792,NA,Cook Inlet
+bm11,MRR1-WL-2016,UAF,Ben Meyer,NA,NA,60.4261,-149.99582,NA,Cook Inlet
+bm12,MRR2-WL-2016,UAF,Ben Meyer,NA,NA,60.39136,-149.99156,NA,Cook Inlet
+bm13,URR-WL-2015,UAF,Ben Meyer,NA,NA,60.3595,-149.89873,NA,Cook Inlet
+bm14,URR1-WL-2016,UAF,Ben Meyer,NA,NA,60.31956,-149.87888,NA,Cook Inlet
+bm2,MBC-WL-2015,UAF,Ben Meyer,NA,NA,60.57018,-151.10335,NA,Cook Inlet
+bm3,UBC-WL-2015,UAF,Ben Meyer,NA,NA,60.61534,-151.08607,NA,Cook Inlet
+bm6,LPC-WL-2015,UAF,Ben Meyer,NA,NA,60.403722,-149.369611,NA,Cook Inlet
+bm7,MPC-WL-2015,UAF,Ben Meyer,NA,NA,60.414056,-149.34663,NA,Cook Inlet
+bm8,UPC-WL-2015,UAF,Ben Meyer,NA,NA,60.41199,-149.3076,NA,Cook Inlet
+bm9,LRR-WL-2015,UAF,Ben Meyer,NA,NA,60.485222,-149.99651,NA,Cook Inlet
+kwf1,BC_KWF,KWF,Brandon Borneman,NA,NA,60.5603,-151.125767,NA,Cook Inlet
+kwf2,PC_KWF,KWF,Brandon Borneman,NA,NA,60.404832999999996,-149.362317,NA,Cook Inlet
+kwf3,RR_KWF,KWF,Brandon Borneman,NA,NA,60.453,-149.986767,NA,Cook Inlet
+kdk_bigcr01,kdk_bigcr01,TribAlutiiqOldHarbor,Jeff Davis,arri@arrialaska.org,907-317-5431,57.247723,-153.301335,Big Creek,Kodiak
+kdk_karrv02,kdk_karrv02,TribLarsenBay,Mary Nelson,larsenbaytribe@gmail.com,907-847-2207,57.538372,-154.15422,Karluk River,Kodiak
+lsarc,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.782138,-149.18937,Archangel Creek,Cook Inlet
+lscoa,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.656238,-149.473032,Coal Creek,Cook Inlet
+lscoh,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.628133,-149.787498,Coho Creek,Cook Inlet
+lsgov,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.668557,-149.333133,Government Creek,Cook Inlet
+lslak,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.626452,-149.937162,Lake Creek,Cook Inlet
+lslak7,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.67049,-149.98413,Lake Creek,Cook Inlet
+lslil10,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.706588000000004,-150.000808,lslil10,Cook Inlet
+lsmoo1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.65352,-149.49865,Moon Princess Creek,Cook Inlet
+lsnlt10,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.685982,-149.9727,Tributary to Nancy Lakes,Cook Inlet
+lspap,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.557807,-150.11386,Papoose Creek,Cook Inlet
+lsr100,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.666997,-149.338823,Little Susitna River,Cook Inlet
+lsr103,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.67747,-149.27101,Little Susitna River,Cook Inlet
+lsr106,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.709558,-149.231498,Little Susitna River,Cook Inlet
+lsr112,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.77361,-149.204107,Little Susitna River,Cook Inlet
+lsr112.2,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.77987,-149.19394,Little Susitna River,Cook Inlet
+lsr112.4,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.782203,-149.188073,Little Susitna River,Cook Inlet
+lsr28,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.43731,-150.17555,Little Susitna River,Cook Inlet
+lsr28.3,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.440751,-150.172541,Little Susitna River,Cook Inlet
+lsr33,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.466261,-150.14287,Little Susitna River,Cook Inlet
+lsr33.1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.47212,-150.13939,Little Susitna River,Cook Inlet
+lsr33.8,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.46991,-150.14108,Little Susitna River,Cook Inlet
+lsr47,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.563507,-150.124787,Little Susitna River,Cook Inlet
+lsr48.1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.55983,-150.11182,Little Susitna River,Cook Inlet
+lsr48.3,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.55852,-150.11078,Little Susitna River,Cook Inlet
+lsr59,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.604542,-149.991972,Little Susitna River,Cook Inlet
+lsr63.1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.62426,-149.94444,Little Susitna River,Cook Inlet
+lsr63.4,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.62484,-149.93958,Little Susitna River,Cook Inlet
+lsr67,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.619537,-149.871517,Little Susitna River,Cook Inlet
+lsr73,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.62688,-149.79404,Little Susitna River,Cook Inlet
+lsr73.1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.6268,-149.7914,Little Susitna River,Cook Inlet
+lsr73.2,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.625855,-149.789445,Little Susitna River,Cook Inlet
+lsr87,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.64631,-149.58609,Little Susitna River,Cook Inlet
+lsr89,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.64779,-149.537918,Little Susitna River,Cook Inlet
+lsr93,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.655185,-149.46607,Little Susitna River,Cook Inlet
+lsswi1,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.649845,-149.51172,Swiftwater Creek,Cook Inlet
+lstrb33,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.472883,-150.13757,Tributary to Little Susitna River,Cook Inlet
+lstrb36,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.497963,-150.135783,Tributary to Little Susitna River,Cook Inlet
+lstrb88,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.65021,-149.564815,Tributary to Little Susitna River,Cook Inlet
+lstrb97,NA,uaaAKNHP,Dan Bogan,dlbogan@alaska.edu,907-786-4964,61.664262,-149.385608,Tributary to Little Susitna River,Cook Inlet
+nps_katm_idavc_stream_water,KATM_idavc_stream_water,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,58.66621,-155.67084,Idavain Creek,Bristol Bay
+nps_katm_lbrooo,KATM_lbrooo_temp,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,58.5478,-155.795322,Lake Brooks,Bristol Bay
+nps_katm_margc_stream_water,KATM_margc_stream_water,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,58.4859344835,-155.577723084,Margot Creek,Bristol Bay
+nps_katm_naknlo,KATM_naknlo_temp,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,58.68184,-156.43503,Naknek Lake,Bristol Bay
+nps_katm_savor_stream_water,KATM_savor_stream_water,npsSWAN,Krista Bartz,NA,NA,58.5295,-155.30368000000001,Savonoski River,Bristol Bay
+nps_katm_upatc_stream_water,KATM_upatc_stream_water,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,58.5113383745,-155.803890375,Up-A-Tree Creek,Bristol Bay
+nps_lacl_kijilo,LACL_kijilo_temp,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,60.30716,-154.2906,Kijik Lake,Bristol Bay
+nps_lacl_tazir_stream_water,LACL_tazir_stream_water,npsSWAN,Krista Bartz,krista_bartz@nps.gov,907-644-3685,59.934737,-154.835196,Tazimina River,Bristol Bay
+nps_lacl_tlikr_stream_water,LACL_tlikr_stream_water,npsSWAN,Krista Bartz,NA,NA,60.49937,-153.68665,Tlikikila River,Bristol Bay
+nps_chulitna_siteb,Chulitna River,npsakLakeClarkNP,Dan Young,dan_young@nps.gov,907-644-3629,60.18552667,-154.8296432,Chulitna River,Bristol Bay
+nps_hardenburg_bay,Hardenburg Bay,npsakLakeClarkNP,Dan Young,dan_young@nps.gov,907-644-3629,60.204378,-154.307097,Lake Clark,Bristol Bay
+nps_little_kijik_river_dan,Little Kijik River below Kijik Lake,npsakLakeClarkNP,Dan Young,dan_young@nps.gov,907-644-3629,60.307515,-154.294991,Little Kijik River,Bristol Bay
+nps_newhalen_river,Newhalen River,npsakLakeClarkNP,Dan Young,dan_young@nps.gov,907-644-3629,59.919518,-154.885521,Newhalen River,Bristol Bay
+nps_six_mile_outlet,Sixmile Lake outlet,npsakLakeClarkNP,Dan Young,dan_young@nps.gov,907-644-3629,59.9463,-154.862584,Sixmile Lake,Bristol Bay
+nps_caribou creek,Caribou Creek,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,62.573112,-143.517448,Caribou Creek,Copper
+nps_crystal creek,Crystal Creek,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,61.366593,-143.429155,Crystal Creek,Copper
+nps_gilahina river,Gilahina River,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,61.438616,-143.718336,Gilahina River,Copper
+nps_lakina river,Lakina River,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,61.37528,-143.34658,Lakina River,Copper
+nps_long lake creek,Long Lake Creek,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,61.377462,-143.313945,Long Lake Creek,Copper
+nps_rock creek wrst,Rock Creek WRST,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,62.565077,-143.432676,Rock Creek,Copper
+nps_rufus creek,Rufus Creek,npsCAKN,Trey Simmons,Trey_Simmons@nps.gov,907-455-0666,62.659614,-143.84301,Rufus Creek,Copper
+nv_eyak_hartney creek,Hartney Creek,nvEyak,James Paley,james.paley@eyak-nsn.gov,NA,60.501592,-145.841728,Hartney Creek,Prince William Sound
+nv_eyak_heney creek,Heney Creek,nvEyak,James Paley,james.paley@eyak-nsn.gov,NA,60.523277,-145.778896,Heney Creek,Prince William Sound
+pwscc_erb,PWSCC_Erb,PWSCC,Pete Rand,psrand@gmail.com,NA,60.37702,-148.152,Erb Creek,Prince William Sound
+pwscc_gilmour,PWSCC_Gilmour,PWSCC,Pete Rand,psrand@gmail.com,NA,60.27138,-147.187,Gilmour Creek,Prince William Sound
+pwscc_hogan,PWSCC_Hogan,PWSCC,Pete Rand,psrand@gmail.com,NA,60.20842,-147.762,Hogan Creek,Prince William Sound
+pwscc_stockdale,PWSCC_Stockdale,PWSCC,Pete Rand,psrand@gmail.com,NA,60.30413,-147.183,Stockdale Creek,Prince William Sound
+usfs_18 mile,18 Mile,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.459915,-145.293891,18 Mile Creek,Copper
+usfs_18 mile middle fork,18 Mile Middle Fork,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.461103,-145.308159,18 Mile Creek,Copper
+usfs_18 mile west fork,18 Mile West Fork,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.462392,-145.32135,18 Mile Creek,Copper
+usfs_24.9 mile creek,24.9 Mile Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.441748,-145.135752,24.9 Mile Creek,Copper
+usfs_25 mile,25 Mile,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.442572,-145.120855,25 Mile Creek,Copper
+usfs_bench creek,Bench Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.686736,-149.230125,Bench Creek,Cook Inlet
+usfs_blackhole creek,Blackhole Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.447506,-145.239497,Blackhole Creek,Copper
+usfs_cabin lake outlet,Cabin Lake Outlet,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.526771,-145.460427,Cabin Lake Outlet,Copper
+usfs_center creek,Center Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.716129,-149.282707,Center Creek,Cook Inlet
+usfs_chickaloon headwaters,Chickaloon Headwaters,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.632766,-149.886354,Chickaloon River,Cook Inlet
+usfs_crescent creek,Crescent Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.497764,-149.6875,Crescent Creek,Cook Inlet
+usfs_daves creek,Daves Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.5,-149.683,Daves Creek,Cook Inlet
+usfs_eagle creek,Eagle Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.457203,-146.566161,Eagle Creek,Prince William Sound
+usfs_hell's hole trib,Hell's Hole Trib,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.71769,-146.386732,Hell's Hole Tributary,Prince William Sound
+usfs_hook point,Hook Point,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.349561,-146.263261,Hook Point,Copper
+usfs_ibeck creek-low,Ibeck Creek-Low,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.549901,-145.498861,Ibeck Creek,Copper
+usfs_jackpot river,Jackpot River,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.416087,-148.245992,Jackpot River,Prince William Sound
+usfs_juneau creek,Juneau Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.48705,-149.881306,Juneau Creek,Cook Inlet
+usfs_koppen creek,Koppen Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.706541,-145.897486,Koppen Creek,Prince William Sound
+usfs_little martin river,Little Martin River,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.397048,-144.60513,Little Martin River,Copper
+usfs_martin lake- inlet,Martin Lake- Inlet,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.342737,-144.519326,Martin Lake,Copper
+usfs_middle arm eyak,Middle Arm Eyak,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.555899,-145.642909,Eyak Lake,Copper
+usfs_olsen creek,Olsen Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.759608,-146.175184,Olsen Creek,Prince William Sound
+usfs_pigot bay spawn channel,Pigot Bay Spawn Channel,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.857839,-148.395377,Pigot Bay Channel,Prince William Sound
+usfs_power creek,Power Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.586624,-145.620874,Power Creek,Copper
+usfs_quartz creek,Quartz Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.508205,-149.682556,Quartz Creek,Cook Inlet
+usfs_resurrection creek,Resurrection Creek,usfsakChugach,Angela Coleman,ajcoleman@fs.fed.us,907-288-7728,60.918092,-149.64687,Resurrection Creek,Cook Inlet
+usfs_rude river sc,Rude River SC,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.662712,-145.608051,Rude River,Prince William Sound
+usfs_salmon creek,Salmon Creek,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.454759,-145.173191,Salmon Creek,Copper
+usfs_sheep river,Sheep River,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.716494,-145.901306,Sheep River,Prince William Sound
+usfs_shelter bay trib,Shelter Bay Trib,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.427341,-146.635434,Shelter Bay tributary,Prince William Sound
+usfs_solf lake fish pass,Solf Lake Fish Pass,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,60.431491,-147.729337,Solf Lake,Prince William Sound
+usfs_stump lake outlet,Stump Lake Outlet,usfsakChugach,Luca Adelfio,ladelfio@fs.fed.us,907-424-4753,59.872786,-147.45236,Stump Lake Outlet,Prince William Sound
+usgs_15200280,15200280,USGS,Jeff Conaway,NA,NA,62.5203918,-145.5330154,GULKANA R AT SOURDOUGH AK,Copper
+usgs_15209700,15209700,USGS,NA,NA,NA,61.43372656,-142.9426256,WF KENNICOTT R AT MCCARTHY AK,Copper
+usgs_15215900,15215900,USGS,Jeff Conaway,NA,NA,60.5327973,-145.3806148,GLACIER R TRIB NR CORDOVA AK,Copper
+usgs_15236900,15236900,USGS,NA,NA,NA,60.36995858,-148.8987624,WOLVERINE C NR LAWING AK,Prince William Sound
+usgs_15237030,15237030,USGS,NA,NA,NA,60.45188889,-148.108,ESHAMY C AT ESHAMY LAKE OUTLET NR WHITTIER AK,Prince William Sound
+usgs_15238450,15238450,USGS,NA,NA,NA,60.1093333,-149.4546667,MARATHON C NR SEWARD AK,Prince William Sound
+usgs_15238984,15238984,USGS,Jeff Conaway,NA,NA,59.7521805,-150.9560085,SF BATTLE C NR HOMER AK,Cook Inlet
+usgs_15238986,15238986,USGS,NA,NA,NA,59.76173646,-150.955177,BATTLE C 1.0 MI AB MOUTH NR HOMER AK,Cook Inlet
+usgs_15239070,15239070,USGS,Jeff Conaway,NA,NA,59.80107399,-150.8849079,BRADLEY R NR TIDEWATER NR HOMER AK,Cook Inlet
+usgs_15241600,15241600,USGS,Jeff Conaway,NA,NA,60.04841667,-151.6649167,NINILCHIK R AT NINILCHIK AK,Cook Inlet
+usgs_15258000,15258000,USGS,Jeff Conaway,NA,NA,60.49219269,-149.8099203,KENAI R AT COOPER LANDING AK,Cook Inlet
+usgs_15260001,15260001,USGS,Jeff Conaway,NA,NA,60.43441667,-149.8245278,COOPER C AT SIPHON OUTLET NR COOPER LANDING AK,Cook Inlet
+usgs_15261000,15261000,USGS,Jeff Conaway,NA,NA,60.4799795,-149.882711,COOPER C AT MOUTH NR COOPER LANDING AK,Cook Inlet
+usgs_15266110,15266110,USGS,Jeff Conaway,NA,NA,60.466099,-150.60109,KENAI R BL SKILAK LK OUTLET NR STERLING AK,Cook Inlet
+usgs_15266300,15266300,USGS,Jeff Conaway,NA,NA,60.4769289,-151.0816675,KENAI R AT SOLDOTNA AK,Cook Inlet
+usgs_15272380,15272380,USGS,Jeff Conaway,NA,NA,60.8974833,-148.9241074,TWENTYMILE R BL GLACIER R NR PORTAGE AK,Cook Inlet
+usgs_15274000,15274000,USGS,Jeff Conaway,NA,NA,61.16667096,-149.7727527,SF CAMPBELL C NR ANCHORAGE AK,Cook Inlet
+usgs_15276000,15276000,USGS,Jeff Conaway,NA,NA,61.22500619,-149.6372008,SHIP C NR ANCHORAGE AK,Cook Inlet
+usgs_15280999,15280999,USGS,NA,NA,NA,61.52338889,-149.0418889,PALMER (BODENBURG) C AT E DILLY AVE NR PALMER AK,Cook Inlet
+usgs_15283700,15283700,USGS,Jeff Conaway,NA,NA,61.68438889,-149.0524167,MOOSE C NR PALMER AK,Cook Inlet
+usgs_15284000,15284000,USGS,NA,NA,NA,61.6086312,-149.0730432,MATANUSKA R AT PALMER AK,Cook Inlet
+usgs_15285000,15285000,USGS,Jeff Conaway,NA,NA,61.64307278,-149.1983305,WASILLA C NR PALMER AK,Cook Inlet
+usgs_15290000,15290000,USGS,Jeff Conaway,NA,NA,61.7097433,-149.231938,L SUSITNA R NR PALMER AK,Cook Inlet
+usgs_15291000,15291000,USGS,Jeff Conaway,NA,NA,63.1034383699999,-147.5180902,SUSITNA R NR DENALI AK,Cook Inlet
+usgs_15291700,15291700,USGS,Jeff Conaway,NA,NA,62.8233333,-148.6047222,SUSITNA R AB TSUSENA C NR CHULITNA AK,Cook Inlet
+usgs_15292100,15292100,USGS,Jeff Conaway,NA,NA,62.3986618,-150.1355954,SUSITNA R NR TALKEETNA AK,Cook Inlet
+usgs_15292400,15292400,USGS,Jeff Conaway,NA,NA,62.55810837,-150.23616,CHULITNA R NR TALKEETNA AK,Cook Inlet
+usgs_15292700,15292700,USGS,Jeff Conaway,NA,NA,62.3464388,-150.019201,TALKEETNA R NR TALKEETNA AK,Cook Inlet
+usgs_15292780,15292780,USGS,Jeff Conaway,NA,NA,62.1748474,-150.1726719,SUSITNA R AT SUNSHINE AK,Cook Inlet
+usgs_15292800,15292800,USGS,Jeff Conaway,NA,NA,62.1047619,-150.0597486,MONTANA C NR MONTANA AK,Cook Inlet
+usgs_15293200,15293200,USGS,Jeff Conaway,NA,NA,61.92388889,-150.0713889,KASHWITNA R NR WILLOW AK,Cook Inlet
+usgs_15294005,15294005,USGS,Jeff Conaway,NA,NA,61.78030346,-149.8866786,WILLOW C NR WILLOW AK,Cook Inlet
+usgs_15294080,15294080,USGS,NA,NA,NA,62.1328333,-150.5386667,KROTO CREEK AT OILWELL ROAD NEAR TRAPPER CREEK AK,Cook Inlet
+usgs_15294345,15294345,USGS,Jeff Conaway,NA,NA,61.6980747,-150.6527885,YENTNA R NR SUSITNA STATION AK,Cook Inlet
+usgs_15294350,15294350,USGS,Jeff Conaway,NA,NA,61.5441796,-150.5147329,SUSITNA R AT SUSITNA STATION AK,Cook Inlet
+usgs_15295700,15295700,USGS,Jeff Conaway,NA,NA,57.69397807,-153.1639087,TERROR R AT MOUTH NR KODIAK AK,Kodiak
+usgs_15297475,15297475,USGS,NA,NA,NA,57.81592178,-152.6244165,RED CLOUD R TR NR KODIAK AK,Kodiak
+usgs_15298040,15298040,USGS,Jeff Conaway,NA,NA,60.2036591,-154.7044349,CHULITNA R 5MI AB MOUTH NR PORT ALSWORTH AK,Bristol Bay
+usgs_15300100,15300100,USGS,Jeff Conaway,NA,NA,59.8237617,-154.8844049,BEAR C NR ILIAMNA AK,Bristol Bay
+usgs_15300250,15300250,USGS,Jeff Conaway,NA,NA,59.7859761,-155.2552406,UPPER TALARIK C NR ILIAMNA AK,Bristol Bay
+usgs_15300270,15300270,USGS,Jeff Conaway,NA,NA,59.84155048,-154.3796745,CHEKOK C NR PEDRO BAY AK,Bristol Bay
+usgs_15300300,15300300,USGS,Jeff Conaway,NA,NA,59.7579499,-153.8468866,ILIAMNA R NR PEDRO BAY AK,Bristol Bay
+usgs_15300320,15300320,USGS,Jeff Conaway,NA,NA,59.70379507,-153.712188,CHINKELYES C BL SUMMIT LK NR PEDRO BAY AK,Bristol Bay
+usgs_15301500,15301500,USGS,NA,NA,NA,60.1539944,-158.7366923,ALLEN R NR ALEKNAGIK AK,Bristol Bay
+usgs_15302000,15302000,USGS,Jeff Conaway,NA,NA,59.93483,-158.1900062,NUYAKUK R NR DILLINGHAM AK,Bristol Bay
+usgs_15302200,15302200,USGS,Jeff Conaway,NA,NA,59.7926376,-155.5246895,KOKTULI R NR ILIAMNA AK,Bristol Bay
+usgs_15302250,15302250,USGS,Jeff Conaway,NA,NA,59.8424682,-155.7185564,NF KOKTULI R NR ILIAMNA AK,Bristol Bay
+usgs_15302300,15302300,USGS,NA,NA,NA,59.8376227,-156.6938693,MULCHATNA R AB STUYAHOK R NR NEW STUYAHOK AK,Bristol Bay
+usgs_15302320,15302320,USGS,NA,NA,NA,59.80901149,-156.6669229,STUYAHOK R NR NEW STUYAHOK AK,Bristol Bay
+usgs_15302812,15302812,USGS,NA,NA,NA,59.415,-157.8041667,KOKWOK R 22 MI AB NUSHAGAK R NR EKWOK AK,Bristol Bay
+uw_nerka allah creek,NA,uwASP,NA,NA,NA,59.42976,-158.65941,Allah,Bristol Bay
+uw_aleknagik bear creek,NA,uwASP,NA,NA,NA,59.295787,-158.778379,NA,Bristol Bay
+uw_nerka beaver creek,NA,uwASP,NA,NA,NA,59.55437,-158.58325,Beaver,Bristol Bay
+uw_nerka bug creek,NA,uwASP,NA,NA,NA,59.46354,-158.88681,Bug,Bristol Bay
+uw_little togiak c creek,NA,uwASP,NA,NA,NA,59.582279,-159.153905,C,Bristol Bay
+uw_aleknagik eagle creek,NA,uwASP,NA,NA,NA,59.3171212,-158.694184,Eagle,Bristol Bay
+uw_nerka fenno creek,NA,uwASP,NA,NA,NA,59.421831,-158.81088,Fenno,Bristol Bay
+uw_aleknagik pfifer creek,NA,uwASP,NA,NA,NA,59.20665,-158.667514,Pfifer,Bristol Bay
+uw_aleknagik hansen creek,NA,uwASP,NA,NA,NA,59.321524,-158.701816,Hansen,Bristol Bay
+uw_aleknagik happy creek,NA,uwASP,NA,NA,NA,59.323232,-158.717744,NA,Bristol Bay
+uw_nerka hidden lake creek,NA,uwASP,NA,NA,NA,59.53995,-158.767329,Hidden,Bristol Bay
+uw_aleknagik ice creek,NA,uwASP,NA,NA,NA,59.33165,-158.814027,Ice,Bristol Bay
+uw_nerka joe creek,NA,uwASP,NA,NA,NA,59.59677,-158.87573,Joe,Bristol Bay
+uw_nerka kema creek,NA,uwASP,NA,NA,NA,59.545584,-158.656191,Kema,Bristol Bay
+uw_nerka lynx creek cold tributary,NA,uwASP,NA,NA,NA,59.493917,-158.897689,Lynx Creek - cold trib,Bristol Bay
+uw_aleknagik mission creek,NA,uwASP,NA,NA,NA,59.274915,-158.599688,Mission,Bristol Bay
+uw_nerka bear creek,NA,uwASP,NA,NA,NA,59.470019,-158.665864,Bear (Nerka) Creek,Bristol Bay
+uw_nerka sam creek,NA,uwASP,NA,NA,NA,59.58922,-158.89537,Sam,Bristol Bay
+uw_nerka seventh creek,NA,uwASP,NA,NA,NA,59.579615,-158.914344,7th,Bristol Bay
+uw_aleknagik silver salmon creek,NA,uwASP,NA,NA,NA,59.22548,-158.673937,Silver Salmon,Bristol Bay
+uw_nerka sixth creek,NA,uwASP,NA,NA,NA,59.576886,-158.923206,6th,Bristol Bay
+uw_nerka stovall creek,NA,uwASP,NA,NA,NA,59.458751,-158.635026,Stovall,Bristol Bay
+uw_aleknagik big whitefish creek,NA,uwASP,NA,NA,NA,59.265797,-158.681275,Whitefish,Bristol Bay
+uw_aleknagik yako creek,NA,uwASP,NA,NA,NA,59.274879,-158.708334,Yako,Bristol Bay
+uw_nerka berm creek,NA,uwASP,NA,NA,NA,59.598938,-158.81484,NA,Bristol Bay
+uw_nerka cabin creek,NA,uwASP,NA,NA,NA,59.595289,-158.847155,NA,Bristol Bay
+uw_nerka cottonwood creek,NA,uwASP,NA,NA,NA,59.625638,-159.079365,Cottonwood Creek,Bristol Bay
+uw_kulik k-3 creek,NA,uwASP,NA,NA,NA,59.79739,-158.946055,K3,Bristol Bay
+uw_nerka lynx creek,NA,uwASP,NA,NA,NA,59.485329,-158.920334,Lynx,Bristol Bay
+uw_nerka pick creek,NA,uwASP,NA,NA,NA,59.550053,-159.064001,Pick,Bristol Bay
+uw_nerka pike creek,NA,uwASP,NA,NA,NA,59.443075,-158.587823,Pike,Bristol Bay
+uw_nerka rainbow creek,NA,uwASP,NA,NA,NA,59.664336,-159.156064,Rainbow Creek,Bristol Bay
+uw_nerka teal creek,NA,uwASP,NA,NA,NA,59.480963,-158.729867,NA,Bristol Bay
+uw_nerka elva creek,NA,uwASP,NA,NA,NA,59.581381,-159.055091,Elva,Bristol Bay
+uw_beverley hope creek,NA,uwASP,NA,NA,NA,59.646153,-158.600091,Hope,Bristol Bay
+uw_beverley moose creek,NA,uwASP,NA,NA,NA,59.63907,-158.584173,Moose,Bristol Bay
+uw_beverley silverhorn creek,NA,uwASP,NA,NA,NA,59.667847,-158.946429,Silverhorn,Bristol Bay
+uw_beverley uno creek,NA,uwASP,NA,NA,NA,59.6909,-158.75479,Uno,Bristol Bay
+uw_kulik kulik creek,NA,uwASP,NA,NA,NA,59.779325,-159.001315,Kulik Creek,Bristol Bay
+uw_little togiak creek,NA,uwASP,NA,NA,NA,59.620165,-159.217037,Little Togiak Creek,Bristol Bay
+uw_nerka n4 creek,NA,uwASP,NA,NA,NA,59.474494,-158.944723,N4 Creek,Bristol Bay
+uw_aleknagik squaw creek,NA,uwASP,NA,NA,NA,59.04937,-158.568496,Squaw,Bristol Bay
+uw_aleknagik youth creek,NA,uwASP,NA,NA,NA,59.43361,-159.012787,Youth,Bristol Bay

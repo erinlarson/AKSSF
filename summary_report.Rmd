@@ -46,7 +46,7 @@ Common trends across the four different models. There were four columns in the o
 load("DFA/output_17Mar22/DFAresults_GlobalDayLength_wInteraction_AllSubsets.Rdata")
 
 md <- readRDS("data_preparation/final_data/md_2022-02-08.rds")
-mod_dat <- readRDS("data_preparation/final_data/model_data2022-02-25.rds")
+mod_dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
 
 sp_dat <- mod_dat %>% 
   select(SiteID, str_ord:log_precip) %>%
