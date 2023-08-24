@@ -27,13 +27,50 @@ Update this with TS created by Tim on 3/17/22. Model data frame created in scrip
 
 ```{r read in model data frame}
 dat <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
-
+names(dat)
 
 dat %>% 
   filter(grepl("UW", Site)) %>% 
   distinct(Site, Year) %>% 
   group_by(Site) %>% 
   summarize(years = toString(Year))
+```
+
+Explore range for stream slope and watershed area. We may not need to QA all the coastal HUC outlet catchments across the study area if they are steep small streams not well represented in the training dataset/model.
+
+```{r}
+dat %>% 
+  ggplot(aes(x = str_slope*100, y = log(wtd_area_sqKM))) +
+  geom_point() +
+  geom_vline(aes(xintercept = 4, color = "strms")) +
+  geom_hline(aes(yintercept = 0, color = "wtds")) +
+  scale_color_manual(values = c("blue", "green"), 
+                     labels = c("strms" = "Stream gradient > 5%",
+                                "wtds" = bquote("Watersheds < 1 km"^2))) +
+  theme(legend.title = element_blank()) +
+  labs(x = "Stream Gradient (%)", y = bquote("Watershed Area ("~km^2~")"))
+
+ggsave("output/gradient by watershed area.jpeg", units = "in", width = 9, height = 7)
+
+dat %>% 
+  distinct(Site, str_slope) %>% 
+  ggplot(aes(x = str_slope*100)) +
+  geom_histogram()
+
+dat %>% 
+  distinct(Site, str_slope) %>% 
+  count(str_slope*100 > 4)
+
+dat %>% 
+  distinct(Site, wtd_area_sqKM) %>% 
+  ggplot(aes(x = (wtd_area_sqKM))) +
+  geom_histogram()
+
+dat %>% 
+  distinct(Site, wtd_area_sqKM) %>% 
+  count(log(wtd_area_sqKM) < 2)
+
+hist(dat$wtd_area_sqKM)
 ```
 
 

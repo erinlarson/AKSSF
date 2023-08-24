@@ -660,7 +660,7 @@ mets11_tr <- bind_cols(mets11_scwd,
                          as_tibble() %>% 
                          rename_with(.fn = ~ paste0("grp_", .x)))
 
-
+# saveRDS(mets11_tr, file = "output/temp_mets11_wTR.rds")
 
 bind_cols(mets11_scwd, group = cutree(mets11_clust, k = 6)) %>% 
   # count(group, Region) %>% 
@@ -771,11 +771,12 @@ pca
 # 
 
 
-mets11_env <- mets11_scwd %>% 
-  select(Region:Rearing) %>% 
+mets11_env <- mets11_tr %>% 
+  select(Region:Rearing, grp_6) %>% 
   mutate(Yearf = factor(Year),
          spf = factor(Spawning),
-         chf = factor(Chinook))
+         chf = factor(Chinook),
+         grp6f = factor(grp_6))
 
 pc1 <- prcomp(mets11_scwd %>% select(-(Region:Rearing))) 
 
@@ -798,7 +799,7 @@ autoplot(pc2, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label 
   theme_bw()
 
 
-autoplot(pc2, data = mets11_env, colour = 'gray', labels = TRUE, loadings.label = TRUE, 
+autoplot(pc2, data = mets11_env, colour = 'grp6f', labels = TRUE, loadings.label = TRUE, 
          loadings.label.colour = "black", loadings.label.repel = TRUE, loadings.colour = "black") +
   theme_bw()
 
