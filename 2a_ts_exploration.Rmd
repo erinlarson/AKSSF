@@ -727,6 +727,126 @@ saveRDS(mod_dat, paste("data_preparation/final_data/model_data", Sys.Date(), ".r
 
 ```
 
+# Comparing 2022 versus 2023 covariates
+
+Read in both data frames. Compare the final covariates used in the model across the two datasets:
+stream slope, mean catchment elevation, mean catchment slope, mean watershed slope, percent of the watershed with a north aspect, watershed area, distance to the coast, percent of the watershed covered by glaciers, lakes, or wetlands; an index of spring snow cover; total summer precipitation; and region 
+
+Dustin created new covariates using a new lake dataset, but noticed that many other covariates also changed and we're now wondering why. Did ESRI change their code?
+
+```{r SiteIDs for spatial and response data}
+
+#SiteIDs sent to Tim
+temp_dat <- readRDS("data_preparation/final_data/summer_data_wair2021-11-23.rds") %>% 
+  mutate(site_lower = tolower(SiteID))
+
+#spatial sites
+cov23 <- read_csv("data_preparation/final_data/AKSSF_sites_sj_merge_2023.csv")
+
+
+anti_join(temp_dat %>% distinct(SiteID), cov23 %>% distinct(SiteID))
+```
+
+
+
+
+```{r read in old and new covariates}
+cov22 <- readRDS("data_preparation/final_data/model_data2022-05-09.rds")
+
+cov23 <- read_csv("data_preparation/final_data/AKSSF_sites_sj_merge_2023.csv")
+
+names(cov22)
+names(cov23)
+
+
+anti_join(cov22 %>% distinct(SiteID = Site), cov23 %>% distinct(SiteID = ts_id_dm))
+
+cov_comp <- left_join(cov22 %>%
+                        mutate(SiteID = tolower(Site)) %>% 
+            distinct(SiteID,
+                     str_slope,
+                     cat_elev_MEAN,
+                     cat_slope_MEAN,
+                     wtd_slope_MEAN,
+                     wtd_north_per,
+                     wtd_area_sqKM,
+                     dist_coast_km,
+                     wtd_glacier_per,
+                     wtd_lake_per,
+                     wtd_wet_per),
+          cov23 %>% 
+            distinct(SiteID = ts_id_dm,
+                     str_slope,
+                     cat_elev_MEAN,
+                     cat_slope_MEAN,
+                     wtd_slope_MEAN,
+                     wtd_north_per,
+                     # wtd_area_sqKM = wtd_area, #dustin needs to let me know which one to use
+                     dist_coast_km,
+                     wtd_glacier_per,
+                     wtd_lake_per,
+                     wtd_wet_per) %>% 
+            rename_with( ~ paste0(.x, "_23"), -SiteID)
+)
+
+cov_comp %>% 
+  filter(is.na(str_slope_23))
+```
+
+
+```{r compare covariates}
+
+#stream slope
+cov_comp %>% 
+  ggplot(aes(x = str_slope, y = str_slope_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+
+#watershed slope
+cov_comp %>% 
+  ggplot(aes(x = wtd_slope_MEAN, y = wtd_slope_MEAN_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+
+#lake cover
+cov_comp %>% 
+  ggplot(aes(x = wtd_lake_per, y = wtd_lake_per_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+
+#north aspect
+cov_comp %>% 
+  ggplot(aes(x = wtd_north_per, y = wtd_north_per_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+
+#distance to coast
+cov_comp %>% 
+  ggplot(aes(x = dist_coast_km, y = dist_coast_km_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+
+#glacier cover
+cov_comp %>% 
+  ggplot(aes(x = wtd_glacier_per, y = wtd_glacier_per_23)) +
+  geom_point() +
+  geom_abline(aes(slope = 1, intercept = 0))
+```
+
+AWC species and life stage information. (Dustin will add this information to the variables names google sheet so we know what each means.)
+
+```{r AWC columns for sites}
+
+#sp ls is species and life stage information
+cov23$sp_ls
+
+#sa sp hab has 1, 2 and NA
+# 1 = 
+# 2 = 
+# NA = 
+cov23$sa_sp_hab %>% unique()
+
+```
 
 
 
