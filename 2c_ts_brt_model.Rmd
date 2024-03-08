@@ -218,7 +218,7 @@ brt_int_dl$rank.list
 gbm.perspec(brt_step, x = 12, y =5) #plots interactions, but I can't get this to show anything
 
 #error
-interact.gbm(brt_step, data = brt_in, n.trees = 200)
+#interact.gbm(brt_step, data = brt_in, n.trees = 200)
 ```
 
 ## Simplified air + DL model
@@ -535,9 +535,9 @@ left_join(site_xval, mod_dat2 %>% distinct(SiteID, Region)) %>%
 Bring in hu12 outlet covariates and snowpack and summer precip for all years. Need to rename all covariates in these files so they match the names in the model, so prediction will work.
 
 ```{r create hu12 covariate df}
-hu12.cov <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWC_HUC12s_Covariates.csv")
+hu12.cov <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_Covariates.csv")
 hu12.spls <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_SpLs.csv") 
-hu12.pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AWCHuc12s_strwtd_cv.csv")
+hu12.pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AwcHuc12s_strwtd_cv.csv")
 
 # dput(names(brt_in)) #getting correct variable names from model
 
