@@ -281,28 +281,28 @@ pd_snow_slope
 Deviance explained.
 
 ```{r elith model data and deviance explained}
+#Commenting out becauser this includes data that was on Becky's local drive and is just an example
+#eel_dat <- read_csv("S:/Classes/Machine Learning Seminar/Boosted Regression Trees - supplementary material/jane_1390_sm_appendixs3/data/model.data.csv") %>% 
+ # mutate(Method = as.factor(Method)) %>% 
+#  as.data.frame()
 
-eel_dat <- read_csv("S:/Classes/Machine Learning Seminar/Boosted Regression Trees - supplementary material/jane_1390_sm_appendixs3/data/model.data.csv") %>% 
-  mutate(Method = as.factor(Method)) %>% 
-  as.data.frame()
+#eel_brt <- gbm_step(Angaus ~ ., data = eel_dat[,-1], distribution = "bernoulli",
+#               n.trees = 1000, shrinkage = 0.01, interaction.depth = 5)
 
-eel_brt <- gbm_step(Angaus ~ ., data = eel_dat[,-1], distribution = "bernoulli",
-               n.trees = 1000, shrinkage = 0.01, interaction.depth = 5)
+#eel_brt <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
+       #              data = eel_dat[,-1],
+    #                 tree.complexity = 5, learning.rate = 0.01, bag.fraction = 0.5,
+      #               n.folds = 10, family = "bernoulli", max.trees = 2000)
+#
 
-eel_brt <- gbm.step(gbm.y = 1, gbm.x = 2:13, 
-                     data = eel_dat[,-1],
-                     tree.complexity = 5, learning.rate = 0.01, bag.fraction = 0.5,
-                     n.folds = 10, family = "bernoulli", max.trees = 2000)
+#summary(eel_brt)
 
+#cv.dev <- eel_brt$cv.statistics$deviance.mean # same as estimated cv deviance in output
+#null.dev <- eel_brt$self.statistics$mean.null #same as mean total deviance in output
+#train.dev <- eel_brt$self.statistics$mean.resid #same as mean residual deviance in output
 
-summary(eel_brt)
-
-cv.dev <- eel_brt$cv.statistics$deviance.mean # same as estimated cv deviance in output
-null.dev <- eel_brt$self.statistics$mean.null #same as mean total deviance in output
-train.dev <- eel_brt$self.statistics$mean.resid #same as mean residual deviance in output
-
-dev.exp <- (null.dev - cv.dev)/null.dev
-dev.exp.train <- (null.dev - train.dev)/null.dev
+#dev.exp <- (null.dev - cv.dev)/null.dev
+#dev.exp.train <- (null.dev - train.dev)/null.dev
 
 ```
 
@@ -586,7 +586,7 @@ Add in summer precipitation that was downloaded for all outlet catchment points 
 
 ```{r add in daymet precipitation for outlets}
 
-hu12_dm <- read_csv("data_preparation/HUC12_cat_pts_daymet_2001-19.csv") %>% 
+hu12_dm <- read_csv("data_preparation/HUC12_cat_pts_missing_daymet_2011-19.csv") %>% 
   as_tibble()
 
 #get rid of attributes, which are affecting merge below
