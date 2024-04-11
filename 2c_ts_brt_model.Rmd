@@ -42,6 +42,9 @@ dat <- merge(dat, valconfine_only, by="cat_ID_con")
 dat$log_vb_mean_width_m<-log(dat$cat_vb_mean_width_m)
   
 head(dat)
+cor(dat$wtd_slope_MEAN, dat$wtd_wet_per)
+cor(dat$wtd_slope_MEAN, dat$wtd_wet_per)
+
 ```
 
 Explore range for stream slope and watershed area. We may not need to QA all the coastal HUC outlet catchments across the study area if they are steep small streams not well represented in the training dataset/model.
@@ -84,6 +87,8 @@ dat %>%
   geom_histogram()
 
 hist(dat$cat_vb_mean_width_m)
+
+
 ```
 
 
