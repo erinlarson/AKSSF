@@ -43,7 +43,7 @@ dat$log_vb_mean_width_m<-log(dat$cat_vb_mean_width_m)
   
 head(dat)
 cor(dat$wtd_slope_MEAN, dat$wtd_wet_per)
-cor(dat$wtd_slope_MEAN, dat$wtd_wet_per)
+cor(dat$wtd_slope_MEAN, dat$wtd_elev_MEAN)
 
 ```
 
