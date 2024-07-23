@@ -149,7 +149,7 @@ dat %>%
                 cat_elev_MEAN, cat_slope_MEAN, wtd_north_per, 
                 wtd_slope_MEAN, wtd_area_sqKM, #dist_coast_km,
                 wtd_glacier_per, wtd_lake_per, wtd_wet_per, 
-                wtd_lcld_jd, summer_precip, Region, log_vb_mean_width_m, Latitude, Longitude) %>% 
+                wtd_lcld_jd, summer_precip, Region, cat_vb_mean_width_m, Latitude, Longitude) %>% 
   write_csv(., file = "data_preparation/final_data/zenodo1/tempSitesSens.csv")
 
 ```
