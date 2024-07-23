@@ -556,7 +556,7 @@ left_join(site_xval, mod_dat2 %>% distinct(SiteID, Region)) %>%
 Bring in hu12 outlet covariates and snowpack and summer precip for all years. Need to rename all covariates in these files so they match the names in the model, so prediction will work.
 
 ```{r create hu12 covariate df}
-hu12.cov <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_Covariates.csv")
+hu12.cov <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_CovariatesWCONF_20240314.csv")
 hu12.spls <- read_csv("data_preparation/sensitivity_drivers/AKSSF_awcHuc12s_SpLs.csv") 
 hu12.pts <- read_csv("data_preparation/sensitivity_drivers/AKSSF_AwcHuc12s_strwtd_cv.csv")
 #dist_catch<-read_csv("data_preparation/sensitivity_drivers/AKSSF_dist_catch_coast_km.csv")
@@ -576,7 +576,7 @@ hu12.cov <- hu12.cov %>%
          wtd_glacier_per = AwcHuc12_wtd_glacier_per,
          wtd_lake_per = AwcHuc12_wtd_lake_per,
          wtd_wet_per = AwcHuc12_wtd_wet_per,
-         cat_vb_mean_width_m = cat_vb_mean_width_m,
+         cat_vb_mean_width_m = cat_vb_mean_width_m.x,
          #dist_catch_coast_km = dist_catch_coast_km,
          AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019) %>% 
   pivot_longer(cols = AwcHuc12_wtd_lcld_mn_2011:AwcHuc12_wtd_lcld_mn_2019, names_to = "name", values_to = "wtd_lcld_jd") %>% 
@@ -1008,7 +1008,7 @@ hu12_spls <- left_join(hu12_scens %>%
                          mutate(Scenario = paste(type, scenario, sep = " ")) %>% 
                          select(Region, HUC12, Year, Scenario, TempSens = preds_airDL), 
                        hu12.df %>% select(HUC12, sp_ls, #dist_coast_km,
-                                                      wtd_area_sqKM:wtd_wet_per, 
+                                                      wtd_area_sqKM:cat_vb_mean_width_m, 
                                                       wtd_lcld_jd, Year, 
                                                       summer_precip)) %>%
   mutate(Chinook = case_when(grepl("K_", sp_ls) ~ 1,
